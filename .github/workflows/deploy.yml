@@ -1,0 +1,75 @@
+# Verify every push, and publish main to GitHub Pages.
+#
+# The site is fully static: `npm run build` emits dist/ and that is the whole
+# deployment. Nothing here needs a server, so the build artifact is handed
+# straight to Pages.
+#
+# `verify` runs on pull requests too, so a branch can be checked without
+# publishing. `deploy` is gated on main.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # never cancel a half-finished Pages deploy — queue behind it instead
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      # The golden master compares the port against output from the original
+      # engine; a failure means the layout drifted. See CLAUDE.md.
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      # Guards the reason the fonts were self-hosted in the first place. If a
+      # third-party URL creeps back into the bundle, fail here rather than
+      # discovering it in production.
+      - name: Assert the bundle makes no third-party requests
+        run: |
+          if grep -rq "fonts.googleapis.com\|fonts.gstatic.com" dist/; then
+            echo "::error::dist/ still references Google Fonts — the webfont should be self-hosted"
+            grep -rl "fonts.googleapis.com\|fonts.gstatic.com" dist/
+            exit 1
+          fi
+          echo "no third-party font requests in dist/"
+
+      - uses: actions/upload-pages-artifact@v3
+        if: github.ref == 'refs/heads/main'
+        with:
+          path: dist
+
+  deploy:
+    needs: verify
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4

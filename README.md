@@ -8,6 +8,8 @@ The point is not *when* something appeared but **what limitation of its predeces
 solved**. So every model carries `problem / idea / limitation`, and every relationship is
 labelled in `limit → fix` form.
 
+**→ [chanlumerico.github.io/deep-learning-genealogy](https://chanlumerico.github.io/deep-learning-genealogy/)**
+
 ```bash
 npm install
 npm run dev      # http://localhost:5173
@@ -111,6 +113,13 @@ falls back to a plain timeline in the detail panel. Backfilling this is the natu
 change, and it is deliberately kept separate from the port so that any visual difference
 is attributable to code, not data.
 
+## Deployment
+
+`.github/workflows/deploy.yml` runs `npm test` and `npm run build` on every push and
+pull request; pushes to `main` publish `dist/` to GitHub Pages. Pages is served from
+the workflow, so there is no `gh-pages` branch. `base: './'` keeps every asset and
+data URL relative, which is what lets the site live on a subpath.
+
 ## Design system
 
 The legacy app linked the "Classical" design system, but that sheet is a light
@@ -118,3 +127,15 @@ Cormorant/Lora theme this app never uses — everything here is dark IBM Plex, s
 locally. Only three of its rules reached the page through inheritance (global
 `box-sizing`, body `font-size` and `line-height`); those are reproduced verbatim at the
 top of `src/styles.css` and the rest is left behind.
+
+**The webfont is self-hosted.** `src/assets/fonts/` carries the Latin subset of IBM
+Plex Sans as two woff2 files — a variable roman (`wght` 100–700, covering the four
+weights the sheet uses) and a static italic 400 — so the page makes no third-party
+requests and first paint does not wait on a cross-origin fetch. The PNG export
+base64-inlines the same two files; it used to re-fetch them from Google. A CI step
+fails the build if a Google Fonts URL reappears in `dist/`. The fonts are licensed
+under the SIL Open Font License 1.1 (`src/assets/fonts/OFL.txt`).
+
+Two glyphs the UI uses — `→` (U+2192) and `✓` (U+2713) — are outside that subset and
+render in the system font. That was already true when the fonts came from Google: no
+subset it serves carries them either.

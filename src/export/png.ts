@@ -4,40 +4,45 @@
 // at the highest scale the browser will encode.
 
 import { CANVAS } from '../layout'
+import italicUrl from '../assets/fonts/ibm-plex-sans-latin-italic.woff2'
+import romanUrl from '../assets/fonts/ibm-plex-sans-latin.woff2'
 
 const NS = 'http://www.w3.org/2000/svg'
 
+// A rasterised <img> cannot reach out for a stylesheet, so the faces have to
+// travel inside the SVG as data URIs. Same two files the page renders with —
+// self-hosted, so this is a same-origin read with no CORS to negotiate.
+const FACES = [
+  { url: romanUrl, style: 'normal', weight: '100 700' },
+  { url: italicUrl, style: 'italic', weight: '400' },
+]
+
 let fontCss: string | null | undefined
 
-/** The Latin faces of the webfont, base64-inlined once so exported text is faithful. */
+function toBase64(buf: ArrayBuffer): string {
+  const bytes = new Uint8Array(buf)
+  // chunked: String.fromCharCode(...bytes) would overflow the argument limit
+  let bin = ''
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
+  }
+  return btoa(bin)
+}
+
+/** The webfont, base64-inlined once so exported text is faithful. */
 async function embeddedFontCss(): Promise<string | null> {
   if (fontCss !== undefined) return fontCss
   fontCss = null
   try {
-    const href = Array.from(document.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]'))
-      .map((l) => l.href)
-      .filter((h) => h.indexOf('fonts.googleapis.com') >= 0)[0]
-    if (!href) return null
-    const sheet = await (await fetch(href)).text()
-    const blocks = sheet.split('@font-face').slice(1)
-      .map((b) => '@font-face' + b.slice(0, b.indexOf('}') + 1))
-      .filter((b) => {
-        const r = /unicode-range:([^;]+);/.exec(b)
-        return !r || r[1].toLowerCase().indexOf('u+0000-00ff') >= 0
-      })
-    let css = blocks.join('\n')
-    const urls: string[] = css.match(/https:\/\/fonts\.gstatic\.com[^)'"]+/g) || []
-    const uniq = urls.filter((u, i) => urls.indexOf(u) === i)
-    const data = await Promise.all(uniq.map(async (u) => {
-      const buf = await (await fetch(u)).arrayBuffer()
-      const bytes = new Uint8Array(buf)
-      let bin = ''
-      for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i])
-      return [u, 'data:font/woff2;base64,' + btoa(bin)] as const
+    const blocks = await Promise.all(FACES.map(async (f) => {
+      const buf = await (await fetch(f.url)).arrayBuffer()
+      return `@font-face{font-family:'IBM Plex Sans';font-style:${f.style};` +
+        `font-weight:${f.weight};` +
+        `src:url(data:font/woff2;base64,${toBase64(buf)}) format('woff2');}`
     }))
-    data.forEach((p) => { css = css.split(p[0]).join(p[1]) })
-    fontCss = css
+    fontCss = blocks.join('\n')
   } catch (e) {
+    // the sheet still exports, just in whatever face the renderer substitutes
     console.warn('[export] font inline skipped', e)
   }
   return fontCss
