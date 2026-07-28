@@ -1,7 +1,11 @@
 import type { NodeModel } from '../layout'
+import type { ReadMap } from './readingLog'
 import { CSV_ALIASES, CSV_HEADER } from './papers'
 
 export type CsvIndex = Record<string, string>
+
+/** Replace overwrites the whole log; add only ever ticks more boxes. */
+export type ImportMode = 'add' | 'replace'
 
 export type CsvResult =
   | { ok: false; error: string }
@@ -68,5 +72,26 @@ export class PaperCsv {
       ok: true, matched, ignored,
       rows: lines.length - 1, count: Object.keys(matched).length,
     }
+  }
+
+  static cell(v: unknown): string {
+    const s = String(v ?? '')
+    return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s
+  }
+
+  /**
+   * Every model currently marked read, in the same shape `parse` accepts, so a
+   * reader can carry their list to another browser. Model names round-trip:
+   * `index` maps the normalised display name back onto the node id.
+   */
+  static serialize(nodes: NodeModel[], read: ReadMap): string {
+    const rows = nodes
+      .filter((n) => read[n.id])
+      .sort((a, b) => (a.year - b.year) || a.name.localeCompare(b.name))
+      .map((n) => [n.name, n.lane.label, n.paper || '', n.contribution, n.year]
+        .map(PaperCsv.cell).join(','))
+    // `parse` lowercases the header before comparing, so title case round-trips
+    const head = CSV_HEADER.map((h) => h[0].toUpperCase() + h.slice(1)).join(',')
+    return [head, ...rows].join('\n') + '\n'
   }
 }

@@ -6,9 +6,11 @@ import {
 import type { EdgeKindKey, EdgeModel, Genealogy, LaneId, NodeModel } from './layout'
 import { loadGraphData } from './data/load'
 import { PaperCsv } from './data/csv'
+import type { ImportMode } from './data/csv'
 import { READ_FILTERS, ReadingLog } from './data/readingLog'
 import type { ReadFilterId, ReadMap } from './data/readingLog'
 import { exportPng } from './export/png'
+import { exportReadingCsv } from './export/csv'
 import { GraphCanvas } from './components/GraphCanvas'
 import { TopBar } from './components/TopBar'
 import { Legend } from './components/Legend'
@@ -59,6 +61,7 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
   const [read, setRead] = useState<ReadMap>(() => ReadingLog.load())
   const [readFilter, setReadFilter] = useState<ReadFilterId>('all')
   const [listOpen, setListOpen] = useState(false)
+  const [importMode, setImportMode] = useState<ImportMode>('add')
   const [importNote, setImportNote] = useState('')
   const [importBad, setImportBad] = useState(false)
 
@@ -332,6 +335,12 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
     })
   }, [])
 
+  /** Whole-list writes — the ones that do not need the previous state. */
+  const commitRead = useCallback((next: ReadMap) => {
+    ReadingLog.save(next)
+    setRead(next)
+  }, [])
+
   const importCsv = useCallback((file: File) => {
     if (!graph) return
     const reader = new FileReader()
@@ -340,19 +349,38 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
       if (!res.ok) { setImportNote(res.error); setImportBad(true); return }
       setImportBad(false)
       setImportNote(res.count + ' of ' + res.rows + ' rows matched' +
+        (importMode === 'replace' ? ' · list replaced' : '') +
         (res.ignored.length
           ? ' · not in the tree: ' + res.ignored.slice(0, 4).join(', ') +
             (res.ignored.length > 4 ? ' +' + (res.ignored.length - 4) : '')
           : ''))
       setRead((prev) => {
-        const next = { ...prev, ...res.matched }
+        const next: ReadMap = importMode === 'replace'
+          ? { ...res.matched }
+          : { ...prev, ...res.matched }
         ReadingLog.save(next)
         return next
       })
     }
     reader.onerror = () => { setImportNote('Could not read that file.'); setImportBad(true) }
     reader.readAsText(file)
-  }, [graph])
+  }, [graph, importMode])
+
+  const exportCsv = useCallback(() => {
+    if (!graph) return
+    if (!graph.nodes.some((n) => read[n.id])) {
+      setImportNote('Nothing is marked read yet.'); setImportBad(true); return
+    }
+    setImportBad(false)
+    setImportNote('')
+    exportReadingCsv(graph.nodes, read)
+  }, [graph, read])
+
+  const clearRead = useCallback(() => {
+    commitRead({})
+    setImportBad(false)
+    setImportNote('Reading list cleared.')
+  }, [commitRead])
 
   const doExport = useCallback(async () => {
     if (exporting || !svgRef.current) return
@@ -395,6 +423,20 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
       bd: on ? 'rgba(233,229,221,0.42)' : 'rgba(233,229,221,0.18)',
       fg: on ? '#f0ebe1' : '#7c7568',
       onClick: () => setReadFilter(f.id),
+    }
+  })
+
+  const importModes: ToggleVM[] = ([
+    { id: 'add', label: 'Add to list' },
+    { id: 'replace', label: 'Replace list' },
+  ] as Array<{ id: ImportMode; label: string }>).map((m) => {
+    const on = importMode === m.id
+    return {
+      key: m.id, label: m.label,
+      bg: on ? 'rgba(233,229,221,0.13)' : 'transparent',
+      bd: on ? 'rgba(233,229,221,0.42)' : 'rgba(233,229,221,0.18)',
+      fg: on ? '#f0ebe1' : '#7c7568',
+      onClick: () => setImportMode(m.id),
     }
   })
 
@@ -515,9 +557,13 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
             readCount={`${readCount} / ${graph.nodes.length}`}
             readPct={Math.round(readCount / graph.nodes.length * 100) + '%'}
             groups={readGroups}
+            importModes={importModes}
             importNote={importNote}
             importBad={importBad}
             onImport={importCsv}
+            onExport={exportCsv}
+            onClearAll={clearRead}
+            hasRead={readCount > 0}
             onToggleRead={toggleRead}
             onToggleGroup={setAllRead}
             onClose={() => setListOpen(false)}

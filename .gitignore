@@ -7,3 +7,4 @@ coverage/
 *.log
 *.tsbuildinfo
 legacy/
+CLAUDE.md

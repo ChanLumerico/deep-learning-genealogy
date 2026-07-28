@@ -1,6 +1,10 @@
 // ═══════════════════════════════════════════════════════════════════════════
-// READING LIST · papers keyed by node. Every entry here is seeded as already
-// read; the rest of the tree starts unread.
+// READING LIST · papers keyed by node.
+//
+// PAPERS is reference data: the canonical title shown under every model in the
+// reading list. It is NOT reading state, and this file ships no reading state
+// of any kind — a visitor starts with nothing read, and the list only ever
+// grows from their own ticks or a CSV they upload (see readingLog.ts, csv.ts).
 // ═══════════════════════════════════════════════════════════════════════════
 
 export const PAPERS: Record<string, string> = {
@@ -76,8 +80,6 @@ export const PAPERS: Record<string, string> = {
   flowmatch: 'Flow Matching for Generative Modeling',
   rectflow: 'Flow Straight and Fast: Learning to Generate and Transfer Data with Rectified Flow',
 }
-
-export const READ_SEED = Object.keys(PAPERS)
 
 // CSV model names that don't normalise onto a node name by themselves
 export const CSV_ALIASES: Record<string, string> = {
