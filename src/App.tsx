@@ -11,6 +11,8 @@ import { READ_FILTERS, ReadingLog } from './data/readingLog'
 import type { ReadFilterId, ReadMap } from './data/readingLog'
 import { exportPng } from './export/png'
 import { exportReadingCsv } from './export/csv'
+import { useViewport } from './view/useViewport'
+import { useCamera, ZOOM } from './view/useCamera'
 import { GraphCanvas } from './components/GraphCanvas'
 import { TopBar } from './components/TopBar'
 import { Legend } from './components/Legend'
@@ -23,6 +25,8 @@ import type {
 } from './view/types'
 
 const PANEL_W = 372
+/** what the camera is looking at — sets how far out zoom is allowed to go */
+const SHEET = { w: CANVAS.w, h: CANVAS.h }
 
 export interface AppProps {
   /** hover preview card over a node */
@@ -40,10 +44,8 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
   const [graph, setGraph] = useState<Genealogy | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
 
-  // camera
-  const [k, setK] = useState(0.58)
-  const [tx, setTx] = useState(0)
-  const [ty, setTy] = useState(0)
+  const vp = useViewport()
+  const { k, tx, ty, centerOn, fit, zoomBy } = useCamera(vpRef, SHEET)
 
   // filters
   const [lanesOff, setLanesOff] = useState<Record<string, boolean>>({})
@@ -65,7 +67,10 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
   const [importNote, setImportNote] = useState('')
   const [importBad, setImportBad] = useState(false)
 
-  const [legendOpen, setLegendOpen] = useState(true)
+  // Chrome that has to fold away on a phone. The legend is a lookup aid, not a
+  // control, so it stays shut until asked for when the sheet is the scarce thing.
+  const [legendOpen, setLegendOpen] = useState(!vp.compact)
+  const [controlsOpen, setControlsOpen] = useState(false)
   const [exporting, setExporting] = useState(false)
 
   // ── load + build ────────────────────────────────────────────────────────
@@ -75,71 +80,19 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
       .then(({ nodes, edges }) => {
         if (cancelled) return
         setGraph(new LayoutEngine(nodes, edges).build())
-        const el = vpRef.current
-        if (el) {
-          const r = el.getBoundingClientRect()
-          setTx(r.width / 2 - 2950 * 0.58)
-          setTy(r.height / 2 - 2300 * 0.58)
-        }
+        // Desktop opens on the dense middle of the sheet at a readable zoom.
+        // A phone at that zoom shows about two nodes, so it opens framed on
+        // the whole thing instead — orientation first, detail on demand.
+        if (vp.compact) fit(CANVAS.w, CANVAS.h, 24)
+        else centerOn(2950, 2300, ZOOM.initial)
       })
       .catch((err) => {
         console.error('[genealogy] data load failed', err)
         if (!cancelled) setLoadError(String(err && err.message ? err.message : err))
       })
     return () => { cancelled = true }
-  }, [])
-
-  // ── camera: wheel zoom about the cursor, drag to pan ────────────────────
-  useEffect(() => {
-    const el = vpRef.current
-    if (!el) return
-    const onWheel = (ev: WheelEvent) => {
-      ev.preventDefault()
-      const r = el.getBoundingClientRect()
-      const px = ev.clientX - r.left, py = ev.clientY - r.top
-      setK((prevK) => {
-        const next = Math.min(2.2, Math.max(0.13, prevK * (ev.deltaY > 0 ? 0.9 : 1.111)))
-        setTx((prevTx) => px - (px - prevTx) * next / prevK)
-        setTy((prevTy) => py - (py - prevTy) * next / prevK)
-        return next
-      })
-    }
-    const onDown = (ev: MouseEvent) => {
-      const target = ev.target as HTMLElement
-      if (target.closest('input,button')) return
-      const sx = ev.clientX, sy = ev.clientY
-      let tx0 = 0, ty0 = 0
-      setTx((v) => { tx0 = v; return v })
-      setTy((v) => { ty0 = v; return v })
-      const move = (m: MouseEvent) => {
-        setTx(tx0 + (m.clientX - sx))
-        setTy(ty0 + (m.clientY - sy))
-        setTip(null)
-      }
-      const up = () => {
-        window.removeEventListener('mousemove', move)
-        window.removeEventListener('mouseup', up)
-        el.style.cursor = 'grab'
-      }
-      el.style.cursor = 'grabbing'
-      window.addEventListener('mousemove', move)
-      window.addEventListener('mouseup', up)
-    }
-    el.addEventListener('wheel', onWheel, { passive: false })
-    el.addEventListener('mousedown', onDown)
-    return () => {
-      el.removeEventListener('wheel', onWheel)
-      el.removeEventListener('mousedown', onDown)
-    }
-  }, [])
-
-  const centerOn = useCallback((n: NodeModel, zoom: number) => {
-    const el = vpRef.current
-    if (!el) return
-    const r = el.getBoundingClientRect()
-    setK(zoom)
-    setTx(r.width / 2 - n.cx * zoom)
-    setTy(r.height / 2 - n.cy * zoom)
+    // the initial frame is chosen once, from the viewport the page opened at
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // ── derived view state ──────────────────────────────────────────────────
@@ -159,13 +112,11 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
 
   const goNode = useCallback((id: string) => {
     if (!graph) return
+    const n = graph.byId[id]
+    if (!n) return
     setSel(id); setSelEIndex(null); setTip(null)
-    setK((prev) => {
-      const zoom = Math.max(prev, 0.72)
-      centerOn(graph.byId[id], zoom)
-      return zoom
-    })
-  }, [graph, centerOn])
+    centerOn(n.cx, n.cy, Math.max(k, 0.72))
+  }, [graph, centerOn, k])
 
   // The heavy pass: one view-state record per node, then paint for every node and
   // edge. Deliberately independent of the camera, so panning and zooming never
@@ -452,8 +403,10 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
     setTip(id); setTipPos({ x, y })
   }, [])
 
-  const panelOpen = !!panel
-  const legendRight = (listOpen || panelOpen) ? PANEL_W + 18 : 18
+  // A panel and the reading list occupy the same slot, so at most one is up.
+  const sheetOpen = listOpen || !!panel
+  // Side panels push the legend left; a phone's bottom sheet does not.
+  const legendRight = sheetOpen && !vp.phone ? PANEL_W + 18 : 18
 
   return (
     <div style={{
@@ -468,23 +421,29 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
         onQuerySubmit={(v) => {
           if (!graph) return
           const hit = graph.search(v)
-          if (hit) { setSel(hit.id); setSelEIndex(null); centerOn(hit, Math.max(k, 0.95)) }
+          if (!hit) return
+          setSel(hit.id); setSelEIndex(null)
+          centerOn(hit.cx, hit.cy, Math.max(k, 0.95))
+          if (vp.drawer) setControlsOpen(false)   // get out of the way of the result
         }}
         readCount={graph ? `${readCount} / ${graph.nodes.length}` : '—'}
         onToggleList={() => setListOpen((v) => !v)}
-        onZoomIn={() => setK((v) => Math.min(2.2, v * 1.25))}
-        onZoomOut={() => setK((v) => Math.max(0.13, v / 1.25))}
-        onFit={() => {
-          const el = vpRef.current
-          const r = el ? el.getBoundingClientRect() : { width: 1400, height: 900 }
-          const kk = r.width / (CANVAS.w + 140)
-          setK(kk); setTx((r.width - CANVAS.w * kk) / 2); setTy(r.height / 2 - (CANVAS.h / 2) * kk)
-        }}
+        onZoomIn={() => zoomBy(ZOOM.step)}
+        onZoomOut={() => zoomBy(1 / ZOOM.step)}
+        onFit={() => fit(CANVAS.w, CANVAS.h, vp.compact ? 24 : 140)}
         onReset={clearSel}
         onExport={doExport}
         exporting={exporting}
+        compact={vp.compact}
+        phone={vp.drawer}
+        open={controlsOpen}
+        onToggleOpen={() => setControlsOpen((v) => !v)}
       />
 
+      {/* The gesture handlers live here, but `touch-action: none` does NOT:
+          it is not overridable by a descendant, so putting it on this wrapper
+          would also kill scrolling inside the panels nested under it. It goes
+          on the canvas itself, which the panels are siblings of. */}
       <div
         ref={vpRef}
         style={{
@@ -524,33 +483,48 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
           </div>
         )}
 
-        {/* left scrim + lane labels, pinned to the viewport */}
-        <div style={{
-          position: 'absolute', left: 0, top: 0, bottom: 0, width: 152, pointerEvents: 'none',
-          background: 'linear-gradient(90deg, #0E1116 62%, rgba(14,17,22,0) 100%)',
-        }} />
-        <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 152, pointerEvents: 'none' }}>
-          {laneLabels.map((L) => (
-            <div
-              key={L.id}
-              style={{
-                position: 'absolute', left: 14, top: L.top,
-                display: 'flex', flexDirection: 'column', gap: 3, opacity: L.op,
-              }}
-            >
-              <div style={{ width: 26, height: 1, background: L.c }} />
-              <div style={{ fontSize: 15, lineHeight: 1.15, color: L.c, letterSpacing: '0.02em' }}>{L.label}</div>
-              <div style={{
-                fontSize: 8.5, letterSpacing: '0.18em', textTransform: 'uppercase',
-                fontWeight: 500, color: '#7d7568', fontVariantNumeric: 'tabular-nums',
-              }}>{L.count}</div>
+        {/* Left scrim + lane labels, pinned to the viewport. A 152px gutter is
+            40% of a phone screen, so on a phone the lane names are dropped —
+            the coloured bands still carry the grouping, and the detail panel
+            names the domain of whatever gets tapped. */}
+        {!vp.phone && (
+          <>
+            <div style={{
+              position: 'absolute', left: 0, top: 0, bottom: 0, width: 152, pointerEvents: 'none',
+              background: 'linear-gradient(90deg, #0E1116 62%, rgba(14,17,22,0) 100%)',
+            }} />
+            <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 152, pointerEvents: 'none' }}>
+              {laneLabels.map((L) => (
+                <div
+                  key={L.id}
+                  style={{
+                    position: 'absolute', left: 14, top: L.top,
+                    display: 'flex', flexDirection: 'column', gap: 3, opacity: L.op,
+                  }}
+                >
+                  <div style={{ width: 26, height: 1, background: L.c }} />
+                  <div style={{ fontSize: 15, lineHeight: 1.15, color: L.c, letterSpacing: '0.02em' }}>{L.label}</div>
+                  <div style={{
+                    fontSize: 8.5, letterSpacing: '0.18em', textTransform: 'uppercase',
+                    fontWeight: 500, color: '#7d7568', fontVariantNumeric: 'tabular-nums',
+                  }}>{L.count}</div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          </>
+        )}
 
-        <Legend open={legendOpen} right={legendRight} onToggle={() => setLegendOpen((v) => !v)} />
+        {/* a bottom sheet covers the legend's corner, so stand it down while one is up */}
+        {!(vp.phone && sheetOpen) && !(vp.drawer && controlsOpen) && (
+          <Legend
+            open={legendOpen} right={legendRight} compact={vp.phone}
+            onToggle={() => setLegendOpen((v) => !v)}
+          />
+        )}
 
-        {hoverPreview && tipN && <NodeTip node={tipN} x={tipPos.x} y={tipPos.y} />}
+        {/* A hover card cannot work without hover: on a touch device the tap
+            that would open it also selects the node, so the panel says it all. */}
+        {hoverPreview && !vp.coarse && tipN && <NodeTip node={tipN} x={tipPos.x} y={tipPos.y} />}
 
         {listOpen && graph && (
           <ReadingList
@@ -564,13 +538,16 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
             onExport={exportCsv}
             onClearAll={clearRead}
             hasRead={readCount > 0}
+            sheet={vp.phone}
             onToggleRead={toggleRead}
             onToggleGroup={setAllRead}
             onClose={() => setListOpen(false)}
           />
         )}
 
-        {panel && !listOpen && <DetailPanel panel={panel} onClose={clearSel} />}
+        {panel && !listOpen && (
+          <DetailPanel panel={panel} sheet={vp.phone} onClose={clearSel} />
+        )}
       </div>
     </div>
   )

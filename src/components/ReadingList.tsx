@@ -21,6 +21,8 @@ export interface ReadingListProps {
   importNote: string
   importBad: boolean
   hasRead: boolean
+  /** phone: dock to the bottom instead of taking a full-height column */
+  sheet?: boolean
   onImport: (file: File) => void
   onExport: () => void
   onClearAll: () => void
@@ -30,11 +32,22 @@ export interface ReadingListProps {
 }
 
 export function ReadingList(p: ReadingListProps) {
+  // See DetailPanel: 372px does not fit a phone, so the list becomes a bottom
+  // sheet. It is taller than the detail panel because it is a list to scroll.
+  const frame: React.CSSProperties = p.sheet
+    ? {
+      position: 'absolute', left: 0, right: 0, bottom: 0, maxHeight: '78dvh',
+      borderTop: '2px solid rgba(233,229,221,0.3)',
+      borderRadius: '12px 12px 0 0', boxShadow: '0 -18px 44px rgba(0,0,0,0.55)',
+    }
+    : {
+      position: 'absolute', right: 0, top: 0, bottom: 0, width: 372,
+      borderLeft: '1px solid rgba(233,229,221,0.3)', boxShadow: '-18px 0 44px rgba(0,0,0,0.5)',
+    }
   return (
     <div style={{
-      position: 'absolute', right: 0, top: 0, bottom: 0, width: 372,
       display: 'flex', flexDirection: 'column', background: 'rgba(9,12,16,0.97)',
-      borderLeft: '1px solid rgba(233,229,221,0.3)', boxShadow: '-18px 0 44px rgba(0,0,0,0.5)',
+      ...frame,
     }}>
       <div style={{ padding: '16px 18px 13px', borderBottom: '1px solid rgba(233,229,221,0.14)' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
@@ -49,7 +62,7 @@ export function ReadingList(p: ReadingListProps) {
             </div>
           </div>
           <button
-            className="gx-close" onClick={p.onClose}
+            className="gx-close" onClick={p.onClose} aria-label="Close"
             style={{ width: 26, height: 26, fontSize: 14 }}
           >×</button>
         </div>
@@ -104,7 +117,10 @@ export function ReadingList(p: ReadingListProps) {
         )}
       </div>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '4px 18px 20px' }}>
+      <div style={{
+        flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch',
+        overscrollBehavior: 'contain', padding: '4px 18px 20px',
+      }}>
         {p.groups.map((g) => (
           <div key={g.id} style={{ paddingTop: 16 }}>
             <div style={{

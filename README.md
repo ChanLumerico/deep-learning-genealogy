@@ -113,6 +113,21 @@ falls back to a plain timeline in the detail panel. Backfilling this is the natu
 change, and it is deliberately kept separate from the port so that any visual difference
 is attributable to code, not data.
 
+## Phones and tablets
+
+The sheet is driven with Pointer Events, so a drag pans and two fingers pinch —
+the app was mouse-only before, which left the graph unnavigable on a touch
+device. Below 1024px the top-bar groups stack and the view opens framed on the
+whole sheet rather than centred on its dense middle; below 640px the controls
+fold behind a toggle, the detail panel and reading list become bottom sheets,
+and the lane gutter gives its 152px back to the graph. A phone in landscape is
+treated as short rather than narrow: it keeps the side panel but folds the
+controls away.
+
+The zoom floor is computed from the viewport instead of fixed, because the
+constant that framed the whole sheet in a desktop window still left it wider
+than a phone screen.
+
 ## Deployment
 
 `.github/workflows/deploy.yml` runs `npm test` and `npm run build` on every push and

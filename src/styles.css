@@ -58,7 +58,25 @@ input[type=range] { accent-color: #9fa9b5; }
 ::selection { background: rgba(233,229,221,0.2); }
 text { user-select: none; }
 
-#root { height: 100vh; }
+/* 100vh on a phone counts the space behind the browser's own chrome, so the
+   sheet ends up taller than the screen and the bottom is unreachable. dvh
+   tracks the visible area; the vh line stays as the fallback.              */
+#root { height: 100vh; height: 100dvh; }
+
+/* The canvas owns its gestures: without this the browser claims the drag for
+   scrolling and the pinch for its own zoom, and the camera never sees them.
+
+   This sits on the <svg>, not on the wrapper that carries the pointer
+   handlers. `touch-action` is resolved by walking UP from whatever was
+   touched, so a descendant cannot re-enable what an ancestor turned off —
+   on the wrapper it would silently make the panels nested inside it
+   unscrollable. The panels are siblings of the canvas, so here it is inert
+   to them.                                                                */
+.gx-sheet { touch-action: none; -webkit-user-select: none; user-select: none; }
+
+/* Stop the pull-to-refresh / rubber-band that fires when a drag starts on
+   the canvas and the page itself has nowhere to go.                        */
+html, body { overscroll-behavior: none; }
 
 /* ── Top-bar chrome ──────────────────────────────────────────────────────
    The legacy template repeated one long inline style on every control. Same
@@ -95,6 +113,15 @@ text { user-select: none; }
 .gx-field { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
 .gx-row { display: flex; gap: 6px; height: 28px; min-width: max-content; }
 
+/* Below the desktop breakpoint the control groups stack, so their buttons
+   wrap onto as many lines as they need instead of forcing a sideways scroll. */
+.gx-row-wrap {
+  flex-wrap: wrap;
+  height: auto;
+  min-width: 0;
+  row-gap: 6px;
+}
+
 .gx-input {
   font-family: 'IBM Plex Sans', system-ui, sans-serif;
   height: 28px;
@@ -120,6 +147,28 @@ text { user-select: none; }
   line-height: 1;
 }
 
-/* Panel rows that lift on hover — style-hover in the legacy template */
-.gx-hover:hover { background: rgba(255,255,255,0.045); }
-.gx-legend-toggle:hover { background: rgba(182,130,53,0.16); }
+/* Panel rows that lift on hover — style-hover in the legacy template.
+   Gated on a device that can actually hover, so a tap on a phone does not
+   leave the row stuck in its hover paint until something else is touched. */
+@media (hover: hover) {
+  .gx-hover:hover { background: rgba(255,255,255,0.045); }
+  .gx-legend-toggle:hover { background: rgba(182,130,53,0.16); }
+}
+
+/* ── Touch ───────────────────────────────────────────────────────────────
+   A 28px control is comfortable under a cursor and cramped under a thumb.
+   On a coarse pointer the chrome grows to the ~44px the platform guidelines
+   ask for, and the tap highlight is dropped in favour of our own states.  */
+@media (pointer: coarse) {
+  .gx-btn, .gx-close, .gx-tap {
+    min-height: 38px;
+    padding-left: 13px;
+    padding-right: 13px;
+  }
+  .gx-row { height: auto; }
+  .gx-input { height: 38px; }
+  /* iOS zooms the whole page when a focused field is under 16px */
+  .gx-input, input, select, textarea { font-size: 16px; }
+  input[type=range] { height: 34px; }
+  * { -webkit-tap-highlight-color: transparent; }
+}

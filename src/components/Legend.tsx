@@ -11,13 +11,19 @@ const TIERS = [
 export interface LegendProps {
   open: boolean
   right: number
+  /** phone: sit against the left edge and take the width that is available */
+  compact?: boolean
   onToggle: () => void
 }
 
-export function Legend({ open, right, onToggle }: LegendProps) {
+export function Legend({ open, right, compact = false, onToggle }: LegendProps) {
   return (
     <div style={{
-      position: 'absolute', right, bottom: 18, width: 276,
+      position: 'absolute', bottom: compact ? 12 : 18,
+      right: compact ? 12 : right,
+      left: compact ? 12 : undefined,
+      width: compact ? undefined : 276,
+      maxWidth: 276,
       background: 'rgba(11,14,18,0.93)', border: '1px solid rgba(233,229,221,0.24)',
       borderRadius: 4, padding: '12px 15px 12px', backdropFilter: 'blur(3px)',
       transition: 'right 260ms cubic-bezier(0.22, 0.61, 0.36, 1)',
@@ -35,7 +41,10 @@ export function Legend({ open, right, onToggle }: LegendProps) {
       </div>
 
       <div style={{
-        maxHeight: open ? 540 : 0, opacity: open ? 1 : 0, overflow: 'hidden',
+        maxHeight: open ? (compact ? '46dvh' : 540) : 0,
+        opacity: open ? 1 : 0,
+        overflowY: open && compact ? 'auto' : 'hidden',
+        overscrollBehavior: 'contain',
         transition: 'max-height 300ms cubic-bezier(0.22, 0.61, 0.36, 1), opacity 200ms ease',
       }}>
         <div style={{ ...RULE, margin: '10px 0 10px' }} />
@@ -95,7 +104,9 @@ export function Legend({ open, right, onToggle }: LegendProps) {
         <div style={{ ...RULE, margin: '11px 0 9px' }} />
 
         <div style={{ fontSize: 10, lineHeight: 1.55, color: '#7d7568' }}>
-          Drag to pan · scroll to zoom · click a node or an edge to open its detail panel and isolate that lineage
+          {compact
+            ? 'Drag to pan · pinch to zoom · tap a node or an edge for its detail and lineage'
+            : 'Drag to pan · scroll to zoom · click a node or an edge to open its detail panel and isolate that lineage'}
         </div>
       </div>
     </div>

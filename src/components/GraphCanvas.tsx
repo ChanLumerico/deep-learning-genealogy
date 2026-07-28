@@ -58,7 +58,10 @@ function GraphCanvasImpl({
   onNodeClick, onNodeEnter, onNodeLeave, onEdgeClick, onEdgeEnter, onEdgeLeave,
 }: GraphCanvasProps) {
   return (
-    <svg ref={svgRef} width="100%" height="100%" style={{ display: 'block' }}>
+    <svg
+      ref={svgRef} className="gx-sheet" width="100%" height="100%"
+      style={{ display: 'block' }}
+    >
       <defs>
         {markers.map((m) => (
           <marker
