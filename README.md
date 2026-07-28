@@ -1,0 +1,112 @@
+# Deep Learning Model Genealogy
+
+An interactive phylogeny of deep-learning architectures: **189 models** and **248 typed
+relationships** from the 1957 perceptron to 2025, laid out across six research-domain
+lanes with every edge orthogonally routed at load time.
+
+The point is not *when* something appeared but **what limitation of its predecessor it
+solved**. So every model carries `problem / idea / limitation`, and every relationship is
+labelled in `limit → fix` form.
+
+```bash
+npm install
+npm run dev      # http://localhost:5173
+```
+
+## Commands
+
+| | |
+|---|---|
+| `npm run dev` | dev server |
+| `npm run build` | typecheck + production bundle into `dist/` |
+| `npm test` | golden-master + invariant tests |
+| `npm run typecheck` | types only |
+| `npm run golden` | regenerate the golden master from the legacy engine |
+
+## Layout
+
+```
+src/
+  layout/        the engine — pure geometry, no DOM, no React
+    spec.ts        LANES, NODE_SIZES, EDGE_KINDS, ARROW_HEADS, ROUTING, TIME  ← tuning surface
+    models.ts      NodeModel / EdgeModel: immutable record + derived geometry
+    obstacles.ts   ObstacleField (node clearance) + ChannelMap (parallel-run spacing)
+    ports.ts       PortAllocator — fans sibling edges so none share a coordinate
+    routes.ts      ForwardRoute → BusRoute → FallbackRoute, each retried down a gap ladder
+    corners.ts     CornerRadii — concentric arcs, auto-shrunk at tight corners
+    shape.ts       Shape.ortho → SVG path with 45° chamfers
+    engine.ts      LayoutEngine.build(): place → link → ports → route → radii → paths → audit
+    audit.ts       the invariants, checked on every build
+    styles.ts      NodeStyle / EdgeStyle: (model + view state) → paint
+  components/    the SVG sheet and the UI chrome
+  data/          loader, reading log, CSV import
+  export/        PNG export
+public/data/     the graph — the only place to edit models and lineages
+test/            golden-master comparison
+tools/           golden-master generator, legacy engine loader, parity checker
+legacy/          the original single-file app, kept as the reference implementation
+```
+
+## Editing the graph
+
+Data only, no code. Adding a model is one line in `public/data/nodes/<domain>.json`;
+adding a lineage is one line in `public/data/edges/relations.json`. Unknown edge
+endpoints are skipped, never fatal. See `public/data/README.md` and `schema.json`.
+
+After a data change, run `npm test` — the audit numbers are asserted, so a change that
+makes the sheet messier fails the build.
+
+## How the port is verified
+
+This is a rewrite of a single-file app (`legacy/Deep Learning Genealogy.dc.html`, 1788
+lines on a bespoke component runtime). The layout engine was *ported*, not reimplemented,
+and the port is held to the original by two mechanical checks.
+
+**1. Golden master (`npm test`).** The original engine has no DOM dependencies, so
+`tools/legacy-engine.mjs` lifts its source text straight out of the legacy HTML and
+executes it under Node — nothing is transcribed by hand. `test/golden/layout.json` is
+that engine's output; the port must reproduce it exactly: every node coordinate, every
+port and face assignment, every route point, every corner radius, every SVG path string,
+the routing-strategy mix, and the audit report.
+
+**2. Rendered-DOM parity (`tools/parity-check.mjs`).** Loads both apps in a browser and
+compares the drawn SVG element by element. Last run: **1855 / 1855 drawables identical**.
+
+### The one deliberate deviation
+
+The legacy app never applies its own initial camera centering — `vpRef.current` is null
+when its `componentDidMount` runs, so both centering paths are skipped and the sheet
+opens at `translate(0,0)`, in the top-left corner. The port implements what that code
+intends and opens centered. This is the only difference the parity check reports; to
+restore the legacy behaviour, drop the `setTx`/`setTy` calls in the load effect in
+`src/App.tsx`.
+
+### Baseline audit numbers
+
+The legacy layout is not perfectly clean, and the port reproduces it exactly:
+
+```
+nodes 189 · edges 248
+routes    ForwardRoute 120, BusRoute 125
+fallbacks 3
+overlaps 0 · edges through a node 0 · tight channels 1 (worst extent 42)
+```
+
+`npm test` asserts overlaps and through-node crossings stay at zero and that tight
+channels and fallbacks do not exceed these numbers.
+
+## Known data gaps
+
+The schema lists `p` (problem) and `l` (limitation) as required, but they are missing on
+**93 of 189 nodes**, and 100 of 248 edges carry no `l` label. Half the graph therefore
+falls back to a plain timeline in the detail panel. Backfilling this is the natural next
+change, and it is deliberately kept separate from the port so that any visual difference
+is attributable to code, not data.
+
+## Design system
+
+The legacy app linked the "Classical" design system, but that sheet is a light
+Cormorant/Lora theme this app never uses — everything here is dark IBM Plex, styled
+locally. Only three of its rules reached the page through inheritance (global
+`box-sizing`, body `font-size` and `line-height`); those are reproduced verbatim at the
+top of `src/styles.css` and the rest is left behind.

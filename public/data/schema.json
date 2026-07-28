@@ -1,0 +1,22 @@
+{
+  "node": {
+    "id": "string · unique slug, referenced by edges",
+    "n": "string · display name",
+    "y": "number · publication year",
+    "org": "string · lab or authors",
+    "c": "string · core contribution, one short phrase",
+    "lane": "enum · found | cv | nlp | gen | rl | mm",
+    "tr": "string · track within the lane (vertical row)",
+    "s": "enum · L paradigm | M major | S variant | H spacer",
+    "p": "string · problem it solved",
+    "i": "string · key idea",
+    "l": "string · limitation it left behind"
+  },
+  "edge": {
+    "f": "string · source node id",
+    "t": "string · target node id",
+    "k": "enum · direct successor | cross domain | fusion | alt line → direct | cross | fusion | alt",
+    "l": "string? · what changed, \"limit → fix\" form",
+    "hi": "boolean? · draw thicker as a spine of the tree"
+  }
+}

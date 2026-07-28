@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "description": "Deep Learning Model Genealogy — graph source of truth. Load order defines record order.",
+  "schema": "data/schema.json",
+  "nodes": [
+    {
+      "lane": "found",
+      "label": "Foundations & Techniques",
+      "path": "data/nodes/foundations.json"
+    },
+    {
+      "lane": "cv",
+      "label": "Computer Vision",
+      "path": "data/nodes/vision.json"
+    },
+    {
+      "lane": "nlp",
+      "label": "NLP / Sequence",
+      "path": "data/nodes/language.json"
+    },
+    {
+      "lane": "gen",
+      "label": "Generative Models",
+      "path": "data/nodes/generative.json"
+    },
+    {
+      "lane": "rl",
+      "label": "Reinforcement Learning",
+      "path": "data/nodes/reinforcement.json"
+    },
+    {
+      "lane": "mm",
+      "label": "Multimodal & Agents",
+      "path": "data/nodes/multimodal.json"
+    }
+  ],
+  "edges": [
+    {
+      "path": "data/edges/relations.json"
+    }
+  ]
+}

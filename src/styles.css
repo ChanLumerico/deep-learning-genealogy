@@ -1,0 +1,88 @@
+/* ── Baseline ────────────────────────────────────────────────────────────
+   The legacy app pulled in the "Classical" design system stylesheet, but that
+   sheet is a light Cormorant/Lora theme this app never uses — everything here
+   is dark IBM Plex, set inline. Only three of its rules actually reached the
+   page through inheritance, so those are reproduced verbatim and the rest of
+   the system is left behind.                                              */
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body { margin: 0; padding: 0; background: #0E1116; }
+body {
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.55;
+  font-weight: 400;
+  color: #e9e5dd;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: #cfc9bd; text-decoration: none; }
+a:hover { color: #efeae0; }
+input[type=range] { accent-color: #9fa9b5; }
+::selection { background: rgba(233,229,221,0.2); }
+text { user-select: none; }
+
+#root { height: 100vh; }
+
+/* ── Top-bar chrome ──────────────────────────────────────────────────────
+   The legacy template repeated one long inline style on every control. Same
+   computed values, named once.                                            */
+.gx-btn {
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  padding: 0 10px;
+  box-sizing: border-box;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  font-size: 11px;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  flex: 1 1 auto;
+}
+
+/* Section caption above each control group */
+.gx-cap {
+  height: 12px;
+  display: flex;
+  align-items: center;
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-weight: 500;
+  color: #7e7669;
+}
+
+.gx-field { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.gx-row { display: flex; gap: 6px; height: 28px; min-width: max-content; }
+
+.gx-input {
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  height: 28px;
+  padding: 0 10px;
+  box-sizing: border-box;
+  font-size: 12px;
+  border-radius: 4px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(233,229,221,0.22);
+  color: #ece7de;
+  outline: none;
+  width: 100%;
+}
+
+.gx-close {
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  flex: none;
+  border-radius: 4px;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid rgba(233,229,221,0.22);
+  color: #b8b1a4;
+  line-height: 1;
+}
+
+/* Panel rows that lift on hover — style-hover in the legacy template */
+.gx-hover:hover { background: rgba(255,255,255,0.045); }
+.gx-legend-toggle:hover { background: rgba(182,130,53,0.16); }
