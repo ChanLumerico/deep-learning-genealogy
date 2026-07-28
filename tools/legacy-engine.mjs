@@ -5,8 +5,13 @@
 //
 // The slice is DOM-free (verified: the only `window` references are in ReadingLog,
 // which the build path never calls), so a couple of inert stubs are enough.
+//
+// legacy/ is NOT in the repository — it is gitignored and lives only on the machine
+// that did the port. So this tool, and `npm run golden` with it, only runs where that
+// folder is present. `npm test` is unaffected: it compares against the committed
+// test/golden/layout.json, which is the whole point of checking that file in.
 
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 
@@ -18,6 +23,15 @@ const END = 'class Component extends DCLogic {'
 
 /** Cut the engine out of the legacy single-file app. */
 export function extractEngineSource() {
+  if (!existsSync(LEGACY_HTML)) {
+    throw new Error(
+      `the legacy app is not present at ${LEGACY_HTML}\n\n` +
+      'legacy/ is gitignored, so a fresh clone cannot regenerate the golden master.\n' +
+      'This is deliberate: test/golden/layout.json is committed and `npm test` still\n' +
+      'checks the port against it. Restore legacy/ only if you genuinely need to\n' +
+      'rebuild the reference output.',
+    )
+  }
   const html = readFileSync(LEGACY_HTML, 'utf8')
   const from = html.indexOf(START)
   const to = html.indexOf(END)
@@ -42,10 +56,14 @@ export function loadLegacyEngine() {
   return factory()
 }
 
-/** Read the graph exactly the way the browser does: manifest order, then concatenate. */
-export function loadGraphData(dataRoot = join(ROOT, 'legacy', 'data')) {
+/**
+ * Read the graph exactly the way the browser does: manifest order, then concatenate.
+ * Reads public/data, not legacy/data — they were copied byte-identical, and public/
+ * is the one under version control.
+ */
+export function loadGraphData(dataRoot = join(ROOT, 'public', 'data')) {
   const manifest = JSON.parse(readFileSync(join(dataRoot, 'manifest.json'), 'utf8'))
-  const read = (rel) => JSON.parse(readFileSync(join(ROOT, 'legacy', rel), 'utf8'))
+  const read = (rel) => JSON.parse(readFileSync(join(ROOT, 'public', rel), 'utf8'))
   const nodes = manifest.nodes.flatMap((f) => read(f.path))
   const edges = manifest.edges.flatMap((f) => read(f.path))
   return { nodes, edges }

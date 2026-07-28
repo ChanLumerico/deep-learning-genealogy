@@ -21,7 +21,7 @@ npm run dev      # http://localhost:5173
 | `npm run build` | typecheck + production bundle into `dist/` |
 | `npm test` | golden-master + invariant tests |
 | `npm run typecheck` | types only |
-| `npm run golden` | regenerate the golden master from the legacy engine |
+| `npm run golden` | regenerate the golden master — needs a local `legacy/`, see below |
 
 ## Layout
 
@@ -44,8 +44,11 @@ src/
 public/data/     the graph — the only place to edit models and lineages
 test/            golden-master comparison
 tools/           golden-master generator, legacy engine loader, parity checker
-legacy/          the original single-file app, kept as the reference implementation
 ```
+
+`legacy/` — the original single-file app — is **not in the repository**. It is
+gitignored and kept only on the machine that did the port. `npm test` does not need
+it; `npm run golden` and `tools/parity-check.mjs` do.
 
 ## Editing the graph
 
@@ -68,6 +71,11 @@ executes it under Node — nothing is transcribed by hand. `test/golden/layout.j
 that engine's output; the port must reproduce it exactly: every node coordinate, every
 port and face assignment, every route point, every corner radius, every SVG path string,
 the routing-strategy mix, and the audit report.
+
+The generated file is committed, so the test runs anywhere. Regenerating it needs a
+local `legacy/`, and **regenerating it to make a failing test pass defeats the entire
+point** — a failure means the port drifted. Regenerate only if the legacy app itself
+changed.
 
 **2. Rendered-DOM parity (`tools/parity-check.mjs`).** Loads both apps in a browser and
 compares the drawn SVG element by element. Last run: **1855 / 1855 drawables identical**.
