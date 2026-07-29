@@ -1,1 +1,648 @@
-{}
+{
+ "bn>ln": {
+  "lead": "BatchNorm made normalisation a standard part of training a deep network, and in the same move made it awkward everywhere the mini-batch is not a clean, fixed-size sample. LayerNorm keeps the normalisation and changes the axis it is computed over. Nothing else about the mechanism moves.",
+  "blocks": [
+   {
+    "h": "What BatchNorm established",
+    "b": "Ioffe and Szegedy's result was that fixing the first two moments of each feature, layer by layer, is enough to change what is trainable. For each channel the batch mean and variance are subtracted and divided out, and a learned pair $\\gamma, \\beta$ restores the scale and offset the network wants:\n\n$$\\hat{x} = \\frac{x - \\mu_B}{\\sqrt{\\sigma_B^2 + \\epsilon}}, \\qquad y = \\gamma \\hat{x} + \\beta$$\n\nwhere $\\mu_B$ and $\\sigma_B^2$ are taken over the examples in the batch. Learning rates that previously diverged became usable, and initialisation stopped being decisive.\n\nThe cost is in the subscript. $\\mu_B$ is a training-time quantity, so inference has to substitute running averages and therefore computes a different function from training. And one example's output depends on which other examples happened to share its batch — a property that is tolerable for image classification and untenable elsewhere."
+   },
+   {
+    "h": "The axis LayerNorm changed",
+    "b": "Ba, Kiros and Hinton compute the same two moments over the $H$ hidden units of a **single** example instead:\n\n$$\\mu = \\frac{1}{H}\\sum_{i=1}^{H} a_i, \\qquad \\sigma = \\sqrt{\\frac{1}{H}\\sum_{i=1}^{H}(a_i - \\mu)^2}$$\n\nThe learned $\\gamma, \\beta$ are kept, and so is the placement inside the layer. What is thrown away is the batch dimension entirely: no running statistics, no train-test discrepancy, no minimum batch size, and no dependence on sequence length, so a recurrent net can normalise at every timestep including lengths never seen in training.\n\nTwo things had to be accepted to make the removal work. The regularising noise that batch sampling supplied for free is gone, so LayerNorm networks need their regularisation stated explicitly. And the statistic now assumes the units in a layer are exchangeable, which holds for a fully connected or recurrent layer and holds poorly across the spatial positions of a convolutional one — the original paper reports exactly that shortfall on convnets."
+   },
+   {
+    "h": "What changed as a result",
+    "b": "LayerNorm became the normaliser for anything sequential, because variable lengths, padded batches and autoregressive decoding at batch size one all break batch statistics rather than merely inconveniencing them. The Transformer adopted it in every sublayer, and every language model since has inherited that choice unexamined.\n\nThe bill has two parts. In vision, BatchNorm kept winning for years; GroupNorm took over where batches are too small for reliable statistics, in detection and segmentation, while LayerNorm itself came in with the vision transformers and ConvNeXt and displaced BatchNorm there outright. And LayerNorm sits on the critical path of every token: it is a reduction over the feature dimension, memory-bandwidth bound rather than compute bound, which is why fused kernels for it are written by hand. RMSNorm later dropped the mean subtraction and kept only the division by root mean square, with no loss in quality — evidence that the re-centring half of the operation was never doing much work."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Batch Normalization: Accelerating Deep Network Training by Reducing Internal Covariate Shift",
+    "y": 2015
+   },
+   {
+    "t": "Layer Normalization",
+    "y": 2016
+   },
+   {
+    "t": "Root Mean Square Layer Normalization",
+    "y": 2019
+   }
+  ]
+ },
+ "residual>bn": {
+  "lead": "These are two answers to the same 2015 question — why does adding layers stop helping — and they are not versions of one another. BatchNorm treats it as a conditioning problem in the optimisation; the residual connection treats it as a problem with the function the network has been asked to represent. They shipped together, which obscured for years which of them was doing what.",
+  "blocks": [
+   {
+    "h": "Two diagnoses of depth",
+    "b": "BatchNorm's stated account was internal covariate shift: as the layers below update, the distribution arriving at a given layer keeps moving, so that layer spends its capacity tracking a moving target and the learning rate has to stay small. Fixing the per-feature mean and variance removes the shift, and the reported effect is real — much larger learning rates without divergence, and far less sensitivity to initialisation.\n\nThe residual account starts from an observation BatchNorm cannot explain. A 56-layer plain network has higher **training** error than a 20-layer one, so this is not overfitting. Worse, there is a construction that rules out any representational excuse: copy the shallow net into the deep one and set the remaining layers to the identity, and the deep net matches the shallow one exactly. Gradient descent does not find that solution. The proposed fix is not to normalise anything but to reparameterise, so that the identity is what a block does when its weights are zero: $y = F(x) + x$."
+   },
+   {
+    "h": "Where the accounts diverge",
+    "b": "He et al. close the escape route deliberately. Their plain baselines are trained with BatchNorm, and they verify that the gradients in those networks have healthy magnitudes. Normalisation was already in place, vanishing gradients were already excluded, and degradation persisted anyway. Whatever BatchNorm fixes, it is not this.\n\nThe reverse critique arrived later and was just as sharp. Santurkar and colleagues injected non-stationary noise after each BatchNorm layer — deliberately reintroducing the distribution shift the method was supposed to remove — and the training benefit survived. Their alternative reading is that BatchNorm smooths the loss landscape, making gradients more predictive over longer steps. So both papers were right about their fix and shaky about their reason: one mechanism was defended by an explanation the field later abandoned, the other by an intuition about learning identities that subsequent analysis rephrased in terms of signal propagation and effective depth."
+   },
+   {
+    "h": "What survived, and at what cost",
+    "b": "In practice they were used together from the start — every ResNet block contains BatchNorm — and that pairing became the default vision unit for half a decade. Which idea travelled further is not close. The identity path is in every Transformer, every diffusion U-Net and every large model since, essentially unmodified. BatchNorm has been replaced repeatedly, by LayerNorm, GroupNorm and RMSNorm, because the dependence on batch composition never stopped being a liability.\n\nThe later work that separated them is the interesting part. Fixup, SkipInit and the normaliser-free ResNets argued that BatchNorm's contribution **inside a residual network** is chiefly to downscale the residual branch at initialisation, so each block starts close to the identity — and that a single scalar per block, or a matched initialisation scheme, achieves the same thing without any batch statistics. The cost of bundling the two in 2015 was that this took roughly four years to establish."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Deep Residual Learning for Image Recognition",
+    "y": 2015
+   },
+   {
+    "t": "How Does Batch Normalization Help Optimization?",
+    "y": 2018
+   },
+   {
+    "t": "Fixup Initialization: Residual Learning Without Normalization",
+    "y": 2019
+   }
+  ]
+ },
+ "relu>alexnet": {
+  "lead": "The rectifier was already old — Fukushima's layered threshold networks, Hahnloser et al. in 2000, Jarrett et al.'s vision pipelines in 2009 — but it arrived in the modern lineage from the Boltzmann-machine side, where Nair and Hinton derived it as an approximation to an infinite stack of binary stochastic units. AlexNet took the function, discarded the derivation entirely, and used it as the component that made an eight-layer network affordable to train at all.",
+  "blocks": [
+   {
+    "h": "What ReLU established",
+    "b": "Nair and Hinton's route to $\\max(0, x)$ was probabilistic: replace a binary stochastic unit with an infinite series of copies sharing weights but with offset biases, and the expected output of the series is closely approximated by a rectified linear response. The derivation mattered to them; almost none of it survived contact with supervised training.\n\nWhat survived is the shape of the derivative. A logistic or tanh unit has a derivative that collapses towards zero once the unit saturates, and a backward pass through many such layers multiplies those factors together, so gradient magnitude decays with depth for reasons that have nothing to do with the data. The rectifier's positive half is the identity: its derivative is exactly one, it neither saturates nor rescales, and gradient passes through unattenuated however many layers are stacked. It is also cheap — a comparison and a select, no exponential — and it produces genuinely sparse activations rather than small ones."
+   },
+   {
+    "h": "What AlexNet did with it",
+    "b": "Krizhevsky, Sutskever and Hinton kept only the function. There is no RBM, no noise model and no unsupervised pretraining in AlexNet; the network is trained from a random initialisation by stochastic gradient descent with momentum, and the rectifier is simply the activation. The number they report is the argument: an equivalent four-layer convolutional network reaches 25% training error on CIFAR-10 roughly **six times faster** with rectifiers than with tanh units. On a run that already occupied two GTX 580s for days, a sixfold difference in iterations is the line between an experiment and an impossibility.\n\nThree things had to be added around it. They also added local response normalisation — offered not as a bound on unbounded activations, which the paper says rectifiers do not need, but as a lateral-inhibition scheme worth about 1.4% top-1, and later shown to contribute nothing. Some biases were initialised positive so that units began on the active side of the hinge. And a network that trains this quickly overfits, which is what dropout was there to absorb."
+   },
+   {
+    "h": "What changed as a result",
+    "b": "After 2012 saturating activations effectively vanished from feedforward vision networks, and depth stopped being conditional on layerwise pretraining — the thing rectifiers replaced was not only tanh but an entire training methodology built to work around tanh.\n\nThe cost is the dead unit. A unit whose pre-activation is negative for every input in the data receives exactly zero gradient and can never recover, so a fraction of the network can quietly stop existing during training. Initialisation had to be re-derived for rectifiers because the hinge discards half the signal and so halves its variance — He et al.'s factor of two, where Glorot's derivation had assumed a linear unit — while the dead unit is what leaky ReLU, PReLU and ELU were all proposed to soften within a few years. The hard zero is also precisely what later got softened: GELU and SiLU, the activations in every Transformer, keep the non-saturating positive half while restoring a small gradient below the origin."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Rectified Linear Units Improve Restricted Boltzmann Machines",
+    "y": 2010
+   },
+   {
+    "t": "ImageNet Classification with Deep Convolutional Neural Networks",
+    "y": 2012
+   },
+   {
+    "t": "Delving Deep into Rectifiers: Surpassing Human-Level Performance on ImageNet Classification",
+    "y": 2015
+   }
+  ]
+ },
+ "dropout>alexnet": {
+  "lead": "Dropout was proposed as a way of preventing units in a densely connected layer from co-adapting. AlexNet applied it to the two 4096-unit layers that held the bulk of its sixty million parameters, where — together with the label-preserving data augmentation the paper treats as equally necessary — it is what kept a model that large from simply memorising 1.2 million images.",
+  "blocks": [
+   {
+    "h": "What dropout established",
+    "b": "At training time each unit is retained with probability $p$, typically $0.5$, independently at every presentation; only the surviving subnetwork receives gradient. At test time the full network is used with outgoing weights scaled by $p$, so the expected input to each unit matches what it saw during training.\n\nTwo readings of why this helps were offered, and both are useful. Locally, no unit can rely on a particular partner being present, so a feature has to be useful on its own rather than as one half of a brittle pair — the co-adaptation argument that gave the 2012 paper its title. Globally, training samples from $2^n$ weight-sharing subnetworks and the weight-scaling rule approximates a geometric mean over their predictions, making dropout an ensemble method that costs one network. The structural point is that a regulariser could be a **sampling procedure** rather than a penalty term, with one probability in place of per-layer weight-decay coefficients."
+   },
+   {
+    "h": "What AlexNet did with it",
+    "b": "The application is selective, and the selection is the contribution. Dropout goes on the first two fully connected layers only. The convolutional layers are left alone: weight sharing already constrains their capacity severely, and their parameter count is small, whereas the dense layers hold most of the sixty million weights and are where memorisation would happen. Nothing about the mechanism was altered.\n\nKrizhevsky reports that without dropout the network overfits substantially, and that with it convergence takes roughly twice as many iterations. That trade — double the training time to make the model generalise — was affordable exactly once GPU training had made the underlying run feasible, which is why dropout and the hardware argument arrive in the same paper. The three ingredients are interlocking: rectifiers make the network train fast enough to overfit, and dropout is what stops it."
+   },
+   {
+    "h": "What changed as a result",
+    "b": "Dropout was standard practice in supervised deep learning for most of a decade. Two developments removed it from convolutional networks specifically. BatchNorm's dependence on batch composition supplies noise of its own, making the two partly redundant, and stacking them is actively harmful — the variance a unit sees at test time no longer matches the statistics BatchNorm accumulated during training. Separately the fat dense head disappeared: global average pooling, adopted by Network-in-Network and then by ResNet, left no layer worth dropping from.\n\nIt survived elsewhere. Transformers apply dropout to residual and attention paths as a matter of course, and keeping it active at inference gives a cheap approximate posterior — the Monte Carlo dropout used for uncertainty estimates. The residual costs are the ones it always had: training and inference compute different functions, and the retention probability is one more thing to tune."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Improving neural networks by preventing co-adaptation of feature detectors",
+    "y": 2012
+   },
+   {
+    "t": "Dropout: A Simple Way to Prevent Neural Networks from Overfitting",
+    "y": 2014
+   },
+   {
+    "t": "Understanding the Disharmony between Dropout and Batch Normalization by Variance Shift",
+    "y": 2019
+   }
+  ]
+ },
+ "bn>resnet": {
+  "lead": "BatchNorm's contribution to ResNet is largely a negative one, and that is what makes it decisive. By making deep plain networks trainable and their gradients demonstrably healthy, it removed the obvious explanation for why those networks still failed. What remained after the obvious explanation was gone is the degradation problem, and the residual block is the answer to it.",
+  "blocks": [
+   {
+    "h": "What BatchNorm established",
+    "b": "Normalising each feature over the mini-batch and restoring scale with learned $\\gamma, \\beta$ holds the activation distribution roughly fixed from layer to layer, so signal magnitude neither grows nor decays geometrically with depth, and neither does the gradient on the way back. The practical consequences were immediate: learning rates an order of magnitude larger became stable, and the elaborate initialisation schemes of the previous few years stopped being load-bearing.\n\nBy mid-2015 that made twenty- or thirty-layer convolutional networks a routine thing to train, where two years earlier they were a research result in themselves. This is the platform ResNet stands on. Without it the failure of very deep plain networks would have been unremarkable — everyone already knew deep networks were hard to optimise, and vanishing gradients was the standing explanation for why."
+   },
+   {
+    "h": "What ResNet did with it",
+    "b": "He et al. use BatchNorm twice over. Structurally, it sits in every residual branch — convolution, BatchNorm, rectifier, convolution, BatchNorm, then the addition. More importantly it is in the **control**: their plain baselines are trained with BatchNorm too, and they check explicitly that gradients in those networks are not vanishing. The 56-layer plain net nonetheless has higher training error than the 20-layer one.\n\nThat isolates the phenomenon. It is not saturation, not gradient scale, and not overfitting; it is that stochastic gradient descent cannot locate, in the deeper parameterisation, a solution as good as one that provably exists. The fix therefore has to be a change of parameterisation rather than another normaliser. Writing a block as $y = F(x) + x$ makes the identity mapping the zero of the weight space, so the optimiser reaches it by shrinking rather than by constructing it."
+   },
+   {
+    "h": "What changed as a result",
+    "b": "The pair became the default vision block, at 152 layers and then at 1001 in the pre-activation revision, which moved BatchNorm and the rectifier ahead of the convolutions so that the skip path is an unbroken identity from input to output.\n\nThe cost is that a batch-dependent component was welded into an architecture that is otherwise batch-independent, and it hurts exactly where ResNets went next. Detection and segmentation train with one or two images per device because of activation memory, and at that batch size the statistics are noise; synchronised BatchNorm, frozen BatchNorm and GroupNorm all exist to work around this one interaction. The subsequent analysis was more unsettling still: Fixup and the normaliser-free networks argued that inside a residual net BatchNorm's main job is to downscale the branch at initialisation, and that a scalar suffices."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Deep Residual Learning for Image Recognition",
+    "y": 2015
+   },
+   {
+    "t": "Identity Mappings in Deep Residual Networks",
+    "y": 2016
+   },
+   {
+    "t": "Group Normalization",
+    "y": 2018
+   }
+  ]
+ },
+ "adam>transformer": {
+  "lead": "Adam supplied an optimiser whose step size is roughly independent of gradient magnitude, which matters in a model whose embeddings, attention projections and normalisation scales receive gradients of wildly different sizes. What the Transformer added on top was a schedule, and that schedule has been copied about as widely as the architecture itself.",
+  "blocks": [
+   {
+    "h": "What Adam established",
+    "b": "Kingma and Ba maintain exponential moving averages of the gradient and of its square, correct both for their initialisation bias, and divide one by the root of the other:\n\n$$m_t = \\beta_1 m_{t-1} + (1-\\beta_1) g_t, \\qquad v_t = \\beta_2 v_{t-1} + (1-\\beta_2) g_t^2$$\n\n$$\\theta_t = \\theta_{t-1} - \\alpha \\frac{\\hat{m}_t}{\\sqrt{\\hat{v}_t} + \\epsilon}$$\n\nwith $\\hat{m}_t = m_t/(1-\\beta_1^t)$ and $\\hat{v}_t = v_t/(1-\\beta_2^t)$. The property that carried into everything downstream is the ratio: the update is of order $\\alpha$ per parameter whatever the gradient's scale, so **one** learning rate can serve parameter groups whose gradients differ by orders of magnitude. Vocabulary embeddings, which receive gradient only on the tokens present in a batch, are the clearest case: plain SGD with a single global rate can be made to serve them and a dense projection at once — the earlier sequence models did it, with clipping and care — but Adam removes the need to tune around the mismatch at all."
+   },
+   {
+    "h": "What the Transformer added",
+    "b": "Vaswani et al. change two things. The second-moment decay is set to $\\beta_2 = 0.98$ rather than the usual $0.999$, shortening the window over which squared gradients are averaged. And the learning rate is not constant but scheduled:\n\n$$\\alpha = d_{\\mathrm{model}}^{-0.5} \\cdot \\min\\left(t^{-0.5},\\; t \\cdot T_{\\mathrm{warmup}}^{-1.5}\\right)$$\n\nrising linearly for the first $T_{\\mathrm{warmup}} = 4000$ steps and decaying as $t^{-1/2}$ thereafter. No motivation is given for it in the paper; the account usually offered, and argued in print only later, is that early in training $\\hat{v}_t$ rests on very few samples, so the adaptive denominator is high-variance and a full-size step can damage the model before the statistics settle. A second reason emerged later: placing LayerNorm after the residual addition leaves gradients badly scaled at initialisation in the upper layers, and without warmup such a model diverges rather than merely training slowly."
+   },
+   {
+    "h": "What changed as a result",
+    "b": "Adam with warmup and a decaying schedule is the recipe for essentially every large model trained since — the decay is often cosine rather than inverse square root, but the shape is the same. The explanation was tidied up afterwards. RAdam attacked the variance-of-second-moment account directly by rectifying the adaptive term; Xiong et al. showed that pre-LN Transformers train stably with no warmup at all, which pins much of the requirement on where the normaliser sits rather than on Adam.\n\nThe cost is memory. Two optimiser states per parameter means the optimiser, not the model, dominates the memory bill at scale — in mixed precision the states are typically the largest single allocation. Adafactor's factored second moment, 8-bit Adam and ZeRO's sharding of optimiser state across devices all exist to reclaim it. Warmup, meanwhile, became a hyperparameter that is inherited rather than chosen."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Adam: A Method for Stochastic Optimization",
+    "y": 2014
+   },
+   {
+    "t": "On the Variance of the Adaptive Learning Rate and Beyond",
+    "y": 2019
+   },
+   {
+    "t": "On Layer Normalization in the Transformer Architecture",
+    "y": 2020
+   }
+  ]
+ },
+ "ln>transformer": {
+  "lead": "The Transformer needed a normaliser that does not consult other examples and does not care how long the sequence is. LayerNorm, built a year earlier for recurrent networks, already satisfied both constraints. It was placed in every sublayer and has stayed there, in one form or another, in every model of the family since.",
+  "blocks": [
+   {
+    "h": "What LayerNorm established",
+    "b": "The statistic is taken over the feature dimension of one example rather than over the batch, so the same computation runs at training and at inference, no running averages are accumulated, and batch size one is not a special case. For a sequence model none of that is convenience. Sentences vary in length, so a padded batch would contribute meaningless entries to any statistic taken over positions. Generation is autoregressive and typically runs a single sequence a token at a time, so batch statistics would not exist to be gathered.\n\nThere is a sharper constraint in a decoder. Any normalisation computed across positions couples a token's representation to tokens elsewhere in the sequence, including later ones, which silently breaks the causal masking the whole training objective depends on. Normalising strictly within a token is the only form that is safe by construction."
+   },
+   {
+    "h": "What the Transformer did with it",
+    "b": "Every sublayer is wrapped as `LayerNorm(x + Sublayer(x))` — attention and the position-wise feed-forward network alike — so that each contribution re-enters the residual stream at a controlled scale. The learned $\\gamma, \\beta$ are kept unchanged from Ba et al.; nothing about the operation itself was modified.\n\nThe placement is what had to be paid for. Putting the normaliser **after** the addition means the residual path is not a clean identity: it passes through a normalisation at every layer, and at initialisation this leaves the gradients reaching the upper layers badly scaled. That is a substantial part of why the published recipe cannot dispense with learning-rate warmup, and why early attempts to train much deeper Transformers with the original block layout tended to diverge rather than converge slowly."
+   },
+   {
+    "h": "What changed as a result",
+    "b": "Two revisions followed, and both are now standard. Pre-LN moves the normaliser inside the branch, before attention and before the feed-forward network, leaving the skip connection an unbroken identity from embedding to output — this removes the need for warmup and is what makes stacks of many dozens of layers routine. RMSNorm then removed the mean subtraction, keeping only division by the root mean square of the activations, with no measurable loss; the re-centring half of LayerNorm turned out not to be doing the work it was assumed to be doing.\n\nWhat it costs is throughput and clarity. A normalisation is a reduction on the critical path of every token, bound by memory bandwidth rather than arithmetic, which is why it is one of the first things fused into a custom kernel. It also makes the residual stream a non-linear object, complicating both quantisation and interpretability work that would prefer it linear."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Attention Is All You Need",
+    "y": 2017
+   },
+   {
+    "t": "On Layer Normalization in the Transformer Architecture",
+    "y": 2020
+   },
+   {
+    "t": "Root Mean Square Layer Normalization",
+    "y": 2019
+   }
+  ]
+ },
+ "residual>ddpm": {
+  "lead": "The identity skip crossed into diffusion twice over. Once as furniture — DDPM's denoiser is a U-Net built from residual blocks — and once in the objective itself, where predicting the added noise rather than the clean image makes every reverse step a small learned correction to its own input. That is the residual block's arithmetic moved up a level, from layer to sampling step.",
+  "blocks": [
+   {
+    "h": "What the identity path established",
+    "b": "He et al. were addressing degradation, not depth for its own sake: a 56-layer plain network had higher training error than a 20-layer one, so the extra layers could not even learn to pass their input through unchanged. Writing a block as $y = x + f(x)$ makes the identity free — $f$ has only to supply a correction — and gives gradients an unobstructed additive path back to early layers.\n\nThe consequence that travels here is representational rather than optimisational. A residual stack is a running state that is repeatedly nudged, so any module computing a small deviation from its input, rather than a fresh output, inherits both the easy gradient and the easy default of doing nothing at all. The reverse process of a diffusion model has exactly that shape: each of its steps is a nearly-identity map on a slightly noisy image, and almost none of them should be producing a picture from scratch."
+   },
+   {
+    "h": "What DDPM built on it",
+    "b": "The backbone is the literal inheritance. Ho et al.'s denoiser is a U-Net of residual blocks in the PixelCNN++ style, one network shared across all $T$ noise levels, with the timestep supplied as a sinusoidal embedding added inside every block and self-attention at the $16\\times16$ feature map.\n\nThe deeper borrowing is the parameterisation. Instead of predicting the posterior mean directly, the network predicts the noise $\\epsilon$ that was added, and the mean is recovered by subtracting it:\n\n$$\\mu_\\theta(x_t,t)=\\frac{1}{\\sqrt{\\alpha_t}}\\left(x_t-\\frac{\\beta_t}{\\sqrt{1-\\bar\\alpha_t}}\\,\\epsilon_\\theta(x_t,t)\\right)$$\n\nwhere $\\beta_t$ is the variance injected at step $t$, $\\alpha_t = 1-\\beta_t$, and $\\bar\\alpha_t$ is their running product. Each reverse step is its own input minus a scaled network output. The target additionally keeps unit variance at every noise level, which is what allows one set of weights to serve the whole schedule instead of a separate model per step."
+   },
+   {
+    "h": "What it bought and cost",
+    "b": "With that parameterisation, and a reweighted loss that drops the variational coefficients in favour of a plain mean-squared error on $\\epsilon$, diffusion became straightforwardly trainable, reaching an unconditional CIFAR-10 FID of 3.17 without any adversarial machinery. The residual U-Net then hardened into the default denoiser, recognisable in guided diffusion and in Stable Diffusion's latent model.\n\nTwo costs came with the inheritance. The convolutional prior arrived uninvited and went unexamined for years; DiT later showed the U-Net was not load-bearing and that a plain transformer scales better, so the backbone had been settled by descent rather than by evidence. And the noise-residual view is uneven across the schedule: at high noise levels, where the signal-to-noise ratio approaches zero, $\\epsilon$-prediction says almost nothing about the image it is meant to recover, which is why $v$-prediction and terminal signal-to-noise corrections had to be added afterwards."
+   }
+  ]
+ },
+ "attnmech>showattend": {
+  "lead": "Bahdanau's alignment was defined over the hidden states of an encoder, but nothing in the mechanism required the source to be a sequence at all. Xu et al. replaced that set with the spatial grid of a convolutional feature map, and the same weighted sum became a caption model that looks at a different part of the image for each word it emits.",
+  "blocks": [
+   {
+    "h": "What soft alignment established",
+    "b": "The mechanism is three parts: a scoring function over a set of candidate vectors, a softmax turning those scores into a distribution, and a convex combination handed to the decoder as its context. Crucially it is trained by the task loss alone — nothing supervises the weights, and the alignment emerges because it helps prediction.\n\nTwo properties made it portable. The maths never consults the order of the source set; sequence order entered the translation model through the encoder recurrence, not through attention. And the size of the source set is decoupled from the length of the output, so a decoder can run for as many steps as it likes over a fixed pool of vectors. Any collection of feature vectors with a notion of relevance to a query therefore qualifies as a source, whether or not it has a first element."
+   },
+   {
+    "h": "What the caption model changed",
+    "b": "The annotations become 196 vectors read off a $14\\times14$ convolutional feature map, one per spatial cell, with no source-side recurrence anywhere in the model. Xu et al. offered two readings of the weights: deterministic soft attention, where the context is the expectation over locations and everything stays differentiable, and hard attention, where a single location is sampled and trained with a REINFORCE estimator plus variance reduction and an entropy term.\n\nTwo additions were needed to make the transplant work. A scalar gate on the context vector lets the decoder decide how much visual evidence a given word requires, since function words need almost none. And a doubly stochastic penalty encourages the attention paid to each region, summed over the whole caption, to approach one — without it the model settled on a few salient cells and described the rest from language statistics."
+   },
+   {
+    "h": "What changed downstream",
+    "b": "This fixed the pattern of bolting attention onto a convolutional grid, which carried into visual question answering and video description, and it exposed the grid's own defect: cells are a uniform tiling that does not respect object boundaries, which is what bottom-up attention later fixed by attending over detected regions instead.\n\nIts larger and more ambiguous legacy is interpretive. The overlaid attention map, showing where the model was looking as it produced a particular word, became the standard evidence that a model had learned something sensible, and it is the paper's most copied figure. That reading went unchallenged for years before anyone asked whether attention weights are faithful — they are one factor in a computation, not a certificate of what the output actually depended on. The hard-attention variant, meanwhile, was fiddly enough to estimate that soft attention won by default almost everywhere."
+   }
+  ]
+ },
+ "mlp>elman": {
+  "lead": "Backpropagation supplied a way to assign blame through an arbitrary differentiable graph, but said nothing about how to present a sequence to one. Elman's change is small in code and large in consequence: copy the hidden layer at each step and feed it back alongside the next input, so the network's own state carries the past rather than the input vector carrying it.",
+  "blocks": [
+   {
+    "h": "What backprop made available",
+    "b": "The 1986 work established that error at the output can be apportioned to any weight in a layered network by repeated application of the chain rule, which made architecture a design question rather than a mathematical obstacle. What it did not relax is the shape of the input: a feed-forward network consumes a fixed-width vector.\n\nThe standard workaround was to encode time as space — a sliding window over the last $n$ items, as in NETtalk's seven-letter buffer and later in time-delay networks. That has two defects. The window sets a hard ceiling on how far back context can reach, chosen by the designer before training. And nothing is shared across offsets: the same pattern arriving one position earlier is a different input vector meeting different weights, so a regularity has to be learned separately at every position it can occupy."
+   },
+   {
+    "h": "What Elman did with it",
+    "b": "A set of context units holds a copy of the previous hidden activation and is presented as additional input, so that\n\n$$h_t = \\sigma(W_x x_t + W_h h_{t-1} + b)$$\n\nwith $W_x$ reading the current item and $W_h$ reading the network's own previous state. The input width stays fixed while the reachable context does not, and the same weights apply at every position.\n\nFeeding back the hidden layer rather than the output, as Jordan's networks had done, is the load-bearing choice: the recurrent representation is not tied to the output vocabulary and is free to become whatever the prediction task rewards. Elman trained it with the copy treated as an ordinary static input, which is one step of truncation rather than full unrolling. Predicting the next letter in an unsegmented stream produced error that spiked at word boundaries, and clustering the hidden vectors recovered noun–verb and animate–inanimate distinctions nobody had supplied."
+   },
+   {
+    "h": "What it cost",
+    "b": "Once the loop is unrolled properly, the gradient reaching $k$ steps back carries a product of $k$ Jacobians of the form $W_h^\\top \\mathrm{diag}(\\sigma')$. Singular values below one shrink it geometrically and values above one blow it up, so the model that in principle has unbounded memory in practice retains a handful of steps — the analysis Hochreiter and then Bengio et al. made explicit in the early 1990s.\n\nElman's one-step truncation partly concealed the diagnosis, since a gradient that never travels far cannot be observed to vanish. The full account of why the architecture underdelivered arrived only with attempts to train it on long dependencies, and that gap is the entire brief for the gated cell: keep the recurrent state, replace the multiplicative path through it with an additive one that a gate can leave undisturbed."
+   }
+  ]
+ },
+ "mlp>ae": {
+  "lead": "What passes along this edge is a licence rather than a mechanism. Once error can be propagated from any differentiable loss, the training target no longer has to be a label supplied by a human — and if the target is set equal to the input, the data labels itself and the burden of learning shifts onto whatever constraint you impose in the middle.",
+  "blocks": [
+   {
+    "h": "A target that needs no label",
+    "b": "Nothing in the chain rule cares where targets come from. Setting the output target to the input turns a supervised procedure into an unsupervised one at no mathematical cost, and the construction appears in the orbit of the 1986 work almost immediately, as a way to learn compact codes.\n\nThe important early result is negative. Bourlard and Kamp, and Baldi and Hornik, showed that a single linear hidden layer trained on squared reconstruction error recovers nothing beyond the principal subspace: the optimum spans the same directions as PCA, which an eigendecomposition finds directly and without gradient descent. That fixed the terms of the problem. A neural autoencoder is only worth the trouble if nonlinearity, depth, or an explicit constraint on the code buys something the linear projection cannot, and the field spent the next two decades finding out whether it does."
+   },
+   {
+    "h": "What the deep autoencoder added",
+    "b": "The architecture keeps backprop and the reconstruction loss $\\lVert x - g(f(x)) \\rVert^2$ and adds a narrow code layer, so the identity map is unavailable and the encoder $f$ must decide what to discard. What had to be added to make depth work was an initialisation. Gradient descent from random weights through a multi-layer encoder stacked on its mirrored decoder settled into poor solutions, so Hinton and Salakhutdinov trained each layer in turn as a restricted Boltzmann machine, unrolled the stack into one deep network, and only then fine-tuned it end to end.\n\nTheir demonstration is as much about that recipe as about the shape: a two-dimensional code in which MNIST digit classes separate where two-dimensional PCA smears them together, and better retrieval of Reuters documents from short codes than from latent semantic analysis on the same data."
+   },
+   {
+    "h": "What survived and what did not",
+    "b": "The pretraining half was obsolete within about five years. Rectified activations, better-scaled initialisation and larger labelled datasets made deep networks trainable from random weights directly, and layerwise pretraining is now a historical step rather than a technique.\n\nThe shape survived everything built on top of it — denoising and sparse variants, the VAE, which replaces the deterministic code with a distribution and adds a KL term so the code can be sampled from, VQ-VAE's discrete codebook, and the encoder that maps pixels into the latent space beneath a diffusion model. The persistent cost is that reconstruction error is the wrong objective for representation. A code that reconstructs pixels well spends its capacity on whatever carries the most variance, typically layout and illumination, not on what a downstream task needs. That mismatch is why representation learning moved to contrastive and masked-prediction objectives, and why the autoencoder now most often serves as a perceptual compressor beneath a generative model rather than as a feature learner in its own right."
+   }
+  ]
+ },
+ "residual>nde": {
+  "lead": "A residual block computes $h_{t+1} = h_t + f(h_t)$, which is a forward Euler step of an ordinary differential equation with the step size fixed at one. Chen et al. took that reading literally: keep the increment, delete the discretisation, and hand the depth axis to a numerical solver that chooses its own steps.",
+  "blocks": [
+   {
+    "h": "Why the increment form invites a limit",
+    "b": "ResNet was presented as a fix for optimisation — the identity path lets gradients reach early layers and makes a do-nothing block free — but the transferable part was the functional form. A conventional layer $h_{t+1} = \\sigma(W h_t)$ admits no continuous reading; the additive form does, immediately and exactly.\n\nWhat made the limit more than a formal trick was evidence that trained residual networks behave like a smooth trajectory rather than a sequence of distinct transformations. Individual blocks change the running state by a small amount, blocks can be dropped or reordered at inference with modest damage, and stochastic depth trains networks in which the number of blocks varies from batch to batch. A stack whose members are individually near-identity and collectively order-tolerant is a discretised flow that has not yet been recognised as one."
+   },
+   {
+    "h": "What Neural ODE did with it",
+    "b": "The hidden state becomes the solution of an initial value problem, $h(T) = h(0) + \\int_0^T f(h(t), t, \\theta)\\,\\mathrm{d}t$, evaluated by an off-the-shelf adaptive solver. The increment is kept. Discarded are the fixed layer count and, more radically, the per-layer parameters: one vector field with $t$ as an input replaces a distinct weight matrix per block, so depth is no longer a hyperparameter but an error tolerance, and the number of function evaluations is decided at runtime by the difficulty of the trajectory.\n\nThe removal only pays if you do not have to store what the solver did. The adjoint method supplies that. With $a(t) = \\partial L/\\partial h(t)$, one solves\n\n$$\\frac{\\mathrm{d}a}{\\mathrm{d}t} = -a(t)^\\top \\frac{\\partial f}{\\partial h}$$\n\nbackwards alongside the state, so training memory is constant in depth rather than linear in it."
+   },
+   {
+    "h": "What it changed and cost",
+    "b": "The payoff landed in generative modelling rather than in classification. Continuous time replaces the log-determinant of the change-of-variables formula with a trace, $\\partial_t \\log p = -\\mathrm{tr}(\\partial f / \\partial h)$, which a stochastic estimator handles cheaply. That freed normalising flows from the triangular-Jacobian architectures they had been constrained to, and the line runs from there through FFJORD to flow matching and the probability-flow view of diffusion.\n\nThe costs are practical and were felt quickly. Learned dynamics stiffen during training, so the evaluation count climbs and cost becomes data-dependent and unpredictable. The adjoint's backwards solve does not retrace the forward trajectory exactly, so gradients inherit solver error, prompting checkpointing and tolerance fixes. And on ordinary supervised vision the ODE network never matched a well-tuned ResNet per unit of compute. It became an instrument for continuous-time densities, not a replacement backbone."
+   }
+  ]
+ },
+ "attnmech>attnunet": {
+  "lead": "What crosses here is the smaller half of the attention mechanism. Oktay et al. kept the additive scoring function and the fact that it is learned from the task loss with no supervision of its own, and dropped the softmax, the query set and the weighted sum — leaving a per-pixel relevance mask that multiplies U-Net's skip connections before they are concatenated.",
+  "blocks": [
+   {
+    "h": "What soft attention established",
+    "b": "The mechanism established that the question \"which of these features are relevant right now\" can be answered by a small learned function of context, trained end to end with no labels on the answer itself. The score used for that was additive: a single hidden layer over the sum of two projections, $v^\\top \\tanh(W_s s + W_h h)$, comparing a query $s$ with a candidate $h$.\n\nThat scoring function is cheap, it takes two vectors of unequal provenance without requiring them to live in the same space, and it does not assume the candidates form a sequence. The rest of the machinery — normalising the scores into a distribution and collapsing the candidates into one context vector — solved a problem specific to a decoder that needed a single summary per output step. It is separable, and here it is separated."
+   },
+   {
+    "h": "What the attention gate did",
+    "b": "U-Net's skips carry encoder features at full resolution so that boundaries survive the decoder's upsampling, but at that resolution the network has almost no context about what it is segmenting, and most of what crosses is background. For a small organ in an abdominal CT scan the target occupies a small fraction of the voxels, and the usual remedy was a two-stage cascade: localise with one network, segment with another.\n\nThe gate uses the coarser decoder feature $g$, which does know what is being segmented, as the query, and the skip feature $x$ as the candidate:\n\n$$\\alpha = \\sigma\\!\\left(\\psi^\\top \\mathrm{ReLU}(W_x x + W_g g)\\right), \\qquad \\hat{x} = \\alpha \\odot x$$\n\nThe logistic $\\sigma$ replaces the softmax deliberately. Regions do not compete for a fixed budget, several can be retained at once, and gradients stay dense across the map."
+   },
+   {
+    "h": "What it bought, and the ceiling",
+    "b": "The gate costs a few convolutions, needs no second network and no detection stage, and became a near-standard addition to encoder–decoder segmentation, where the localisation benefit of a cascade is obtained inside a single model trained once.\n\nThe cost is that the borrowed name flatters the mechanism. There is no interaction between pairs of positions and no distribution over a set; a pixel's gate depends on its own feature and on a coarse context vector, so the effective receptive field is still whatever the convolutions supply. Functionally it is closer to squeeze-and-excitation applied spatially than to the alignment model it descends from. Genuine long-range dependence in segmentation had to wait for real self-attention — non-local blocks, then transformer encoders in TransUNet and Swin-UNet — which pay a cost quadratic in however many positions attend to each other at once, whether that is a whole low-resolution grid or, in Swin's case, a shifted window, to buy exactly what a gate cannot provide."
+   }
+  ]
+ },
+ "perceptron>mlp": {
+  "lead": "Rosenblatt's perceptron supplied a learning rule — move each weight in proportion to the error it contributed to — and a proof that the rule terminates. What travelled forward to the multilayer network was that rule. What had to be invented was a way to compute an error for a unit that has no target of its own.",
+  "blocks": [
+   {
+    "h": "What the perceptron established",
+    "b": "The perceptron is a threshold unit trained by error correction: on a misclassified example, $w \\leftarrow w + \\eta(y - \\hat{y})x$. The update is local, requires no derivative, and comes with a convergence theorem — if the two classes are linearly separable, the procedure halts after finitely many corrections.\n\nThe guarantee was also the ceiling. A single threshold unit realises a hyperplane and nothing else, and Minsky and Papert's 1969 analysis made the consequence concrete: XOR is not a linear function of its inputs, so no setting of $w$ classifies it. The remedy was never mysterious. A hidden layer can construct features under which the problem becomes separable, and everyone knew it. The obstacle was that the error-correction rule needs a target for the unit it updates, and a hidden unit is told nothing about what it should have output. Without that, extra layers were architecture you could draw but not train."
+   },
+   {
+    "h": "What backprop had to add",
+    "b": "Backpropagation keeps the shape of the perceptron rule — an update proportional to a per-unit error — and discards the hard threshold that made the rule possible in the first place. A differentiable squashing function replaces it, which costs the clean binary decision but makes the chain rule applicable.\n\nThe error of a hidden unit is then defined by what it caused downstream:\n\n$$\\delta_j = \\sigma'(a_j)\\sum_k w_{kj}\\,\\delta_k$$\n\nwhere $a_j$ is unit $j$'s pre-activation and $\\delta_k$ the already-computed error of each unit it feeds. Credit assignment becomes a second sweep through the same graph, costing the same order as the forward pass, so depth is affordable.\n\nThe algorithm itself had been derived before — reverse-mode differentiation by Linnainmaa in 1970, applied to networks by Werbos in 1974. The 1986 contribution of Rumelhart, Hinton and Williams was the demonstration that the hidden units so trained learn interpretable internal representations rather than arbitrary intermediate values."
+   },
+   {
+    "h": "What it cost to make the trade",
+    "b": "The convergence guarantee did not survive. The loss over a multilayer network is non-convex, and no theorem promises the procedure finds a good solution or any particular one. The field swapped a provable algorithm for a workable one, and has been living with that ever since.\n\nWorse, the depth that backprop had purchased could not immediately be spent. The backward recursion multiplies by $\\sigma'(a_j)$ at every layer, and for a saturating unit that factor is small, so gradient magnitude decays geometrically with depth — diagnosed by Hochreiter in 1991 and by Bengio and colleagues in 1994. The datasets and machines of the late 1980s were too small to expose whether anything else was wrong.\n\nAlmost every later node on the foundations lane is a repair to one of those two problems: ReLU, careful initialisation and normalisation for the gradient; dropout and weight decay for the unconstrained capacity; Adam for the step size the chain rule never supplied."
+   }
+  ]
+ },
+ "boltzmann>rbm": {
+  "lead": "The Boltzmann machine defined learning as matching two correlation statistics — one measured with the data clamped onto the visible units, one with the network running free. The second was the problem: it required Gibbs sampling to equilibrium. The RBM keeps the energy model and the learning rule intact and deletes the connections that made sampling slow.",
+  "blocks": [
+   {
+    "h": "An elegant, untrainable model",
+    "b": "Hinton and Sejnowski defined a distribution over binary states through an energy, $p(s) \\propto e^{-E(s)}$ with $E(s) = -\\sum_{i<j} w_{ij}s_i s_j - \\sum_i b_i s_i$. The remarkable consequence is that the gradient of the log-likelihood takes a purely local form:\n\n$$\\frac{\\partial \\log p}{\\partial w_{ij}} = \\langle s_i s_j\\rangle_{\\mathrm{data}} - \\langle s_i s_j\\rangle_{\\mathrm{model}}$$\n\nEach weight needs only the states of the two units it connects, averaged first with the data held fixed and then with the network sampling freely. No global error signal is required, which is exactly what made the model attractive as an account of learning in a physical substrate.\n\nBoth averages, however, are intractable. With hidden units wired to one another, even the clamped phase has no closed form, and the free phase must run a Markov chain to equilibrium. For any network large enough to be interesting, that took impractically long, and the estimates were too noisy to drive learning."
+   },
+   {
+    "h": "What the restriction buys",
+    "b": "The restricted Boltzmann machine keeps the energy function and the two-phase rule and removes every visible-visible and hidden-hidden connection, leaving a bipartite graph. The consequence is immediate: given the visible layer, the hidden units are conditionally independent,\n\n$$p(h_j = 1 \\mid v) = \\sigma\\Big(b_j + \\sum_i w_{ij}v_i\\Big)$$\n\nso an exact sample of the whole hidden layer is one matrix multiply. Sampling becomes block Gibbs, alternating exact draws of entire layers, and the clamped phase is now computed rather than estimated.\n\nThe free phase remains an equilibrium quantity, and contrastive divergence simply declines to compute it: start the chain at a training vector, run a single alternating step, and take the correlations there. The architecture is Smolensky's 1986 harmonium; Hinton's 2002 contribution is the approximation that made it usable. The price is that CD-1 follows the gradient of the likelihood only loosely, and the hidden layer can no longer represent dependencies among its own units."
+   },
+   {
+    "h": "A layer you can actually train",
+    "b": "The result was a component that trained unsupervised in minutes on ordinary hardware, which is what made stacking conceivable and gave the 2006 revival its engine. RBMs also worked as standalone models — notably for collaborative filtering in the Netflix Prize — so the tractability was not purely instrumental.\n\nThe bias in contrastive divergence is real and showed up where you would expect: models that score training data well but generate poorly, because the negative phase never explores far from the data. Persistent contrastive divergence, which carries the chain across parameter updates rather than restarting it, recovered some of that.\n\nThe deeper cost was strategic. The restriction bought tractability by giving up the general undirected model, and when ReLU, good initialisation and large labelled datasets made plain backprop work, the whole energy-based branch stopped being the route to depth. Its statistics came back much later, in score matching and diffusion, rather than through this line."
+   }
+  ]
+ },
+ "rbm>dbn": {
+  "lead": "A trained RBM gives you two things: a layer of features and a posterior over them that factorises, so it can be sampled in one matrix multiply. The deep belief network's move is to treat that posterior as a dataset and train another RBM on it — and to show the repetition is not merely a heuristic but provably improves a bound on the likelihood.",
+  "blocks": [
+   {
+    "h": "Two properties of a trained RBM",
+    "b": "Everything the DBN does rests on two facts established by contrastive divergence. First, an RBM can be trained on its own, without any error signal arriving from above and without any labels, so a layer is a self-contained learning problem. Second, because the hidden units are conditionally independent given the visible ones, inferring the representation of a data vector is a single sigmoid of a matrix product — not an iterative inference procedure.\n\nTogether these mean a trained RBM converts a dataset into another dataset cheaply and deterministically enough to be practical. The hidden activations of the training set are simply a new set of vectors, of a form the same algorithm accepts as input. Nothing in the RBM formulation says the visible units must be pixels. That closure — the output of the procedure is a legitimate input to the procedure — is the whole opening."
+   },
+   {
+    "h": "Greedy stacking, then a change of story",
+    "b": "Hinton, Osindero and Teh train an RBM on the data, freeze it, push the training set through to obtain hidden samples, train a second RBM on those, and repeat. The stack is then reinterpreted: the top two layers remain an undirected RBM acting as an associative memory, while the layers below are read as a directed sigmoid belief network using the same weights generatively.\n\nThe justification is the part that mattered. If a new layer is initialised with the transpose of the weights below it, adding it leaves a variational lower bound on the log-likelihood unchanged, and training that layer can only raise the bound. Greedy layer-wise training is therefore a legitimate optimisation of a global quantity, not a hopeful sequence of local fits.\n\nThe generative account is then largely discarded. The stacked weights are treated as an initialisation and the whole network is fine-tuned discriminatively by backprop."
+   },
+   {
+    "h": "The right answer to the wrong diagnosis",
+    "b": "This is the work that made \"deep\" a usable adjective. It reframed the problem from \"the gradient signal degrades\" to \"the starting point is bad\", and for roughly six years unsupervised pretraining was the accepted answer, transferring intact to stacked denoising autoencoders where the RBM was swapped for a simpler component.\n\nThe diagnosis was partly wrong. Later analysis suggested pretraining acted mainly as a regulariser, and once rectifiers, variance-preserving initialisation and datasets the size of ImageNet arrived, deep supervised networks trained perfectly well from random weights. Pretraining disappeared from vision within a few years of dominating it.\n\nWhat survived was the strategic claim rather than the mechanism: that the way to use unlabelled data is to train a generative model of it and reuse the parameters. That claim was correct, and it returned a decade later in language modelling with a different engine underneath it."
+   }
+  ]
+ },
+ "dbn>alexnet": {
+  "lead": "AlexNet does not descend from the deep belief network. Its architecture comes from the convolutional line — Fukushima's neocognitron and LeCun's LeNet — and it borrows none of the RBM machinery. What links the two is a shared question, largely the same laboratory, and opposite answers to it, which is why this arrow is a fork rather than a step.",
+  "blocks": [
+   {
+    "h": "The premise the DBN line rested on",
+    "b": "The 2006 programme was built on a specific claim: gradient descent from random weights cannot train a deep network, because it settles in a poor region of a non-convex landscape; labelled data is scarce while unlabelled data is abundant; therefore learn a generative model layer by layer and use it as the initialisation.\n\nEvery part of that had support at the time. On the datasets available between 2006 and 2010, pretrained networks did beat randomly initialised ones, and the margin widened with depth. The claim set the research agenda for half a decade and supplied the field with its name.\n\nIts weakness was that each clause was contingent on quantities nobody was holding fixed — the size of the labelled set, the choice of nonlinearity, the scale of available compute. Change those and the premise stops being true, without any part of the theory being refuted."
+   },
+   {
+    "h": "The opposite bet",
+    "b": "Krizhevsky, Sutskever and Hinton kept none of the apparatus: no RBMs, no layer-wise schedule, no generative model, one supervised objective trained end to end from random initialisation. Making that work required a different set of substitutions. ReLU replaced saturating units so the gradient survived eight layers. Dropout on the fully connected layers replaced the generative prior as the regulariser. The model was split across two GTX 580 cards with 3GB each because it did not fit on one. And ImageNet supplied 1.2 million labelled images where the earlier premise had assumed labels were the scarce resource.\n\nThe 2012 ILSVRC result was 15.3% top-5 error against 26.2% for the next entry, which used hand-designed features. Two of the three authors had spent years on the pretraining programme. The honest description of this edge is not inheritance but a wager settled against the earlier position by people who had held it."
+   },
+   {
+    "h": "What the fork cost the loser",
+    "b": "Vision went fully supervised and stayed there. Unsupervised representation learning, the entire point of the DBN line, effectively vanished from the field for most of a decade, returning only with contrastive methods and masked autoencoders — and returning without any of the energy-based machinery.\n\nMeanwhile the DBN's underlying claim was vindicated elsewhere. Generative pretraining on unlabelled data followed by task-specific fine-tuning is precisely what GPT and BERT do; the engine is a transformer and a prediction objective instead of stacked RBMs and contrastive divergence, at a data scale the 2006 work could not have contemplated.\n\nSo the DBN was right about the destination and wrong about the mechanism, and in this field being wrong about the mechanism costs you the lineage. Nothing in the current tree descends from it directly, which is the strongest thing that can be said about an idea that was, in outline, correct."
+   }
+  ]
+ },
+ "mlp>relu": {
+  "lead": "Backpropagation makes the gradient reaching a low layer a product of terms contributed by every layer above it. Once that is understood, the activation function is not a modelling preference but a decision about what that product does to the gradient's magnitude. ReLU is the choice whose derivative is exactly one.",
+  "blocks": [
+   {
+    "h": "The defect inside the chain rule",
+    "b": "The backward pass multiplies by $\\sigma'(a)$ at every unit it passes through. For the logistic sigmoid, $\\sigma'(a) = \\sigma(a)\\,(1 - \\sigma(a))$, which never exceeds $1/4$ and falls towards zero the moment the unit saturates. Over $L$ layers the error signal is therefore scaled by at most $4^{-L}$, and in practice by far less, since saturation is common. This was established rather than suspected — Hochreiter's 1991 thesis, then Bengio, Simard and Frasconi in 1994 for the recurrent case.\n\nThe damaging property is not incidental to the sigmoid. It was chosen because it keeps activations bounded and gives a unit a reading as a Bernoulli variable, which is what connected these networks to the energy-based models on the same lane. Both of those virtues come from the flat tails, and the flat tails are what destroy the gradient."
+   },
+   {
+    "h": "Removing the squash",
+    "b": "The rectifier keeps the layered architecture and the chain rule and discards boundedness and the probabilistic interpretation:\n\n$$f(x) = \\max(0, x)$$\n\nOn the positive side the derivative is exactly $1$, so a gradient travelling down a path of active units is not attenuated at all, however long the path. Depth stops costing gradient magnitude and starts costing only compute.\n\nNair and Hinton arrived at it in 2010 by approximating an infinite stack of binary sigmoid units with shifted biases, so it entered as a derivation rather than a hack; Glorot, Bordes and Bengio then showed rectifier networks train well without any pretraining. Two additions were needed to make the removal survive. Initialisation had to be rescaled, since a rectifier passes roughly half the variance it receives — later formalised as He initialisation. And the network must tolerate dead units: a unit whose pre-activation is negative on every example receives no gradient, permanently."
+   },
+   {
+    "h": "What the sharp corner left behind",
+    "b": "ReLU is one of the three things AlexNet points at, and it is what made the plain supervised deep network trainable at all. It also removed a large part of the practical argument for unsupervised pretraining, which is why this node sits where the two lanes diverge.\n\nThe costs are the ones its own construction predicts. Dead units waste capacity, so leaky ReLU and PReLU give the negative side a small slope. The hard kink at zero is awkward for optimisation, so ELU, GELU and SiLU smooth it — and GELU-family activations, chosen on measured performance rather than argument, are what transformers use now.\n\nThe exact zero also makes activations sparse, which was originally advertised as a biologically motivated virtue. That justification has not held up. The reason ReLU is used is the derivative, and the sparsity is a side effect people learned to stop explaining."
+   }
+  ]
+ },
+ "mlp>dropout": {
+  "lead": "Backpropagation finds parameters that fit the training set, and nothing within it constrains what the network may use to do so. Dropout attacks the problem at the level of the individual unit: a hidden unit that can count on a particular other unit being present will co-adapt with it, so make presence unreliable.",
+  "blocks": [
+   {
+    "h": "Fitting power without a constraint",
+    "b": "The chain rule gives a procedure for fitting any differentiable architecture, and that is the entire content of the 1986 result — it says nothing about which of the many fitting solutions is chosen, and capacity only grows as hidden units are added.\n\nThe classical remedies act on the parameter vector as a whole: an $L_2$ penalty shrinks all weights towards zero, early stopping halts before the fit tightens. Neither addresses the specific failure mode, which is that a hidden unit stops being a feature of the input and becomes a correction to another hidden unit's error — useful only in that unit's company, and useless on data where the company behaves differently.\n\nThe known cure for that kind of variance was averaging independently trained networks, which works and was well understood by the 1990s. It is also expensive in exactly the regime where the problem bites, since it multiplies both training and inference cost by the number of members."
+   },
+   {
+    "h": "An ensemble you can afford",
+    "b": "During training, each unit is retained independently with probability $p$ and otherwise zeroed. The surviving subnetwork performs the forward and backward pass, and only its weights are updated. Because the mask is redrawn every step, no unit can rely on any other being present, and a feature must be useful on its own.\n\nAt test time nothing is dropped and outgoing weights are multiplied by $p$, so each unit receives, in expectation, the input it saw during training. The claim attached to this is that the procedure trains an ensemble of $2^n$ subnetworks with tied weights and approximates their average in one forward pass. The averaging is exact only in a network with no nonlinear hidden units, and an approximation in any real one — and it worked considerably better than that argument entitles it to.\n\nNothing about backprop had to change. Dropout is a multiplicative mask in the forward pass, and the gradient flows through it unmodified."
+   },
+   {
+    "h": "Where it stopped applying",
+    "b": "Dropout sits on AlexNet's fully connected layers, where nearly all the parameters are, and for several years it was the default regulariser for anything large enough to overfit.\n\nIts limits emerged in the same order the architectures did. Convergence needs noticeably more epochs, since each step trains a different subnetwork on a noisier objective. It transfers poorly to convolutional layers, where neighbouring activations are strongly correlated and zeroing individual ones removes little information, which is why spatial dropout and stochastic depth replaced it there. It interacts badly with batch normalisation: the two disagree about the variance a unit sees at training and at test time, and stacking them can hurt.\n\nAt current scale the underlying problem often does not occur. A model that sees each training example roughly once has far less opportunity to overfit it, and dropout rates in the largest language models are frequently set to zero."
+   }
+  ]
+ },
+ "mlp>adam": {
+  "lead": "Backpropagation tells you which direction reduces the loss and says nothing about how far to move. Adam is a rule for converting that same gradient into a step size, computed separately for every parameter from running estimates of the gradient's mean and its magnitude.",
+  "blocks": [
+   {
+    "h": "A direction without a distance",
+    "b": "Reverse-mode differentiation delivers $\\partial L / \\partial \\theta$ for every parameter at roughly the cost of one forward pass, and that is all it delivers. The update $\\theta \\leftarrow \\theta - \\alpha g$ still needs $\\alpha$, and a single global $\\alpha$ must serve parameters whose gradients differ by orders of magnitude — the embedding of a rare token, which receives a large gradient occasionally, and a dense layer weight, which receives a small one every step. For most of the 1990s and 2000s the learning rate and its schedule were the most expensive hyper-parameters in any project.\n\nTwo partial fixes preceded Adam. Momentum averages the direction over recent steps, damping oscillation across a narrow ravine. AdaGrad divides each parameter's step by the square root of its accumulated squared gradient, giving every parameter its own rate — but the accumulator only grows, so the rate decays to zero. RMSProp replaced the sum with an exponential moving average."
+   },
+   {
+    "h": "Both moments, corrected",
+    "b": "Adam keeps both ideas: a first-moment average for the direction, a second for the scale.\n\n$$m_t = \\beta_1 m_{t-1} + (1-\\beta_1)g_t, \\qquad v_t = \\beta_2 v_{t-1} + (1-\\beta_2)g_t^2$$\n\nwith the update $\\theta_t = \\theta_{t-1} - \\alpha\\,\\hat{m}_t / (\\sqrt{\\hat{v}_t} + \\epsilon)$, where $g_t$ is the current gradient.\n\nThe specific addition is the bias correction producing $\\hat{m}$ and $\\hat{v}$. Both averages start at zero, and with the usual $\\beta_2 = 0.999$ the second-moment estimate stays biased far towards zero for the first several hundred steps, making the early updates much too large. Dividing by $1 - \\beta_1^t$ and $1 - \\beta_2^t$ removes the bias exactly.\n\nThe consequence is that the step magnitude is roughly $\\alpha$ whatever the gradient's scale. That turns $\\alpha$ into a bound on movement in parameter space rather than a gain on an arbitrary quantity, which is why a default near $10^{-3}$ transfers across architectures."
+   },
+   {
+    "h": "What the default cost",
+    "b": "Adam is why a new architecture can be trained at all without a tuning campaign first, and it is the optimiser under essentially every transformer.\n\nThe bill has three parts. The convergence proof in the paper was wrong: Reddi and colleagues gave a convex problem on which Adam fails to converge, and proposed AMSGrad. Coupling an $L_2$ penalty to the adaptive denominator scales the penalty down for precisely the parameters with the largest gradients, which is not weight decay at all — AdamW decouples the two, and every large model now uses it. And well-tuned SGD with momentum has repeatedly been observed to generalise slightly better on some vision benchmarks, so the convenience is not free in quality either.\n\nThe fourth cost is arithmetic. Adam stores two extra values per parameter, so at a hundred billion parameters the optimiser state dominates memory — the reason for Adafactor, 8-bit Adam, and the more recent memory-lean alternatives."
+   }
+  ]
+ },
+ "ln>vit": {
+  "lead": "LayerNorm was designed for recurrent networks, where batch statistics are close to useless because sequence lengths vary and effective batch sizes are small. ViT inherited it near-wholesale from the Transformer block, changing little beyond moving the norm ahead of each sublayer, and in doing so installed a batch-independent normaliser at the centre of a field that had run on BatchNorm since 2015.",
+  "blocks": [
+   {
+    "h": "Normalisation without the batch",
+    "b": "Ba, Kiros and Hinton's target was the coupling BatchNorm introduces: its statistics are computed across the batch dimension, so every example's forward pass depends on the others drawn with it, and a separate set of running averages has to stand in at test time. LayerNorm computes the statistics across features within a single example instead:\n\n$$\\mathrm{LN}(x) = \\gamma \\odot \\frac{x - \\mu}{\\sqrt{\\sigma^2 + \\epsilon}} + \\beta$$\n\nwhere $\\mu$ and $\\sigma^2$ are the mean and variance of the $d$ components of one token's vector, and $\\gamma, \\beta$ are learned per channel. Nothing crosses examples. Training and inference therefore compute exactly the same function, and a batch of one behaves like a batch of a thousand. What this established was normalisation as a per-token operation, indifferent to how work is split across devices."
+   },
+   {
+    "h": "Why ViT kept it unexamined",
+    "b": "Dosovitskiy et al. were asking whether a vision model needs convolutional inductive bias, and the cleanest way to ask it was to change the Transformer as little as possible — any vision-specific substitution would have muddied the answer. LayerNorm arrived in vision not because anyone argued for it but because it came attached to the block. What had to be added to make the swap survive is easy to miss. BatchNorm's per-batch statistics are a stochastic perturbation, and in CNNs they had been quietly doing regularisation work; LayerNorm supplies none. ViT covered the gap with very large pretraining sets, and DeiT later covered it with aggressive augmentation and stochastic depth. ViT also placed the norm before each sublayer rather than after, leaving the additive path from input to output unnormalised — the arrangement that lets deep stacks train without a carefully tuned warmup."
+   },
+   {
+    "h": "What the swap cost",
+    "b": "Once normalisation no longer depended on the batch, the awkward parts of large-scale distributed vision training went away: no synchronising statistics across devices, no train-test discrepancy, no degradation when the per-device batch is small because the activations are large. That mattered as ViT scaled to models where the per-device batch is a handful of images. The cost is arithmetic. LayerNorm is a memory-bound reduction over the feature dimension that cannot be folded into a neighbouring matrix multiply, where BatchNorm's affine transform collapses into the preceding convolution at inference for free. In large models the norms take a non-trivial share of latency, which is why RMSNorm — dropping the mean subtraction, keeping the rescaling — displaced it in later work. ConvNeXt then carried LayerNorm back into convolutional networks, one of several borrowings that ran the other way."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Layer Normalization",
+    "y": 2016,
+    "url": "https://arxiv.org/abs/1607.06450"
+   },
+   {
+    "t": "An Image Is Worth 16x16 Words: Transformers for Image Recognition at Scale",
+    "y": 2020,
+    "url": "https://arxiv.org/abs/2010.11929"
+   }
+  ]
+ },
+ "residual>transformer": {
+  "lead": "What travelled from ResNet was not a vision technique but a claim about optimisation: if a layer's output is added to its input, depth stops being an obstacle to training. The Transformer applied it at the granularity of sublayers rather than blocks, and the additive path that resulted became the model's central data structure.",
+  "blocks": [
+   {
+    "h": "What the identity path established",
+    "b": "He et al. were addressing degradation rather than vanishing gradients as such. A 56-layer plain convolutional network had higher **training** error than a 20-layer one, which is not overfitting but a failure of the solver to find a solution it demonstrably contains. Their fix was to have each block compute $y = F(x) + x$, so the block need only learn the residual $F$; where the useful function is near identity, the optimiser can drive $F$ towards zero instead of fitting identity through a stack of nonlinearities. The gradient consequence follows directly, since $\\partial y / \\partial x = I + \\partial F / \\partial x$ gives backpropagation a route to early layers that is not attenuated by the product of intervening Jacobians. Nothing in the argument mentions images, and that generality is what made it portable."
+   },
+   {
+    "h": "Sublayers, not blocks",
+    "b": "Vaswani et al. wrapped every sublayer — attention and feed-forward alike — as $\\mathrm{LayerNorm}(x + \\mathrm{Sublayer}(x))$. Two consequences are usually left implicit. Addition requires matching shapes, so every sublayer in the stack must share one width, $d_{\\mathrm{model}} = 512$ in the base model; the residual connection is the reason a Transformer is a uniform-width column rather than a tapering pyramid like a CNN. And because the width never changes, the local skips compose. ResNet's shortcuts each spanned two or three convolutions and the widths changed at every stage boundary; the Transformer's share one width all the way up, and once the norm moved inside the block they composed into a single unbroken additive path from the embedding to the output logits. Each sublayer reads the accumulated state from that path and writes an increment back to it. The stabilisation was borrowed; this structure was not present in ResNet."
+   },
+   {
+    "h": "The residual stream and its bill",
+    "b": "The path became an object of study in its own right. Because every sublayer contributes additively, the vector at any depth decomposes into terms that can be inspected separately — the basis of logit-lens readouts and much of mechanistic interpretability, which treats the stream as a shared bus that heads write to and read from. Practically, stacks of ninety-six layers and more became routine. The bill arrived in the placement of the norm. The original post-norm arrangement, normalising after the addition, leaves gradients badly scaled with depth at initialisation, and post-norm Transformers will not train without learning-rate warmup and careful initialisation. Moving the norm inside the block, so the residual path itself is never normalised, removes the need for warmup and is what nearly every model since 2020 does — at the price of a stream whose magnitude grows with depth, with its own pathologies at scale."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Deep Residual Learning for Image Recognition",
+    "y": 2015,
+    "url": "https://arxiv.org/abs/1512.03385"
+   },
+   {
+    "t": "On Layer Normalization in the Transformer Architecture",
+    "y": 2020,
+    "url": "https://arxiv.org/abs/2002.04745"
+   }
+  ]
+ },
+ "attnmech>transformer": {
+  "lead": "By 2015 attention was a well-understood accessory: a differentiable way to retrieve content by similarity rather than by position, bolted onto a recurrent decoder. The Transformer's move was to promote it from an auxiliary channel between an encoder and a decoder into the only mechanism by which information moves anywhere in the model.",
+  "blocks": [
+   {
+    "h": "Retrieval by content",
+    "b": "As Bahdanau and then Luong left it, attention computes a weighted average over a set of vectors, the weights being a softmax over a learned compatibility score between the current state and each candidate. Two properties are decisive. The retrieval is differentiable end to end, so the alignment is learned by the same gradient step as everything else rather than supplied by a separate aligner. And it is content-addressed, so the cost of reaching a distant element does not grow with distance. Luong's contribution matters more than its modest framing suggests: the compatibility score can be a plain dot product rather than a small feed-forward network, and a dot-product score against a whole sequence is a single matrix multiplication. At that point the mechanism was still glued to a recurrent model, deciding what the decoder looked at while the RNN decided what it carried."
+   },
+   {
+    "h": "From accessory to layer",
+    "b": "Vaswani et al. renamed the parts — query, key, value — and the renaming was the argument: the operation has nothing to do with encoders or decoders and applies to any three projections of any sequence.\n\n$$\\mathrm{Attention}(Q,K,V) = \\mathrm{softmax}\\!\\left(\\frac{QK^\\top}{\\sqrt{d_k}}\\right)V$$\n\nThe scaling is not cosmetic. If the components of $q$ and $k$ are independent with unit variance, $q \\cdot k$ has variance $d_k$; at $d_k = 64$ that drives the softmax into a regime where one weight dominates and the gradient through it nearly vanishes, so dividing by $\\sqrt{d_k}$ restores unit variance. The second addition is multiple heads: one softmax can only average one way, so $h$ smaller attentions run in parallel over different learned subspaces and their outputs are concatenated. The same operator then serves three roles — within the source, masked within the target, and across the two."
+   },
+   {
+    "h": "What the promotion left behind",
+    "b": "Once attention is the layer rather than an accessory, the model's cost is dense matrix multiplication and its depth is decoupled from sequence length. Everything that scales well downstream follows from that one change. What it left behind is everything attention never had. A set of vectors has no order and no notion of locality, so position must be supplied by hand through encodings, and the biases a convolution or a recurrence gave away for free — neighbouring pixels are related, nearby words are related — must now be learned from data, which is why Transformers need more of it than their predecessors to reach the same accuracy on small problems. The softmax also runs over every ordered pair, $O(n^2)$ in time and memory, a rounding error at 2017 sentence lengths and the central engineering problem at 100k-token contexts."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Effective Approaches to Attention-based Neural Machine Translation",
+    "y": 2015,
+    "url": "https://arxiv.org/abs/1508.04025"
+   },
+   {
+    "t": "Attention Is All You Need",
+    "y": 2017,
+    "url": "https://arxiv.org/abs/1706.03762"
+   }
+  ]
+ },
+ "kd>deit": {
+  "lead": "Distillation gave DeiT a way to import something a vision Transformer could not extract from ImageNet on its own. What crossed the gap was neither weights nor architecture but a convolutional network's inductive bias, delivered in the only form a Transformer can consume: labels.",
+  "blocks": [
+   {
+    "h": "Soft targets as a channel",
+    "b": "Hinton, Vinyals and Dean's argument was that a trained model's full output distribution carries far more information than the one-hot label it was fitted to — the relative probabilities assigned to the wrong classes encode which classes resemble which, and that structure is the model's own, not the dataset's. Softening the teacher's logits with a temperature,\n\n$$p_i = \\frac{\\exp(z_i/T)}{\\sum_j \\exp(z_j/T)}$$\n\nlifts those small probabilities into a range where they contribute usable gradient. A student trained against them converges from fewer examples than one trained on hard labels alone. The mechanism is deliberately generic: the loss constrains the student's function and says nothing about how either model computes it. That indifference to architecture is precisely what makes distillation available **across** families rather than only within one."
+   },
+   {
+    "h": "The distillation token",
+    "b": "Touvron et al. did not simply add a distillation term to the class token's loss. They appended a second learned token to the patch sequence, attending and attended to like any other, whose final representation is trained against the teacher's prediction while the class token is trained against the ground-truth label; at test time both heads are read and combined. The empirical findings sat awkwardly with the theory. Hard distillation, taking the teacher's argmax as a label, beat soft distillation with a temperature, and a convolutional teacher beat a Transformer teacher of comparable accuracy. The standard reading is that the student absorbs the CNN's locality and translation bias through the teacher's decisions on augmented crops. That is a plausible account supported by the teacher-architecture ablation, not a demonstrated mechanism, and it is worth holding loosely."
+   },
+   {
+    "h": "ImageNet became enough",
+    "b": "ViT's best results had required JFT-300M, and on ImageNet-1k alone it lost to comparable ResNets, so its conclusion that inductive bias can be traded for data held only at pre-training scales almost no laboratory could reach. DeiT trained on ImageNet-1k alone, on a single eight-GPU machine over a few days, and reached accuracy competitive with the best convolutional networks of the time. Most of that came from the training recipe — augmentation, regularisation, repeated sampling — with the distillation token adding a further point and a half. The cost is a dependency that undercuts the original question. A vision Transformer that needs a convolutional teacher to reach its accuracy at ImageNet scale has not shown convolutional bias to be unnecessary; it has shown the bias can be acquired second-hand, which is a different and weaker claim."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Distilling the Knowledge in a Neural Network",
+    "y": 2015,
+    "url": "https://arxiv.org/abs/1503.02531"
+   },
+   {
+    "t": "Training data-efficient image transformers & distillation through attention",
+    "y": 2021,
+    "url": "https://arxiv.org/abs/2012.12877"
+   }
+  ]
+ },
+ "kd>distilbert": {
+  "lead": "DistilBERT is the plainest application of Hinton's recipe to a pre-trained language model, with one change of timing that turned out to carry the result: the distillation happens during pre-training, not separately for each downstream task. The teacher's cost is paid once, by whoever publishes the model.",
+  "blocks": [
+   {
+    "h": "Why a masked LM distils well",
+    "b": "Distillation's premise is that a teacher's softened output distribution carries the similarity structure the one-hot target throws away. For a masked language model that structure is unusually rich: the target at a masked position is a distribution over tens of thousands of word pieces, and the teacher's ranking of the alternatives is a statement about what the context admits. The hard label says the word was **bank**; the teacher says the slot also tolerated river, shore and vault, in that order, and rejected the rest. Training against the softened distribution therefore delivers many bits per example rather than one, which is why a student can reach a given quality in a fraction of the teacher's steps. The loss constrains outputs only, so the student is free to be a different shape."
+   },
+   {
+    "h": "What was halved and what was added",
+    "b": "Sanh et al. halved the depth, six layers from twelve, kept the width and the tokeniser, and initialised the student by taking every other layer of the teacher — an initialisation that is only available because the width was left alone. Training used three losses: the usual masked-language objective, the distillation term against the teacher's softened distribution, and a cosine loss pulling the student's hidden states towards the teacher's. That third term is the one addition beyond the 2015 recipe, and it exists because output matching leaves the intermediate representation geometry entirely unconstrained, which wastes the fact that student and teacher share a layer layout. The next-sentence objective and the token-type embeddings were dropped. The result is around 40% smaller and roughly 60% faster at inference while retaining most of BERT's GLUE score."
+   },
+   {
+    "h": "What it settled and what it cost",
+    "b": "Distilling once, before fine-tuning, made compression a publisher's step rather than a practitioner's, and a single small checkpoint served every downstream task. That is why the pattern stuck. Successors sharpened it: TinyBERT and MobileBERT showed that matching attention maps and hidden states layer by layer beats matching outputs, which is to say DistilBERT left capacity unclaimed by distilling mainly at the head. Two costs are structural. The student inherits the teacher's failure modes and its biases, and in this setup does not acquire capabilities the teacher lacks — though born-again and noisy-student results show a student can pass its teacher when the distillation signal is not the only one it trains on. And the economics shifted underneath it: once it became clear that a small model trained on far more tokens is strong on its own, distillation had to justify itself against simply training the small model properly."
+   }
+  ],
+  "refs": [
+   {
+    "t": "DistilBERT, a distilled version of BERT: smaller, faster, cheaper and lighter",
+    "y": 2019,
+    "url": "https://arxiv.org/abs/1910.01108"
+   },
+   {
+    "t": "Distilling the Knowledge in a Neural Network",
+    "y": 2015,
+    "url": "https://arxiv.org/abs/1503.02531"
+   }
+  ]
+ },
+ "lora>llama": {
+  "lead": "This arrow does not describe an influence on design. LoRA played no part in how LLaMA was trained, and Meta's paper does not depend on it. It is here because low-rank adaptation is the reason that releasing those weights had the consequences it did: it turned a checkpoint of seven to sixty-five billion parameters into something a single researcher with one GPU could actually change.",
+  "blocks": [
+   {
+    "h": "Freezing the base, learning a delta",
+    "b": "Hu et al. began from the observation that the update learned during fine-tuning has low intrinsic rank — the direction a task moves a pre-trained weight matrix is far simpler than the matrix itself. So freeze $W_0$ and learn $\\Delta W = BA$ with $B \\in \\mathbb{R}^{d \\times r}$, $A \\in \\mathbb{R}^{r \\times k}$ and $r$ typically between 4 and 64:\n\n$$h = W_0 x + BAx$$\n\nThe headline saving in trainable parameters understates the real one, which is optimiser state: Adam holds two moment estimates per trainable parameter, so freezing the base removes the dominant term in training memory along with the gradients and most of the cross-device traffic. And because $BA$ has the same shape as $W_0$, it can be folded into the weights after training, so inference costs nothing extra — the point on which LoRA beat inserted adapter layers, which add depth and latency."
+   },
+   {
+    "h": "What the open weights supplied",
+    "b": "Touvron et al.'s contribution was orthogonal: training only on publicly available corpora, and pushing small models far past the compute-optimal token count so that inference rather than training is the cheap part. Those two things met immediately. Within weeks of the February 2023 release, instruction tuning of the 7B and 13B models was being done with low-rank adapters on single consumer cards, and QLoRA — quantising the frozen base to four bits and training higher-precision adapters on top — brought fine-tuning of the largest model onto one 48GB GPU later that year. What LoRA supplied is the missing half of accessibility. Open weights that nobody outside a well-funded lab can afford to modify are a read-only artefact; open weights plus a method that fits on a gaming card are a platform."
+   },
+   {
+    "h": "What that made possible, and what it cost",
+    "b": "The consequence was a derivative ecosystem rather than a model: instruction-tuned, domain-tuned and language-specific variants appearing faster than they could be catalogued, and a research literature that could finally run controlled experiments on a strong base model. Two costs came with it. Rank is a genuine limit — low-rank updates adapt style, format and instruction-following well, and are much weaker at installing substantial new factual knowledge, so the claim of parity with full fine-tuning holds on some benchmarks and not others. The second is sharper: safety alignment is itself a thin layer over a capable base, and cheap adaptation strips it as cheaply as it adds anything else. The property that democratised adaptation also made guardrail removal a weekend project, and no amount of care in the base model's training changes that arithmetic."
+   }
+  ],
+  "refs": [
+   {
+    "t": "LoRA: Low-Rank Adaptation of Large Language Models",
+    "y": 2021,
+    "url": "https://arxiv.org/abs/2106.09685"
+   },
+   {
+    "t": "LLaMA: Open and Efficient Foundation Language Models",
+    "y": 2023,
+    "url": "https://arxiv.org/abs/2302.13971"
+   },
+   {
+    "t": "QLoRA: Efficient Finetuning of Quantized LLMs",
+    "y": 2023,
+    "url": "https://arxiv.org/abs/2305.14314"
+   }
+  ]
+ },
+ "lora>ldm": {
+  "lead": "LoRA was written about GPT-3 and evaluated on language models; its arrival in image generation was a community port rather than a follow-up paper. The target was also narrower than the original method's. What gets wrapped in Stable Diffusion is chiefly the cross-attention projections inside the denoising U-Net — the small set of matrices where text meets pixels.",
+  "blocks": [
+   {
+    "h": "Where the conditioning lives",
+    "b": "Rombach et al. condition generation by cross-attention inside the U-Net: the prompt is encoded once, and at several spatial resolutions the image features form queries while the text embedding forms keys and values, so $W_Q$ reads from the latent and $W_K, W_V$ read from the prompt. Almost everything about how a word maps onto appearance is carried by those projections. That localisation is what made low-rank adaptation such a good fit, and it is a property of the LDM architecture rather than of LoRA: the thing a user wants to change — what a particular style, subject or face looks like when named — lives in an identifiable subset of the weights instead of diffusely across the network. DreamBooth, by contrast, fine-tunes the whole U-Net and emits a multi-gigabyte checkpoint per concept."
+   },
+   {
+    "h": "What the port kept and changed",
+    "b": "It kept $W_0 + BA$ unchanged, and kept the merge-at-inference property. What changed was which matrices get wrapped and the resulting scale: ranks of 4 to 32 over the attention projections produce files of a few megabytes rather than several gigabytes. That put LoRA between the two existing options — textual inversion, which learns only a new token embedding and is therefore bounded by what the frozen model can already draw, and full fine-tuning, which has the capacity but not the portability. The unplanned property was composition. Because an adapter is an additive delta, several can be summed with scalar weights at generation time, $W_0 + \\sum_i \\alpha_i B_i A_i$. This is not principled — the deltas were trained independently, they interfere, and concepts bleed into one another — but it works often enough to have become the normal way the model is used."
+   },
+   {
+    "h": "What it changed, and the bill",
+    "b": "Distribution changed shape. A style or a subject became a shareable few-megabyte file rather than a model, repositories accumulated tens of thousands of them, and the base checkpoint turned into a substrate that other people build on. The technical costs are mild: unmerged adapters add inference overhead, stacked ones degrade unpredictably, and there is no way to tell in advance which pair will conflict. The social cost is not mild. The cheapest and most common use is imitating a named living artist, or a specific real person, from a few dozen images and an hour on a rented GPU. That is what moved the consent question away from the abstract composition of training corpora and onto a concrete file with a name attached. Neither source paper anticipated the use, and neither could have prevented it."
+   }
+  ],
+  "refs": [
+   {
+    "t": "LoRA: Low-Rank Adaptation of Large Language Models",
+    "y": 2021,
+    "url": "https://arxiv.org/abs/2106.09685"
+   },
+   {
+    "t": "High-Resolution Image Synthesis with Latent Diffusion Models",
+    "y": 2022,
+    "url": "https://arxiv.org/abs/2112.10752"
+   }
+  ]
+ }
+}
