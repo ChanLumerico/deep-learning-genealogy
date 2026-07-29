@@ -92,8 +92,24 @@ export function useCamera(
     }
 
     // ── pointers: one drags, two pinch ────────────────────────────────────
+    //
+    // Capture is taken only once a drag has actually started, never on
+    // pointerdown. A captured pointer retargets its pointerup to the capturing
+    // element, so the browser then raises `click` on this wrapper instead of on
+    // the node or edge that was under the finger — which silently killed every
+    // tap and click on the sheet. Below the threshold the pointer stays
+    // uncaptured and the click lands where it should.
     const active = new Map<number, { x: number; y: number }>()
+    const origin = new Map<number, { x: number; y: number; type: string }>()
     let anchor: { dist: number; mx: number; my: number } | null = null
+    let dragging = false
+
+    /** how far a pointer may wander before it counts as a drag, not a tap */
+    const slop = (type: string) => (type === 'touch' ? 9 : 4)
+
+    const capture = (id: number) => {
+      if (!el.hasPointerCapture(id)) el.setPointerCapture(id)
+    }
 
     const centroid = () => {
       const pts = [...active.values()]
@@ -113,17 +129,32 @@ export function useCamera(
     const onDown = (ev: PointerEvent) => {
       // the chrome keeps its own taps
       if ((ev.target as HTMLElement).closest('input,button,label,select,textarea')) return
-      active.set(ev.pointerId, local(ev))
-      el.setPointerCapture(ev.pointerId)
+      const p = local(ev)
+      active.set(ev.pointerId, p)
+      origin.set(ev.pointerId, { ...p, type: ev.pointerType })
+      // a second finger is a pinch, never a tap — safe to own it at once
+      if (active.size === 2) {
+        dragging = true
+        active.forEach((_, id) => capture(id))
+      }
       reseat()
       if (active.size === 1) el.style.cursor = 'grabbing'
     }
 
     const onMove = (ev: PointerEvent) => {
       if (!active.has(ev.pointerId)) return
-      ev.preventDefault()
       const prev = active.get(ev.pointerId)!
       const now = local(ev)
+
+      if (!dragging) {
+        const from = origin.get(ev.pointerId)!
+        if (Math.hypot(now.x - from.x, now.y - from.y) < slop(from.type)) return
+        dragging = true
+        capture(ev.pointerId)
+      }
+      // only now: suppressing the default before this point also suppresses
+      // the click the browser would have raised for a stationary press
+      ev.preventDefault()
       active.set(ev.pointerId, now)
 
       if (active.size === 1) {
@@ -145,10 +176,14 @@ export function useCamera(
 
     const onUp = (ev: PointerEvent) => {
       if (!active.delete(ev.pointerId)) return
+      origin.delete(ev.pointerId)
       if (el.hasPointerCapture(ev.pointerId)) el.releasePointerCapture(ev.pointerId)
       // two fingers down to one: re-seat so the survivor does not jump
       reseat()
-      if (active.size === 0) el.style.cursor = 'grab'
+      if (active.size === 0) {
+        dragging = false
+        el.style.cursor = 'grab'
+      }
     }
 
     el.addEventListener('wheel', onWheel, { passive: false })

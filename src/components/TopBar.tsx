@@ -47,6 +47,19 @@ export interface TopBarProps {
   onToggleOpen: () => void
 }
 
+/** points the way the bar will move: up to fold it away, down to bring it back */
+function Chevron({ up }: { up: boolean }) {
+  return (
+    <svg
+      width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
+      style={{ flex: 'none', transform: up ? 'none' : 'rotate(180deg)' }}
+    >
+      <path d="m5 15 7-7 7 7" />
+    </svg>
+  )
+}
+
 function DownloadIcon() {
   return (
     <svg
@@ -59,8 +72,10 @@ function DownloadIcon() {
 }
 
 export function TopBar(p: TopBarProps) {
-  // On a phone everything below the title is behind the toggle. Everywhere else
-  // the controls are always present — `open` only governs the phone drawer.
+  // On a phone EVERYTHING below the header strip folds away — timeline
+  // included. The bar was still taking a quarter of the screen with only the
+  // controls collapsed, and on a sheet this tall that quarter matters more
+  // than any control does.
   const showControls = !p.phone || p.open
 
   return (
@@ -74,54 +89,74 @@ export function TopBar(p: TopBarProps) {
         overflowY: p.phone ? 'auto' : undefined,
       }}
     >
+      {/* Header strip: on a phone this is the whole bar when collapsed, and
+          it is the one thing that never folds — it carries the way back. */}
+      {p.phone && (
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          gap: 10, padding: '7px 12px',
+        }}>
+          <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
+            <div style={{
+              fontSize: 13.5, fontWeight: 500, letterSpacing: '-0.01em', color: '#f1ece2',
+              lineHeight: 1.15, whiteSpace: 'nowrap', overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}>Deep Learning Model Genealogy</div>
+            {/* collapsed, the year still has to be legible — it is what the
+                timeline is currently filtering to */}
+            <div style={{
+              fontSize: 9, letterSpacing: '0.16em', textTransform: 'uppercase',
+              color: '#8d8578', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
+            }}>{p.yearLabel}</div>
+          </div>
+          <button
+            className="gx-btn gx-tap"
+            onClick={p.onToggleOpen}
+            aria-expanded={p.open}
+            aria-label={p.open ? 'Collapse the toolbar' : 'Expand the toolbar'}
+            style={{
+              flex: '0 0 auto', gap: 7, padding: '0 12px',
+              background: p.open ? 'rgba(233,229,221,0.13)' : 'transparent',
+              border: '1px solid rgba(233,229,221,0.34)', color: '#dcd6ca',
+              letterSpacing: '0.06em',
+            }}
+          >
+            <Chevron up={p.open} />
+            {p.open ? 'Hide' : 'Menu'}
+          </button>
+        </div>
+      )}
+
+      {showControls && (
       <div style={{
         display: 'flex', alignItems: p.compact ? 'center' : 'flex-start',
         flexDirection: p.compact ? 'column' : 'row',
         gap: p.compact ? 10 : 30,
-        padding: p.phone ? '9px 13px' : '12px 20px',
+        padding: p.phone ? '2px 13px 11px' : '12px 20px',
       }}>
 
-        {/* ① title, and on a phone the control toggle sits beside it */}
+        {/* ① title (desktop / tablet only — the phone has its own strip above) */}
         <div style={{
           flex: '0 0 auto', display: 'flex', flexDirection: 'column',
           gap: p.compact ? 9 : 12, width: p.compact ? '100%' : 'fit-content',
         }}>
-          <div style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
-          }}>
+          {!p.phone && (
             <div style={{
               display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 3,
-              height: p.phone ? 'auto' : 47, minWidth: 0,
+              height: 47, minWidth: 0,
             }}>
               <div style={{
-                fontSize: p.phone ? 15 : 20, fontWeight: 500, letterSpacing: '-0.01em',
-                color: '#f1ece2', lineHeight: 1.05,
-                whiteSpace: p.phone ? 'normal' : 'nowrap',
+                fontSize: 20, fontWeight: 500, letterSpacing: '-0.01em',
+                color: '#f1ece2', lineHeight: 1.05, whiteSpace: 'nowrap',
               }}>Deep Learning Model Genealogy</div>
               <div style={{
                 fontSize: 9.5, letterSpacing: '0.19em', textTransform: 'uppercase',
                 fontWeight: 400, color: '#8d8578', fontVariantNumeric: 'tabular-nums',
                 whiteSpace: 'nowrap',
-              }}>{p.phone ? '1957 — 2025' : 'A Phylogeny of Architectures · 1957 — 2025'}</div>
+              }}>A Phylogeny of Architectures · 1957 — 2025</div>
             </div>
+          )}
 
-            {p.phone && (
-              <button
-                className="gx-btn gx-tap"
-                onClick={p.onToggleOpen}
-                aria-expanded={p.open}
-                aria-label={p.open ? 'Hide controls' : 'Show controls'}
-                style={{
-                  flex: '0 0 auto', padding: '0 12px',
-                  background: p.open ? 'rgba(233,229,221,0.13)' : 'transparent',
-                  border: '1px solid rgba(233,229,221,0.34)', color: '#dcd6ca',
-                  letterSpacing: '0.06em',
-                }}
-              >{p.open ? 'Close' : 'Controls'}</button>
-            )}
-          </div>
-
-          {/* the timeline is the one control worth keeping visible on a phone */}
           <div className="gx-field">
             <div className="gx-cap" style={CAP_SPLIT}>
               <span>Timeline</span><span style={VALUE}>{p.yearLabel}</span>
@@ -137,7 +172,7 @@ export function TopBar(p: TopBarProps) {
           </div>
         </div>
 
-        {showControls && (
+        {(
           <>
             {/* ② domain / edge filters + search */}
             <div style={{
@@ -258,6 +293,7 @@ export function TopBar(p: TopBarProps) {
           </>
         )}
       </div>
+      )}
     </div>
   )
 }
