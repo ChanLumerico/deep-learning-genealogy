@@ -1,31 +1,1192 @@
 {
-  "transformer": {
-    "lead": "The Transformer removed recurrence from sequence modelling entirely, replacing it with attention alone. Every position attends to every other in a single parallel operation, so the path between any two tokens is one step rather than $O(n)$ — and training, freed from the sequential dependency of an RNN, finally scaled with the hardware.",
-    "blocks": [
-      {
-        "h": "The problem it inherited",
-        "b": "An LSTM reads a sequence one step at a time: the state at position $t$ cannot be computed until position $t-1$ is done. Two consequences follow, and both were binding by 2017.\n\nFirst, **training cannot be parallelised across the sequence**. GPUs were getting much faster at dense matrix products, and an architecture that serialises over length cannot use that.\n\nSecond, the **path length between distant tokens is linear**. Gradient signal between position $1$ and position $n$ passes through $n$ multiplicative steps, and the LSTM gate is a mitigation rather than a cure. Attention had already been bolted onto encoder–decoder RNNs in 2014 to give the decoder direct access to encoder states; the Transformer's wager was that the recurrence around it was no longer earning its place."
-      },
-      {
-        "h": "Scaled dot-product attention",
-        "b": "Each token is projected into a query, a key and a value. A query is compared against every key by dot product, the scores are normalised, and the output is the correspondingly weighted sum of values:\n\n$$\\mathrm{Attention}(Q,K,V) = \\mathrm{softmax}\\!\\left(\\frac{QK^{\\top}}{\\sqrt{d_k}}\\right)V$$\n\nThe $\\sqrt{d_k}$ divisor is not cosmetic. For queries and keys with independent unit-variance components, $q\\cdot k$ has variance $d_k$; at $d_k = 64$ the raw scores are spread wide enough to push the softmax into a regime where one weight is near $1$ and the gradient through the rest is effectively zero. Dividing by $\\sqrt{d_k}$ restores unit variance and keeps the softmax in its responsive range.\n\nThe whole operation is two matrix multiplications and a softmax — no loop over positions."
-      },
-      {
-        "h": "Multiple heads, and why one is not enough",
-        "b": "A single softmax produces one distribution per query, so one attention layer can only express one notion of relevance at a time. The Transformer runs $h = 8$ attention functions in parallel on $d_k = d_v = d_{\\mathrm{model}}/h = 64$-dimensional projections, then concatenates:\n\n$$\\mathrm{MultiHead}(Q,K,V) = \\mathrm{Concat}(\\mathrm{head}_1,\\dots,\\mathrm{head}_h)W^{O}$$\n\nBecause each head works in a subspace of $1/h$ the width, the total cost is roughly that of single-head attention at full width. Heads specialise readily — several in trained models track syntactic dependencies, others resolve coreference — though the tidy interpretations found post hoc should be treated with care."
-      },
-      {
-        "h": "Position has to be put back",
-        "b": "Attention is permutation-equivariant: shuffle the input and the output shuffles with it. The recurrence that was removed was also what carried order, so order must be re-injected. The paper adds fixed sinusoids to the input embeddings,\n\n$$PE_{(pos,2i)} = \\sin\\!\\left(\\frac{pos}{10000^{2i/d}}\\right), \\qquad PE_{(pos,2i+1)} = \\cos\\!\\left(\\frac{pos}{10000^{2i/d}}\\right)$$\n\nchosen so that $PE_{pos+k}$ is a fixed linear function of $PE_{pos}$ — relative offsets are linearly recoverable. Learned positional embeddings performed near-identically; the sinusoids were preferred for the hope of extrapolating past the training length, a hope later work found largely unrealised. Position encoding has been an active seam ever since, through relative schemes to RoPE."
-      },
-      {
-        "h": "What it cost",
-        "b": "Attention is $O(n^2)$ in both time and memory: the score matrix has an entry for every ordered pair of positions. At the paper's sequence lengths this was cheap next to the gain, and it bought a constant path length between any two tokens. At the context lengths of the models that followed it became the dominant cost, and the efficient-attention literature — sparse, low-rank, linear, and eventually the IO-aware exact methods — is the direct descendant of this one line in the complexity table."
-      }
-    ],
-    "refs": [
-      { "t": "Attention Is All You Need", "y": 2017, "url": "https://arxiv.org/abs/1706.03762" },
-      { "t": "Neural Machine Translation by Jointly Learning to Align and Translate", "y": 2014, "url": "https://arxiv.org/abs/1409.0473" }
-    ]
-  }
+ "transformer": {
+  "lead": "The Transformer removed recurrence from sequence modelling entirely, replacing it with attention alone. Every position attends to every other in a single parallel operation, so the path between any two tokens is one step rather than $O(n)$ — and training, freed from the sequential dependency of an RNN, finally scaled with the hardware.",
+  "blocks": [
+   {
+    "h": "The problem it inherited",
+    "b": "An LSTM reads a sequence one step at a time: the state at position $t$ cannot be computed until position $t-1$ is done. Two consequences follow, and both were binding by 2017.\n\nFirst, **training cannot be parallelised across the sequence**. GPUs were getting much faster at dense matrix products, and an architecture that serialises over length cannot use that.\n\nSecond, the **path length between distant tokens is linear**. Gradient signal between position $1$ and position $n$ passes through $n$ multiplicative steps, and the LSTM gate is a mitigation rather than a cure. Attention had already been bolted onto encoder–decoder RNNs in 2014 to give the decoder direct access to encoder states; the Transformer's wager was that the recurrence around it was no longer earning its place."
+   },
+   {
+    "h": "Scaled dot-product attention",
+    "b": "Each token is projected into a query, a key and a value. A query is compared against every key by dot product, the scores are normalised, and the output is the correspondingly weighted sum of values:\n\n$$\\mathrm{Attention}(Q,K,V) = \\mathrm{softmax}\\!\\left(\\frac{QK^{\\top}}{\\sqrt{d_k}}\\right)V$$\n\nThe $\\sqrt{d_k}$ divisor is not cosmetic. For queries and keys with independent unit-variance components, $q\\cdot k$ has variance $d_k$; at $d_k = 64$ the raw scores are spread wide enough to push the softmax into a regime where one weight is near $1$ and the gradient through the rest is effectively zero. Dividing by $\\sqrt{d_k}$ restores unit variance and keeps the softmax in its responsive range.\n\nThe whole operation is two matrix multiplications and a softmax — no loop over positions."
+   },
+   {
+    "h": "Multiple heads, and why one is not enough",
+    "b": "A single softmax produces one distribution per query, so one attention layer can only express one notion of relevance at a time. The Transformer runs $h = 8$ attention functions in parallel on $d_k = d_v = d_{\\mathrm{model}}/h = 64$-dimensional projections, then concatenates:\n\n$$\\mathrm{MultiHead}(Q,K,V) = \\mathrm{Concat}(\\mathrm{head}_1,\\dots,\\mathrm{head}_h)W^{O}$$\n\nBecause each head works in a subspace of $1/h$ the width, the total cost is roughly that of single-head attention at full width. Heads specialise readily — several in trained models track syntactic dependencies, others resolve coreference — though the tidy interpretations found post hoc should be treated with care."
+   },
+   {
+    "h": "Position has to be put back",
+    "b": "Attention is permutation-equivariant: shuffle the input and the output shuffles with it. The recurrence that was removed was also what carried order, so order must be re-injected. The paper adds fixed sinusoids to the input embeddings,\n\n$$PE_{(pos,2i)} = \\sin\\!\\left(\\frac{pos}{10000^{2i/d}}\\right), \\qquad PE_{(pos,2i+1)} = \\cos\\!\\left(\\frac{pos}{10000^{2i/d}}\\right)$$\n\nchosen so that $PE_{pos+k}$ is a fixed linear function of $PE_{pos}$ — relative offsets are linearly recoverable. Learned positional embeddings performed near-identically; the sinusoids were preferred for the hope of extrapolating past the training length, a hope later work found largely unrealised. Position encoding has been an active seam ever since, through relative schemes to RoPE."
+   },
+   {
+    "h": "What it cost",
+    "b": "Attention is $O(n^2)$ in both time and memory: the score matrix has an entry for every ordered pair of positions. At the paper's sequence lengths this was cheap next to the gain, and it bought a constant path length between any two tokens. At the context lengths of the models that followed it became the dominant cost, and the efficient-attention literature — sparse, low-rank, linear, and eventually the IO-aware exact methods — is the direct descendant of this one line in the complexity table."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Attention Is All You Need",
+    "y": 2017,
+    "url": "https://arxiv.org/abs/1706.03762"
+   },
+   {
+    "t": "Neural Machine Translation by Jointly Learning to Align and Translate",
+    "y": 2014,
+    "url": "https://arxiv.org/abs/1409.0473"
+   }
+  ]
+ },
+ "roformer": {
+  "lead": "RoFormer replaced the additive position embedding with a rotation. Query and key vectors are turned in two-dimensional subspaces by an angle proportional to the token's absolute position, so that their dot product depends on position only through the difference of the two positions — relative position falls out of the attention score itself instead of being added to it. It cost no parameters, changed no other part of the architecture, and is now the default in nearly every open decoder-only language model.",
+  "blocks": [
+   {
+    "h": "Absolute embeddings and their patches",
+    "b": "The original Transformer adds a position vector to the token embedding once, before the first layer; everything downstream has to keep that information alive through the residual stream. Learned absolute embeddings match the sinusoids inside the trained range — the original paper reports nearly identical results — but they are a lookup table with one row per position seen in training, so position 2049 in a model trained to 2048 has no row at all. Relative schemes fixed the semantics: Shaw's learned relative embeddings, Transformer-XL's decomposition, T5's bucketed scalar bias. But all of them work by editing the attention logits, adding a term indexed by $m-n$ into the expansion of $q_m^{\\top}k_n$, which binds position to an explicitly materialised score matrix."
+   },
+   {
+    "h": "Rotating the query and key",
+    "b": "RoPE puts position into the vectors instead. Split a $d$-dimensional query into $d/2$ coordinate pairs and rotate pair $i$, indexed from zero, by an angle $m\\theta_i$, where $m$ is the token's absolute position and $\\theta_i = 10000^{-2i/d}$. Stacked, those $2\\times 2$ rotations form a block-diagonal orthogonal matrix $R_m$, and query and key become $R_m W_q x_m$ and $R_n W_k x_n$. The score then collapses:\n\n$$(R_m q)^{\\top}(R_n k) = q^{\\top} R_m^{\\top} R_n k = q^{\\top} R_{n-m} k$$\n\nbecause rotations are orthogonal and their angles add. Absolute positions go in; only the offset comes out. In code it is elementwise: a multiply by $\\cos m\\theta$ plus a half-swapped, sign-flipped copy times $\\sin m\\theta$ — no parameters, no extra matmul."
+   },
+   {
+    "h": "What the rotation buys",
+    "b": "Three properties follow. The frequencies are geometric, as in the sinusoids: fast pairs turn quickly and resolve adjacent tokens, slow pairs carry coarse position across the whole context. The rotation is applied to $q$ and $k$ inside every attention layer, so position is re-supplied at each depth rather than diluted by dozens of residual additions. Because $R_m$ is orthogonal it leaves the norms of $q$ and $k$ untouched, so the score scale and the $1/\\sqrt{d_k}$ divisor are unaffected. And RoPE never touches the logit matrix, so it composes with kernelised linear attention and with IO-aware kernels such as FlashAttention that never materialise the scores at all."
+   },
+   {
+    "h": "The decay argument, and adoption",
+    "b": "The paper also argued a long-term decay property: an Abel-summation bound showing that the inner product's envelope shrinks as $|m-n|$ grows, offered as the desirable prior that distant tokens should interact weakly. The bound constrains an envelope under assumptions about query and key magnitudes, not the score a trained model actually produces; read it as motivation rather than proof. Practice settled the question. RoPE was a drop-in change with no parameter cost and equal or better perplexity, and it was taken up by GPT-NeoX, PaLM, LLaMA and nearly every open decoder-only model since."
+   },
+   {
+    "h": "Where it breaks past training length",
+    "b": "Extrapolation was not solved. Beyond the trained length the slow pairs reach rotation angles never seen in training, and quality degrades sharply rather than gracefully. Every fix reshapes the angles: positional interpolation divides positions by a scale factor so a longer context maps back into the trained angular range, trading fine resolution for coverage and needing only brief fine-tuning; NTK-aware scaling and YaRN stretch the slow dimensions while leaving the fast ones alone; and raising the base from $10^4$ to $10^6$ before long-context training is now routine. ALiBi took the opposite route — no embedding at all, just a fixed linear penalty on distance — which extrapolates better but hard-codes monotone decay."
+   }
+  ],
+  "refs": [
+   {
+    "t": "RoFormer: Enhanced Transformer with Rotary Position Embedding",
+    "y": 2021,
+    "url": "https://arxiv.org/abs/2104.09864"
+   },
+   {
+    "t": "Extending Context Window of Large Language Models via Positional Interpolation",
+    "y": 2023,
+    "url": "https://arxiv.org/abs/2306.15595"
+   }
+  ]
+ },
+ "t5": {
+  "lead": "T5 and BART both answered the same question — how to pretrain a full encoder-decoder Transformer — and T5 pushed the framing furthest by casting every task, including regression and classification, as generating a string from a string. The result was that translation, summarisation, question answering and sentence-similarity scoring all shared one model, one loss and one decoding procedure, with the task specified by a prefix in the input rather than by a new output head.",
+  "blocks": [
+   {
+    "h": "Task-specific heads as the bottleneck",
+    "b": "BERT gave a strong pretrained encoder, but using it meant bolting a fresh randomly-initialised head onto it for each downstream task: a span-start and span-end classifier for SQuAD, a two-way softmax for entailment, a regression layer for STS-B. Each head had its own initialisation, its own learning-rate sensitivity and its own way of failing, and none of the transfer learning applied to it. Generation was worse served still, since BERT's encoder-only, masked-token objective does not give a left-to-right decoder at all, and GPT's decoder-only stack could generate but read its input with only causal attention.\n\n**The unification claim is that the head is unnecessary if the output is text.** \"cola sentence: The course is jumping well\" produces \"unacceptable\"; \"stsb sentence1: ... sentence2: ...\" produces \"3.8\", a number emitted as a string to one decimal place. Nothing but the text differs between tasks."
+   },
+   {
+    "h": "Span corruption and why not token masking",
+    "b": "Both models pretrain by corrupting text and asking the decoder to reconstruct it, which is what makes an encoder-decoder trainable without labels. T5's chosen objective drops contiguous spans — mean length $3$, roughly $15\\%$ of tokens — and replaces each with a single sentinel token; the target is the concatenation of the dropped spans, each preceded by its sentinel. Because a span collapses to one input token and appears once in the target, both sequences shrink, and training is markedly cheaper per unit of corruption than reconstructing the whole input.\n\nBART instead ran a wider sweep of corruptions — token deletion, sentence permutation, document rotation, text infilling — and found infilling and sentence shuffling the strongest, which is consistent with T5's independent finding. The convergence matters: two labs searching the space arrived at span-level infilling, and it has been the default corruption for encoder-decoder pretraining since."
+   },
+   {
+    "h": "The paper is mostly an ablation",
+    "b": "T5's substantive content is a systematic sweep, run at fixed compute, over choices the field had been making by taste: architecture (encoder-decoder against language model against prefix LM), objective, corruption rate, span length, dataset, and fine-tuning strategy. The encoder-decoder with a denoising objective won, and it did so at roughly twice the parameters of a comparable decoder-only model for the same compute; tying the encoder and decoder weights brings the count back down and, notably, cost very little accuracy.\n\nThe sweep also produced C4, a cleaned Common Crawl dump of several hundred gigabytes, filtered with heuristics — deduplication, discarding lines without terminal punctuation, dropping pages with boilerplate or offensive-word lists. C4 was released, and became the default pretraining corpus for a large slice of subsequent work, arguably a longer-lived contribution than the architecture."
+   },
+   {
+    "h": "Relative position and the scale ladder",
+    "b": "T5 replaced sinusoidal and learned absolute positions with a simplified relative scheme: a scalar bias added to the attention logit before the softmax, indexed by a bucketed function of the offset $i-j$, with buckets growing logarithmically so that distant positions share parameters. The bias is shared across layers and learned per head. It is cheaper than the relative schemes of Shaw et al. and Transformer-XL because it adds no vector to the keys, only a scalar to the score, and it extrapolates modestly past the training length because far offsets fall in a common bucket.\n\nThe model was trained at five sizes from Small to 11B, and the resulting family made the text-to-text interface concrete for practitioners: mT5, Flan-T5 and the instruction-tuning literature all inherit the format directly, and \"prefix the task\" is the ancestor of the prompt."
+   },
+   {
+    "h": "The cost the format imposes",
+    "b": "An encoder-decoder pays twice at inference. The full input is encoded, then generation is autoregressive over the output, and both stacks hold their own attention — including cross-attention from every decoder layer back to the encoder states. For a classification task whose answer is one word, this is an absurd amount of machinery to emit \"entailment\", and the string output forfeits the normalised distribution over the label set that a classifier head gives for free. Constrained decoding or scoring the candidate labels recovers some of that, but not without care.\n\nDecoder-only models at scale later showed that in-context learning could reach comparable task generality with a single stack, which is the direction GPT-3 took. Encoder-decoders persist where the input is long and the output short — summarisation, retrieval-augmented generation — precisely where the asymmetry pays."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Exploring the Limits of Transfer Learning with a Unified Text-to-Text Transformer",
+    "y": 2019,
+    "url": "https://arxiv.org/abs/1910.10683"
+   },
+   {
+    "t": "BART: Denoising Sequence-to-Sequence Pre-training for Natural Language Generation, Translation, and Comprehension",
+    "y": 2019,
+    "url": "https://arxiv.org/abs/1910.13461"
+   }
+  ]
+ },
+ "txl": {
+  "lead": "Transformer-XL restored recurrence to the Transformer, but at the level of segments rather than tokens: the hidden states of the previous segment are cached and attended to, without gradient. To make that legal it had to abandon absolute position encoding, since two segments would otherwise carry identical position vectors, and the relative scheme it introduced outlived the recurrence.",
+  "blocks": [
+   {
+    "h": "Fixed-length segments and context fragmentation",
+    "b": "A vanilla Transformer language model cannot condition on more tokens than its attention window, so a long document is chopped into fixed segments — 512 tokens, say — and each is trained in isolation. Two failures follow. **The first token of a segment has no context at all**, and the model must predict it from nothing; the paper calls this context fragmentation, and it is not a rare edge case, since every segment boundary produces a stretch of tokens with impoverished conditioning.\n\nThe second failure is at evaluation. To give every token a full window, the standard procedure slides the segment forward one position at a time and recomputes the entire forward pass for a single new prediction. That is correct and ruinously slow: the cost per token is a whole segment's worth of attention, and nothing is reused between adjacent positions even though the two windows overlap almost completely."
+   },
+   {
+    "h": "Caching the previous segment",
+    "b": "The mechanism is small. For layer $n$ and segment $\\tau$, concatenate the previous segment's hidden states, detached from the graph, in front of the current ones:\n\n$\\tilde{h}^{n-1}_{\\tau} = [\\mathrm{SG}(h^{n-1}_{\\tau-1}) \\circ h^{n-1}_{\\tau}]$\n\nwhere $\\mathrm{SG}$ is stop-gradient and $\\circ$ concatenation. Queries come from the current segment only; keys and values come from the extended sequence. So each layer can reach one segment back, and because the layers stack, the effective receptive field grows to roughly $N \\times L$ tokens for $N$ layers and segment length $L$ — the dependency travels down one layer per segment, as in a diagonally-shifted stack.\n\nStop-gradient is what makes it affordable: no backpropagation through time, so the memory held for gradients does not grow with the depth of the cache, even though storing the cached states themselves does. At evaluation the cache can be made much longer than at training, and each new segment is one forward pass."
+   },
+   {
+    "h": "Why absolute positions break",
+    "b": "With absolute encodings, position $1$ of segment $\\tau$ and position $1$ of segment $\\tau-1$ receive the same vector, so a token attending into the cache cannot tell how far back it is looking. The fix is to encode the offset rather than the location. Expanding the query-key logit under absolute encodings gives four terms; Transformer-XL rewrites them as\n\n$A_{i,j} = q_i^{\\top} k_j + q_i^{\\top} W_{k,R} R_{i-j} + u^{\\top} k_j + v^{\\top} W_{k,R} R_{i-j}$\n\nwhere $R_{i-j}$ is a sinusoid of the relative distance, and the two absolute-position query terms are replaced by learned global vectors $u$ and $v$ because a query's own position should not matter once distances are relative. The content-based key projection $W_{k,E}$ and the position-based $W_{k,R}$ are kept separate, which the earlier relative scheme of Shaw et al. did not do."
+   },
+   {
+    "h": "What it bought, and where it went",
+    "b": "On word-level and character-level language modelling the model set the state of the art of its moment across enwik8, text8, WikiText-103 and One Billion Word — the same architecture winning at both character and word granularity, which is unusual. The paper reports dependencies substantially longer than an LSTM's and longer than a vanilla Transformer's, and evaluation faster by a large factor because the sliding recomputation is gone.\n\nThe relative-position formulation is the piece that propagated. XLNet built directly on the same backbone, and the line of thought — that position should enter attention as a function of offset — runs through T5's bucketed scalar bias to RoPE's rotation of queries and keys, which is now near-universal in large decoder-only models."
+   },
+   {
+    "h": "The limits of a detached cache",
+    "b": "Because the cache is stop-gradiented, nothing in it is ever optimised for the role it plays as context; the model learns to read a memory it never learns to write. The receptive field is also bounded rather than unlimited — it grows with depth, but a fixed number of layers gives a fixed horizon, and information older than that is simply gone. Memory grows linearly with the cached length, so the practical window is a GPU-memory decision.\n\nSubsequent work attacked the ceiling from two directions. Compressive Transformer compressed old memories rather than discarding them; the sparse-attention line — Longformer, BigBird, Reformer — abandoned recurrence and instead made a single very long attention pass affordable, which proved the more durable answer as sequence lengths grew."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Transformer-XL: Attentive Language Models Beyond a Fixed-Length Context",
+    "y": 2019,
+    "url": "https://arxiv.org/abs/1901.02860"
+   }
+  ]
+ },
+ "xlnet": {
+  "lead": "XLNet set out to get BERT's bidirectional context without BERT's corrupted input, by maximising the likelihood of a sequence under all orderings of its factorisation rather than one. Each token is predicted from a random subset of the others while remaining a genuine autoregressive target, so no artificial mask symbol ever enters the input and the joint distribution over masked positions is not assumed to factorise.",
+  "blocks": [
+   {
+    "h": "Two defects in masked language modelling",
+    "b": "BERT replaces about $15\\%$ of tokens with `[MASK]` and predicts them from the rest. This gives every position a two-sided view, which is why it beat GPT on understanding tasks, but it carries two costs the paper names precisely.\n\n**The pretrain-finetune discrepancy**: `[MASK]` appears in pretraining and never at fine-tuning time, so the model is optimised on inputs from a distribution it will not meet again. BERT's partial mitigation — sometimes substituting a random or the original token — reduces but does not remove the mismatch.\n\n**The independence assumption**: BERT predicts all masked positions in parallel, conditionally independent given the unmasked remainder. In \"New York is a city\", masking both \"New\" and \"York\" means the model scores each without seeing the other, and the strong mutual dependence between them is simply not modelled. Autoregressive factorisation has no such gap, but sees only one side."
+   },
+   {
+    "h": "Permutation language modelling",
+    "b": "Take $\\mathcal{Z}_T$, the set of all permutations of the index sequence $1 \\dots T$, and maximise\n\n$\\max_{\\theta} \\; \\mathbb{E}_{z \\sim \\mathcal{Z}_T}\\left[\\sum_{t=1}^{T} \\log p_{\\theta}(x_{z_t} \\mid x_{z_{<t}})\\right]$\n\nUnder a random ordering $z$, predicting $x_{z_t}$ conditions on whatever happened to precede it in that ordering, which in expectation is any subset of the sequence — so a token is seen from both sides across samples, while each individual term remains a proper conditional. The product over $t$ is a valid factorisation of the joint, so the independence assumption disappears.\n\nCrucially the input order is untouched. Permutation is implemented entirely through the attention mask, which is what makes it compatible with positional encodings that describe the original sentence. In practice only the last fraction of each permuted sequence is predicted, since predicting from near-empty context is high-variance and slow to converge."
+   },
+   {
+    "h": "Why two attention streams are needed",
+    "b": "A standard Transformer state $h_{z_t}$ mixes the token's content and its position, which breaks under permutation: the model must know *which* position it is predicting without being told what is there. If it used the ordinary hidden state, the target would be visible in its own representation.\n\nXLNet therefore runs two streams sharing parameters. The content stream $h$ behaves normally and can see $x_{z_t}$ itself, so it can serve as a key and value for later predictions. The query stream $g$ sees position $z_t$ and the content of $x_{z_{<t}}$, but not $x_{z_t}$, and is what produces the prediction. Both are computed in one pass with two attention masks; at fine-tuning the query stream is discarded and the model is an ordinary Transformer. The scheme is exact but roughly doubles pretraining cost."
+   },
+   {
+    "h": "Results, and the confound",
+    "b": "XLNet also imports Transformer-XL's segment recurrence and relative encodings, giving it a longer context than BERT, and it was trained on considerably more data. It reported gains over BERT across GLUE, SQuAD, RACE and several classification sets, with the largest margins on tasks involving long documents.\n\nThat combination is the difficulty. **The permutation objective was entangled with more data, longer context and different hyperparameters**, and RoBERTa showed shortly afterwards that BERT trained longer, on more data, with dynamic masking and without the next-sentence objective, closed much of the gap. XLNet's own ablation did compare against BERT on identical data and hyperparameters and came out ahead, but the controlled margins were small, RoBERTa closed much of the headline gap without changing the objective, and no later work established a decisive advantage for permutation at matched scale — which, with two-stream attention's cost, is why few followed. Two-stream attention's cost meant few followed; masked and causal objectives remain the two that scaled."
+   }
+  ],
+  "refs": [
+   {
+    "t": "XLNet: Generalized Autoregressive Pretraining for Language Understanding",
+    "y": 2019,
+    "url": "https://arxiv.org/abs/1906.08237"
+   },
+   {
+    "t": "RoBERTa: A Robustly Optimized BERT Pretraining Approach",
+    "y": 2019,
+    "url": "https://arxiv.org/abs/1907.11692"
+   }
+  ]
+ },
+ "longformer": {
+  "lead": "Longformer made attention linear in sequence length by computing only a structured subset of the score matrix: a sliding window over local neighbours, plus a handful of positions that attend to everything and are attended by everything. It processes documents of several thousand tokens on ordinary hardware, and unlike most efficient-attention schemes it can be initialised from an existing pretrained checkpoint.",
+  "blocks": [
+   {
+    "h": "The quadratic wall in practice",
+    "b": "Self-attention materialises an $n \\times n$ score matrix, so memory and time grow as $O(n^2)$. BERT's 512-token limit was a consequence, and it bites hardest on exactly the tasks where context is the point — full-document classification, multi-hop question answering over a supporting corpus, coreference across a long narrative.\n\nThe workarounds were all lossy. Truncate the document and discard the tail. Chunk it and process segments independently, which reproduces the context fragmentation Transformer-XL identified. Or run a two-stage retrieve-then-read pipeline, whose recall ceiling is set by a retriever that never sees the question and the passage jointly. Transformer-XL's recurrence helped autoregressive language modelling but is left-to-right by construction, so it does not give the bidirectional encoder that classification and extractive QA want."
+   },
+   {
+    "h": "Three attention patterns, composed",
+    "b": "The **sliding window** gives each token attention over $w/2$ neighbours on each side, costing $O(n \\times w)$. Stacking $\\ell$ such layers grows the receptive field to $\\ell \\times w$, exactly as convolutional stacks do, so the top layer integrates far more than one window even though no single layer does.\n\n**Dilated sliding windows** widen the field without extra cost by leaving gaps of size $d$ between attended positions, giving a reach of $\\ell \\times d \\times w$. The paper uses dilation only in upper layers and only in some heads, so that other heads keep the dense local view that fine-grained tasks need.\n\n**Global attention** is task-specified rather than learned: chosen tokens attend to the whole sequence and are attended by it. For classification that is `[CLS]`; for question answering, every token of the question. A small number of such tokens keeps the cost linear while restoring the ability to aggregate globally, which pure local attention cannot do. Global attention uses its own projection matrices, initialised from the sliding-window ones."
+   },
+   {
+    "h": "Why it could reuse RoBERTa",
+    "b": "The design's practical advantage is that it is a drop-in replacement for the attention operation, leaving the rest of the architecture and the parameter shapes untouched. Longformer starts from RoBERTa's weights, copies the 512 learned position embeddings repeatedly to cover 4096 positions — a crude initialisation, but one that preserves the local structure RoBERTa learned, since within any 512-token stretch the relative offsets are unchanged — and continues pretraining briefly on long documents.\n\nThe implementation needed a custom CUDA kernel written in TVM for the banded matrix multiplication, because a naive dense computation followed by masking saves nothing. That detail matters more generally: **a sparsity pattern only pays if the hardware can exploit it**, and banded structure is chosen partly because it maps onto contiguous memory."
+   },
+   {
+    "h": "What it delivered and what it did not",
+    "b": "Longformer improved on RoBERTa across long-document tasks — WikiHop, TriviaQA, HotpotQA, IMDB, Hyperpartisan — with the gains concentrated where documents genuinely exceed 512 tokens, and it was extended to an encoder-decoder, LED, for long-input summarisation on arXiv-length papers. BigBird arrived close behind with a similar window plus random plus global mixture and a proof of Turing completeness for the pattern.\n\nThe unresolved part is that **the sparsity pattern is a prior, hand-designed and fixed**. Which tokens deserve global attention is decided by the task designer, not learned, and a dependency that the window and the global set both miss cannot be represented at all. Later work went two ways: learn the pattern, as in Reformer's hashing and the routing-attention line; or keep attention exactly dense and make it fit in memory by reordering the computation, which is what FlashAttention did — and which, by removing much of the pressure, ended the sparse-attention era rather than improving on it."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Longformer: The Long-Document Transformer",
+    "y": 2020,
+    "url": "https://arxiv.org/abs/2004.05150"
+   },
+   {
+    "t": "Big Bird: Transformers for Longer Sequences",
+    "y": 2020,
+    "url": "https://arxiv.org/abs/2007.14062"
+   }
+  ]
+ },
+ "performer": {
+  "lead": "Linformer and Performer both removed the $n \\times n$ attention matrix, but by different arguments: Linformer projects keys and values down to a fixed length on the grounds that attention is empirically near low-rank, while Performer rewrites the softmax as a kernel and reassociates the products so the sequence dimension is contracted first. Both reach $O(n)$ time and memory, and both trade exactness for it.",
+  "blocks": [
+   {
+    "h": "Why the matrix is the cost",
+    "b": "Attention computes $\\mathrm{softmax}(QK^{\\top}/\\sqrt{d})V$ with $Q, K, V \\in \\mathbb{R}^{n \\times d}$. The inner product $QK^{\\top}$ is $n \\times n$, so it costs $O(n^2 d)$ to form and $O(n^2)$ to store — and it must be stored, because the backward pass needs it. At $d = 64$ and $n = 4096$ the score matrix dwarfs the parameters of the layer.\n\nThe obstruction to a cheaper computation is precisely the softmax. Without it, $Q(K^{\\top}V)$ would contract the sequence dimension first and cost $O(n d^2)$, linear in $n$. The nonlinearity sits between the two matrix products and forbids the reassociation, and every linear-attention method is in some sense an attempt to get around that one placement."
+   },
+   {
+    "h": "Linformer: attention is nearly low-rank",
+    "b": "Linformer's starting observation is empirical: the spectrum of the attention matrix in trained Transformers decays fast, with most of the energy in the leading singular values, and the paper argues via the Johnson–Lindenstrauss lemma that a low-rank approximation is bounded in error.\n\nThe mechanism is two learned linear projections $E, F \\in \\mathbb{R}^{k \\times n}$ applied along the sequence dimension of the keys and values before attention:\n\n$\\mathrm{head} = \\mathrm{softmax}\\!\\left(\\frac{Q(EK)^{\\top}}{\\sqrt{d}}\\right)(FV)$\n\nThe score matrix is now $n \\times k$ with $k$ fixed — the paper uses $k = 256$ independent of $n$ — so cost is $O(nk)$. Projections can be shared across heads and layers to save parameters.\n\nThe binding constraint is that $E$ and $F$ have $n$ as an input dimension, so **the model is tied to a fixed maximum sequence length** and cannot be applied causally without leaking future information into the projection. Linformer is an encoder method."
+   },
+   {
+    "h": "Performer: softmax as an expectation",
+    "b": "Performer keeps the sequence length free by attacking the softmax algebraically. Write the unnormalised attention weight as a kernel, $\\exp(q^{\\top}k/\\sqrt{d}) = \\mathbb{E}[\\phi(q)^{\\top}\\phi(k)]$, for a randomised feature map $\\phi$. Substituting the estimate $\\hat{A} = \\phi(Q)\\phi(K)^{\\top}$ makes the product associative again:\n\n$\\phi(Q)\\left(\\phi(K)^{\\top}V\\right)$\n\ncosts $O(n r d)$ for $r$ random features, never forming anything $n \\times n$.\n\nThe technical contribution is the choice of $\\phi$. Trigonometric random features, the standard construction for a Gaussian kernel, can produce negative estimates of a quantity that is strictly positive, and dividing by a near-zero normaliser then explodes the variance. FAVOR+ uses **positive orthogonal random features** — exponentials rather than sinusoids, so every estimate is positive, and orthogonal rather than i.i.d. random directions, which reduces variance further. The estimator is unbiased with concentration guarantees, and the method applies causally via a prefix-sum, so it works for decoders as well."
+   },
+   {
+    "h": "How the field settled it",
+    "b": "Both were evaluated favourably on their own benchmarks, and Performer showed it could approximate a pretrained Transformer closely enough that fine-tuning recovers most of the loss. But Long Range Arena, run across the family of efficient attentions, found the accuracy-speed frontier muddier than individual papers suggested, and reported quality shortfalls against dense attention that varied unpredictably by task. Linear attention consistently underperforms softmax attention on language modelling at scale, a gap usually attributed to the softmax's sharpness — a low-rank or feature-map approximation smooths the distribution and loses the near-one-hot retrieval that induction-head-like behaviours depend on.\n\nThe decisive turn was practical rather than mathematical. FlashAttention showed the $n^2$ matrix need never be materialised at all: tile the computation, recompute in the backward pass, and keep the result numerically exact while making memory linear. Given exactness at comparable speed, approximation lost its constituency. The kernel idea survives, though — in state-space and linear-recurrent models such as Mamba and RWKV, where a linear-attention-like recurrence is the point rather than a compromise."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Rethinking Attention with Performers",
+    "y": 2020,
+    "url": "https://arxiv.org/abs/2009.14794"
+   },
+   {
+    "t": "Linformer: Self-Attention with Linear Complexity",
+    "y": 2020,
+    "url": "https://arxiv.org/abs/2006.04768"
+   }
+  ]
+ },
+ "roberta": {
+  "lead": "RoBERTa changes nothing about BERT's architecture: the same encoder, the same masked-language-modelling objective, a different training recipe. Trained on ten times the text, for far longer, with much larger batches and without the next-sentence-prediction loss, it matched or beat every model published against BERT in the intervening year. Its real contribution was the uncomfortable finding that BERT had been badly undertrained, and that the field had been crediting to architecture what belonged to compute.",
+  "blocks": [
+   {
+    "h": "The confound it exposed",
+    "b": "In the year after BERT, a run of models — XLNet among them — reported gains and attributed them to new pretraining objectives. Each had also changed the corpus, the batch size and the number of steps, so no published comparison isolated the objective from the budget.\n\nThe authors re-ran BERT's own design under a controlled sweep and found the baseline had a great deal of headroom left: it was nowhere near converged at the original budget, and most of the reported gap closed once compute was matched. **Nothing about the encoder needed to change.** The lesson outlived the models involved. A pretraining result reported without a matched-compute baseline says very little, and the discipline of holding the budget fixed while varying one thing became standard practice largely because of this paper."
+   },
+   {
+    "h": "Dynamic masking, and the loss that went",
+    "b": "BERT chose its masks once, during preprocessing, duplicating the corpus ten ways so each sequence was seen under ten patterns — still four repeats each across forty epochs. RoBERTa samples the mask when the sequence is fed, so no pattern recurs. The gain is small and costs nothing.\n\nNext-sentence prediction was removed outright, on evidence. Dropping the loss and drawing each sequence from a single document matched or beat the original; dropping it and packing full sentences across document boundaries cost nothing downstream either, and is what the final recipe used. NSP's negative half paired sentences from different documents, so the task was largely topic detection, which masked-language modelling already teaches, rather than any model of coherence."
+   },
+   {
+    "h": "More of everything",
+    "b": "The corpus grew from BookCorpus and Wikipedia, about 16GB, to roughly 160GB with the addition of news, web text and story-style crawl. Batches went from 256 sequences to 8K with the learning rate retuned; large batches improved both perplexity and end-task accuracy while parallelising more cleanly. Training ran to 500K steps and accuracy was still climbing when it stopped.\n\nThe tokeniser was swapped for a byte-level BPE of 50K units, which never emits an unknown token — paid for with a larger embedding table and a slight downstream loss the authors accepted for the generality. The result was 88.5 on the GLUE leaderboard, with state-of-the-art numbers on SQuAD and RACE from a model nobody had redesigned."
+   },
+   {
+    "h": "What it did not fix",
+    "b": "RoBERTa buys accuracy with compute and leaves every structural inefficiency of BERT standing. The objective still supervises only the masked 15% of positions, so most of the forward pass yields no gradient of its own — the target ELECTRA went after. Parameters are still untied across layers and the embedding matrix still scales with model width, which ALBERT attacked. Inference cost is unchanged, which is DistilBERT's opening. Position is still summed into content at the input, which DeBERTa argued conflates two different things.\n\nIt also remains a bidirectional encoder: fine-tuned per task, unable to generate. Within two years the scaling programme it validated had moved to decoder-only models, where the same undertraining lesson reappeared as Chinchilla."
+   }
+  ],
+  "refs": [
+   {
+    "t": "RoBERTa: A Robustly Optimized BERT Pretraining Approach",
+    "y": 2019,
+    "url": "https://arxiv.org/abs/1907.11692"
+   }
+  ]
+ },
+ "albert": {
+  "lead": "ALBERT keeps BERT's architecture and attacks its parameter count from two directions: a factorised embedding matrix, and one set of layer weights shared by every layer. ALBERT-large carries about 18M parameters against BERT-large's 334M, and the largest configuration set the state of the art on GLUE, SQuAD 2.0 and RACE. The catch, stated plainly in the paper, is that fewer parameters is not less computation.",
+  "blocks": [
+   {
+    "h": "Where BERT's parameters actually sit",
+    "b": "BERT-large's 334M split across two pools that behave quite differently. The embedding matrix is $V \\times H$ — vocabulary by hidden width — and is only ever looked up, so it is a memory cost carrying no depth. The encoder is $L$ copies of one block shape, each with private weights.\n\nALBERT's argument for the first is that the embedding is context-independent by construction while hidden states are context-dependent; tying $E = H$ is an implementation accident, and it means every increase in width drags the whole vocabulary table along. The argument for the second is empirical: the weights of successive Transformer layers were observed to be similar to one another, so forcing them to be identical costs less than intuition suggests."
+   },
+   {
+    "h": "Factorisation and cross-layer sharing",
+    "b": "Factorisation inserts a bottleneck. The vocabulary is projected into $E$ dimensions and then up into $H$, so the cost falls from $O(V \\times H)$ to $O(V \\times E + E \\times H)$, a large saving whenever $E \\ll H$.\n\nSharing goes further: one attention block and one feed-forward block, reused at every depth. The paper separates sharing attention only, feed-forward only, and both; both is the default, and most of the degradation comes from the feed-forward half. Together these let ALBERT-xxlarge run at $H = 4096$ with 12 layers and 235M parameters — wider than BERT-large and still smaller. Sharing also regularises: the authors removed dropout entirely and gained again."
+   },
+   {
+    "h": "Sentence-order prediction",
+    "b": "ALBERT keeps a sentence-level loss but changes what it asks. NSP drew its negatives from a different document, so topic mismatch gave the answer away and the task collapsed into topic prediction — something masked-language modelling already supplies.\n\nSOP takes two consecutive segments from the same document and, for the negative, swaps their order. Topic is held constant, so the only usable signal is discourse coherence. The asymmetry the argument rests on is measured: a model trained on NSP performs near chance on SOP, while a model trained on SOP does reasonably on NSP. Ablations put a consistent gain on the multi-sentence tasks, RACE in particular. It is a clean example of diagnosing why an auxiliary loss is not earning its place before replacing it."
+   },
+   {
+    "h": "Fewer parameters, not less compute",
+    "b": "The saving is in memory and in gradient communication, not in FLOPs. A shared layer is still executed once per depth, and ALBERT-xxlarge — much wider than BERT-large — is slower per step and at inference despite the smaller footprint.\n\nThat bounds where the design pays: it helps when the model must fit somewhere, or when data-parallel synchronisation dominates, and it does nothing for latency. The subsequent scaling effort went the other way, towards more parameters, sparsely activated where possible, so cross-layer sharing survives mainly in recurrent-depth and looped-transformer work rather than mainstream encoders. Deployment compression went instead to distillation, pruning and quantisation, which reduce arithmetic as well as storage."
+   }
+  ],
+  "refs": [
+   {
+    "t": "ALBERT: A Lite BERT for Self-supervised Learning of Language Representations",
+    "y": 2019,
+    "url": "https://arxiv.org/abs/1909.11942"
+   }
+  ]
+ },
+ "distilbert": {
+  "lead": "DistilBERT is BERT-base with half the layers, trained during pretraining rather than after it to reproduce its teacher's output distribution. It keeps 97% of BERT-base's GLUE score at 66M parameters against 110M and runs about 60% faster. It made a fine-tuned Transformer cheap enough to serve routinely, and the checkpoint did more for the practice of distillation than the paper's numbers did.",
+  "blocks": [
+   {
+    "h": "Distil during pretraining, not after",
+    "b": "Earlier distillation of BERT was task-specific: fine-tune the teacher on a task, then train a small student on that task's data against the teacher's logits. Every new task means another distillation run and another student.\n\nDistilBERT moves the operation upstream. The student is distilled against the teacher's masked-language-modelling distribution over a general corpus, producing a general-purpose checkpoint that is afterwards fine-tuned exactly like any other BERT. That is what made it usable — one artefact, dropped into an existing pipeline, no change of workflow. The cost is that a general student cannot exploit the structure of any particular task, so a task-specific distillation at the same size will usually beat it where someone is willing to run one."
+   },
+   {
+    "h": "The three losses",
+    "b": "Training minimises a sum of three terms. The distillation loss is a cross-entropy against the teacher's softmax at temperature $T$,\n\n$p_i = \\frac{\\exp(z_i/T)}{\\sum_j \\exp(z_j/T)}$\n\napplied to both networks during training and set back to $T = 1$ at inference. Raising $T$ flattens the distribution and exposes the mass the teacher puts on wrong answers — which token was the second-best guess, and by how much — a far richer target than a one-hot label.\n\nThe ordinary masked-language-modelling loss against the true tokens is kept, and a cosine embedding loss aligns the direction of the student's hidden states with the teacher's, pushing the two to represent alike rather than merely to agree at the output."
+   },
+   {
+    "h": "Where the size was taken from",
+    "b": "The student halves depth, twelve layers to six, and keeps the width at 768. Depth was cut rather than width because latency on the target hardware tracks the number of sequential layers, whereas width mostly changes the size of matrix products the accelerator is already efficient at.\n\nBecause the shapes still match, the student can be initialised from every second layer of the teacher, which matters more than it sounds — a randomly initialised student of this size trains markedly worse. Token-type embeddings and the pooler are dropped. Training follows the RoBERTa recipe: large batches, dynamic masking, no next-sentence prediction, on the teacher's corpus."
+   },
+   {
+    "h": "What the 97% hides",
+    "b": "The headline is an average over GLUE, and GLUE averages flatter small models: several of its tasks have small test sets and sit near saturation. The losses concentrate where depth is doing work — extractive question answering and anything needing multi-step composition show a wider gap than the average implies.\n\nDistilBERT also inherits quadratic attention, so it is smaller but not asymptotically cheaper on long inputs. Later work pressed both seams: TinyBERT and MobileBERT distil intermediate attention maps and hidden states layer by layer — TinyBERT pairing a general stage with a task-specific one, MobileBERT staying deliberately task-agnostic — while structured pruning and quantisation attack the same budget differently. The durable lesson is distributional — a compressed checkpoint people can download beats a better one they must reproduce."
+   }
+  ],
+  "refs": [
+   {
+    "t": "DistilBERT, a distilled version of BERT: smaller, faster, cheaper and lighter",
+    "y": 2019,
+    "url": "https://arxiv.org/abs/1910.01108"
+   },
+   {
+    "t": "Distilling the Knowledge in a Neural Network",
+    "y": 2015,
+    "url": "https://arxiv.org/abs/1503.02531"
+   }
+  ]
+ },
+ "electra": {
+  "lead": "ELECTRA replaces masked-language modelling with a discrimination task: a small generator fills in the masked positions, and the model actually being trained decides, at every token in the sequence, whether it is original or a replacement. The loss is defined over all positions rather than the masked 15%, and the compute-to-accuracy curve moves accordingly — ELECTRA-small trains on one GPU in a few days and beats GPT on GLUE.",
+  "blocks": [
+   {
+    "h": "The 15% that teach, and the mismatch",
+    "b": "BERT corrupts about 15% of positions and computes a loss only there. The encoder processes the whole sequence, so roughly six-sevenths of every forward and backward pass builds representation but contributes no gradient of its own. Raising the mask rate does not rescue this: mask too much and the context needed for reconstruction is gone.\n\nThere is a second, subtler defect. `[MASK]` appears in every pretraining batch and never at fine-tuning, so the network is asked downstream to operate on an input distribution it was not trained on. BERT's rule of sometimes leaving the token and sometimes substituting a random one is a patch on precisely this, and is acknowledged as one."
+   },
+   {
+    "h": "Replaced-token detection",
+    "b": "A small masked-language model, the generator, is trained normally and used to sample plausible tokens at the masked positions. Its samples are spliced back into the sequence, and the discriminator — the model that is kept — is trained with a binary cross-entropy at every position: original, or replaced.\n\nBecause the substitutions are plausible rather than random, the task is not trivial; telling \"the chef cooked the meal\" from \"the chef ate the meal\" needs the knowledge masked prediction needs. The two train jointly,\n\n$\\mathcal{L} = \\mathcal{L}_{\\mathrm{MLM}} + \\lambda\\,\\mathcal{L}_{\\mathrm{disc}}$\n\nwith $\\lambda = 50$, because a per-token binary loss is far smaller in magnitude than a vocabulary-sized softmax. The generator is then discarded. The discriminator has never seen `[MASK]`."
+   },
+   {
+    "h": "Not a GAN, deliberately",
+    "b": "The arrangement looks adversarial and the paper is explicit that it is not: the generator is trained by maximum likelihood on the true tokens, not to fool the discriminator.\n\nThey tried the adversarial version. Sampling tokens is discrete, so the generator must be trained by reinforcement learning, and it did worse — policy-gradient estimates over a vocabulary-sized action space are poor, and the resulting generator collapsed towards low entropy, which makes detection too easy. Generator capacity matters for the same reason, in both directions: the best setting is a generator between a quarter and a half of the discriminator's width. Too strong, and the replacements become genuinely indistinguishable. Embeddings are shared between the two networks; nothing else is."
+   },
+   {
+    "h": "What it bought, and what it foreclosed",
+    "b": "At matched compute ELECTRA dominated the encoders of its generation: the base-sized model outperformed BERT-large on GLUE, and the large one matched RoBERTa and XLNet for a fraction of the pretraining cost.\n\nBut the objective yields a discriminator, not a generative model. There is no head assigning probability to text, so it cannot generate, cannot be prompted, and cannot do the zero- and few-shot tasks that GPT-3 pushed to the centre of the field within months of publication. As scaling moved to decoder-only next-token prediction, the efficiency argument stopped applying to the models people were building. It survives inside DeBERTaV3, which pairs replaced-token detection with disentangled attention and had to cut the discriminator's gradient out of the shared embedding table, because the two objectives otherwise pull it in opposite directions."
+   }
+  ],
+  "refs": [
+   {
+    "t": "ELECTRA: Pre-training Text Encoders as Discriminators Rather Than Generators",
+    "y": 2020,
+    "url": "https://arxiv.org/abs/2003.10555"
+   }
+  ]
+ },
+ "deberta": {
+  "lead": "DeBERTa's argument is that BERT discards structure at the input: it adds a position vector to a content vector and asks attention to disentangle them again. DeBERTa keeps the two apart, computing attention from separate content-to-content, content-to-position and position-to-content terms over relative distances, and re-injects absolute position only at the output. An ensemble of its 1.5B-parameter version was the first to pass the human baseline on SuperGLUE.",
+  "blocks": [
+   {
+    "h": "Position summed into content",
+    "b": "In BERT a token's input is the sum of a token embedding and a position embedding. The attention score between positions $i$ and $j$ then expands into four products — content with content, content with position, position with content, position with position — but they are entangled in one vector and share one pair of projections.\n\nThe pattern a word induces genuinely depends on both what it is and where it sits relative to its neighbour: \"deep\" attends to \"learning\" quite differently when adjacent than when ten tokens away. Forcing one vector to carry both makes the model recover a distinction it was never handed. Relative schemes existed in Transformer-XL and T5; DeBERTa's move is to hold the streams separate through the attention computation itself."
+   },
+   {
+    "h": "Disentangled attention",
+    "b": "Each token gets two vectors: content $H$ and relative position $P$. The position-to-position term is dropped, since it carries nothing once positions are relative, leaving three — schematically, and suppressing the separate projections each term uses,\n\n$A_{i,j} = H_i H_j^{\\top} + H_i P_{j|i}^{\\top} + P_{i|j} H_j^{\\top}$\n\nwhere $P_{j|i}$ embeds the relative distance from $i$ to $j$, clipped at a maximum $k$. The first term is ordinary content attention, the second lets content select for an offset, the third lets an offset select for content.\n\nBecause three terms are summed rather than one, the scaling becomes $1/\\sqrt{3d}$ rather than $1/\\sqrt{d}$ — the same variance argument that motivated the original divisor. Relative embeddings are shared across layers, so the parameter cost is small. The compute is not free."
+   },
+   {
+    "h": "Why absolute position returns at the end",
+    "b": "Relative position alone cannot always settle a masked token. In \"a new store opened beside the new mall\", predicting the masked \"store\" requires knowing it is the syntactic subject, and the local relative pattern around it is nearly identical to the one around \"mall\".\n\nThe enhanced mask decoder therefore supplies absolute positions just before the softmax of the masked-language-modelling head, after the encoder stack rather than at its input. The ordering carries the argument: relative position shapes attention at every layer, absolute position informs only the final prediction, so the representations are never tempted to lean on absolute offsets. Ablations attribute a measurable share of the MNLI gain to this component by itself."
+   },
+   {
+    "h": "Results, cost, and what came after",
+    "b": "DeBERTa-large beat RoBERTa-large on MNLI, SQuAD 2.0 and RACE while pretraining on roughly half as much text — the clearest evidence in this family that inductive bias still bought something once the RoBERTa recipe had absorbed the easy gains. The price is heavier attention: two additional score matrices and a gather over relative offsets at every layer.\n\nThe 1.5B model added scale-invariant fine-tuning, an adversarial perturbation applied to normalised word embeddings. DeBERTaV3 then swapped masked-language modelling for ELECTRA's replaced-token detection and fixed the embedding tug-of-war that pairing caused; that checkpoint remains a common default for classification and NLI-based zero-shot pipelines, long after decoder-only models took generation."
+   }
+  ],
+  "refs": [
+   {
+    "t": "DeBERTa: Decoding-enhanced BERT with Disentangled Attention",
+    "y": 2020,
+    "url": "https://arxiv.org/abs/2006.03654"
+   }
+  ]
+ },
+ "gpt1": {
+  "lead": "GPT-1 showed that a single decoder-only Transformer, pretrained to predict the next token on plain books and then fine-tuned with almost no change of shape, could beat purpose-built models across most of a twelve-task benchmark suite. What transferred was the whole network rather than a table of embeddings, and that is what separated it from word2vec and from ELMo's frozen features.",
+  "blocks": [
+   {
+    "h": "What transfer meant before it",
+    "b": "Static embeddings gave one vector per word type, so everything above the first layer of a task model was still trained from scratch on whatever labelled data existed. ELMo improved on this by taking contextual states from a bidirectional LSTM language model, but kept them frozen and fed them into an architecture that still had to be designed per task. ULMFiT fine-tuned a recurrent LM end to end, though for classification.\n\nThe binding constraint was labelled data. Entailment, semantic similarity, commonsense reasoning and question answering each had their own bespoke encoder, its own inductive biases, and a few thousand examples to fit them with. **Transfer stopped at the word level**, and the expensive part of the model was rebuilt every time."
+   },
+   {
+    "h": "Two stages, and an auxiliary loss",
+    "b": "Stage one maximises the ordinary autoregressive likelihood over a large unlabelled corpus,\n\n$L_1 = \\sum_i \\log P(u_i \\mid u_{i-k},\\dots,u_{i-1};\\Theta)$\n\nwith a 12-layer masked-self-attention Transformer. The corpus choice mattered: BooksCorpus, roughly seven thousand unpublished books, was preferred over shuffled-sentence benchmarks because contiguous long passages let the model learn dependencies longer than a sentence.\n\nStage two adds one linear layer on the final token's activation and fine-tunes every parameter. The paper keeps the language-modelling term as an auxiliary objective during fine-tuning, optimising $L_2 + \\lambda L_1$, reporting faster convergence and better generalisation — an early observation that the pretraining objective is a regulariser, not merely an initialiser."
+   },
+   {
+    "h": "Traversal-style input transformations",
+    "b": "Structured tasks look nothing alike: entailment is an ordered pair, similarity is an unordered pair, multiple choice is a context with several candidate answers. The usual answer was a different architecture for each.\n\nGPT-1 instead serialises each into one token sequence using learned delimiter tokens — premise, delimiter, hypothesis — so the pretrained stack sees the only format it knows. Similarity, having no natural order, is processed in both orderings and the representations summed. Multiple choice scores each candidate independently and normalises across them.\n\nThe only genuinely new parameters are the delimiter embeddings and one output matrix. This is the germ of the idea that later removes the head altogether: if a task can be written as a sequence, a sequence model can do it."
+   },
+   {
+    "h": "What it left behind",
+    "b": "Two limits. The model is unidirectional, so the representation of a token carries nothing from its right context — a real handicap for classification and span extraction, and precisely the opening BERT walked through months later with masked-token recovery, taking GLUE by a wide margin.\n\nSecond, every task still needed labelled examples, its own output head, and its own fine-tuned copy of all the weights. Deployment meant one model per task.\n\nThe paper does note that zero-shot behaviour on several tasks improves steadily over the course of pretraining, with no fine-tuning at all. GPT-2 pursued exactly that observation, dropping both the head and the fine-tuning by writing the task in text; GPT-3 then showed that at a hundred times the scale a handful of in-context examples recovers much of what fine-tuning had provided."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Improving Language Understanding by Generative Pre-Training",
+    "y": 2018
+   },
+   {
+    "t": "Deep Contextualized Word Representations (ELMo)",
+    "y": 2018,
+    "url": "https://arxiv.org/abs/1802.05365"
+   }
+  ]
+ },
+ "gpt2": {
+  "lead": "GPT-2 left GPT-1's architecture nearly untouched and scaled it to 1.5B parameters over 40GB of quality-filtered web text, then evaluated it on tasks it had never been fine-tuned for by simply describing them in the input. It reached state of the art on seven of eight language-modelling datasets without seeing their training sets, and argued that supervised NLP tasks are a subset of what a language model already has to model.",
+  "blocks": [
+   {
+    "h": "A task is a conditioning variable",
+    "b": "A supervised system learns $p(\\text{output} \\mid \\text{input})$ for one task. The paper's reframing is that a general system must learn $p(\\text{output} \\mid \\text{input}, \\text{task})$, and that on a large enough web corpus the task specification is itself just text — translation pairs, question-and-answer pairs and \"in summary\" passages occur naturally in documents.\n\nEarlier multitask work had unified tasks under a single format, most notably by casting ten of them as question answering, but still trained on labelled examples of each. **GPT-2 performs no gradient update at test time.** Task specification is a prefix: \"TL;DR:\" for summarisation, a few example pairs for translation. Prompting, in its crude original form, starts here."
+   },
+   {
+    "h": "WebText, and the tokenizer",
+    "b": "Common Crawl was rejected as largely unintelligible. The authors instead scraped outbound links from Reddit submissions with at least three karma as a cheap proxy for a human having found the page worth sharing: roughly eight million documents, 40GB of text after de-duplication, with Wikipedia removed because so many evaluation sets are built from it.\n\nThe tokenizer is byte-level BPE, so no input is ever out of vocabulary, with merges forbidden across character categories to stop the vocabulary spending slots on variants of a word differing only by trailing punctuation. Architecturally the changes are small and stabilising: layer normalisation moved to the input of each sub-block with an extra one after the final block, and residual-path weights scaled by $1/\\sqrt{N}$ at initialisation."
+   },
+   {
+    "h": "Where zero-shot worked and where it did not",
+    "b": "It worked where the task sits close to language modelling. LAMBADA, which requires resolving a long-range dependency to predict a final word, went from a previous best of 59.2% accuracy to 63.2%, with perplexity dropping from 99.8 to 8.6. Reading comprehension on CoQA reached the region of published supervised baselines without any of their training pairs.\n\nIt did not work elsewhere. Summarisation barely improved on selecting a few leading sentences. Translation and closed-book factual questions were poor in absolute terms, if remarkable relative to zero.\n\nThe more consequential result was a slope rather than a level: with four model sizes trained identically, performance rose log-linearly with capacity on essentially every task, and even the largest model still underfit WebText. The obvious next experiment was to make it much bigger."
+   },
+   {
+    "h": "What it left behind",
+    "b": "Zero-shot numbers remained far below fine-tuned systems on most benchmarks, and were unstable under rewording of the prompt — a sensitivity the field spent years papering over. Likelihood-maximising decoding degenerated into repetition loops, which is the problem nucleus sampling was introduced to fix.\n\nNothing in the training made the model helpful or truthful; it made it a good imitator of internet text, which is a different thing.\n\nThe 1.5B model was withheld at publication over misuse concerns and released some months later, the first time model capability was publicly treated as a release decision rather than a publication detail. GPT-3 answered the level question with roughly another hundredfold of scale and a formalised few-shot prompt."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Language Models are Unsupervised Multitask Learners",
+    "y": 2019
+   }
+  ]
+ },
+ "gpt3": {
+  "lead": "GPT-3 scaled the GPT-2 recipe by more than a hundred times, to 175B parameters, and reported that at that size a frozen model can take up a new task from a handful of examples placed in its prompt, with no gradient update at all. In-context learning was not designed in; it was observed, and the paper's central evidence is that it strengthens smoothly and predictably with scale.",
+  "blocks": [
+   {
+    "h": "Fine-tuning as the remaining bottleneck",
+    "b": "After BERT and GPT-2, using a model still meant assembling thousands of labelled examples per task and producing a separate set of weights to serve. The paper raises three objections. Practically, data collection dominates the cost of every new application. Scientifically, strong fine-tuned scores on a narrow benchmark may overstate ability, because a high-capacity model can exploit spurious regularities in a narrow distribution. And by comparison with people, who generally need an instruction and one or two examples.\n\nThe timing was not accidental. Scaling laws published earlier the same year had made test loss a predictable power law in parameters, data and compute, which turned a run of that size from a gamble into an extrapolation with error bars."
+   },
+   {
+    "h": "The model and the corpus",
+    "b": "96 layers, $d_{\\mathrm{model}} = 12288$, 96 attention heads of width 128, a 2048-token context, and dense and locally banded sparse attention layers alternating through the depth. Eight models from 125M upwards were trained under the same recipe so that the trend, not just the endpoint, could be read.\n\nThe data is filtered Common Crawl — kept by a classifier trained to recognise text resembling known-good reference corpora, then fuzzily de-duplicated — mixed with a WebText-like set, two book corpora and English Wikipedia. Roughly 300B tokens are sampled, weighted so the small high-quality sets are seen several times and Common Crawl less than once. A flaw in de-duplication against evaluation sets was found after training and analysed in the paper rather than fixed."
+   },
+   {
+    "h": "Learning inside the forward pass",
+    "b": "At evaluation the prompt holds a natural-language description of the task, then $K$ demonstrations — as many as the 2048-token window allows — then the query, and the model completes it. The weights never move; whatever adaptation occurs happens within a single forward pass.\n\nFew-shot beats one-shot beats zero-shot, and the gaps widen with model size, which the authors read as larger models being better at inferring from context what is being asked. LAMBADA rises to the mid-eighties in accuracy; closed-book TriviaQA is competitive with fine-tuned open-domain systems that retrieve documents. Arithmetic is the most diagnostic result: two-digit addition is close to perfect, and accuracy collapses by five digits, which looks like neither pure memorisation nor a learned algorithm."
+   },
+   {
+    "h": "The failures it named itself",
+    "b": "The paper's own limitations section lists loss of coherence and self-repetition over long passages, and weakness on tasks that compare two sentences — natural language inference, word-sense-in-context — where the absence of bidirectional context plausibly bites.\n\nTwo other gaps drove the next several years. The objective rewards likely text, not helpful or truthful text, so the model will complete a false premise as readily as a true one and answer a question with more questions; that is what InstructGPT set out to fix. And 175B dense parameters are touched for every generated token, making inference the dominant cost and motivating distillation, quantisation and mixture-of-experts routing. Chinchilla later showed this run was badly undertrained for its size at 300B tokens."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Language Models are Few-Shot Learners",
+    "y": 2020,
+    "url": "https://arxiv.org/abs/2005.14165"
+   },
+   {
+    "t": "Scaling Laws for Neural Language Models",
+    "y": 2020,
+    "url": "https://arxiv.org/abs/2001.08361"
+   }
+  ]
+ },
+ "instructgpt": {
+  "lead": "InstructGPT changed what a large language model is optimised for. In place of next-token likelihood on web text, the final stage maximises a reward model fitted to human comparisons of outputs, and the result was that labelers preferred a 1.3B-parameter InstructGPT model's answers to those of the 175B GPT-3 baseline, a model over a hundred times its size. Every widely deployed assistant since is a variation on its three-stage pipeline.",
+  "blocks": [
+   {
+    "h": "The objective is not the intent",
+    "b": "Pretraining makes a model a good continuation of internet text. That is a proxy for being useful, and the gap shows in specific ways: asked a question, GPT-3 may continue with a list of further questions, because that is what a list of questions looks like; it will follow a false premise; it will invent citations with the same fluency it uses for true ones.\n\nThe paper is precise that this is **an objective mismatch rather than a capability gap** — the model can produce the wanted answer, and nothing in training selects for it. Few-shot prompting was the standing workaround, forcing the format by example, and it is fragile, consumes context, and cannot express what a good answer is."
+   },
+   {
+    "h": "Demonstrations, comparisons, PPO",
+    "b": "First, supervised fine-tuning on labeler-written demonstrations, for prompts the labelers largely wrote themselves to bootstrap the first model; real API traffic supplies most of the prompts at the two later stages. Second, a reward model: for each prompt, $K$ sampled completions (between four and nine) are ranked by one labeler, giving $\\binom{K}{2}$ pairwise comparisons that are put in a single batch to prevent overfitting. A 6B model with a scalar head is trained under a Bradley–Terry likelihood,\n\n$\\mathcal{L} = -\\mathbb{E}_{(x,y_w,y_l)}\\left[\\log \\sigma\\!\\left(r_\\theta(x,y_w) - r_\\theta(x,y_l)\\right)\\right]$\n\nwhere $y_w$ is the preferred completion and $r_\\theta$ the learned scalar. Third, PPO fine-tunes the policy against $r_\\theta$. Ranking is the load-bearing choice: labelers cannot write the best answer to most prompts, but they can reliably say which of two is better."
+   },
+   {
+    "h": "Two brakes on the optimiser",
+    "b": "Maximising a learned reward means maximising an approximation, and a sufficiently good optimiser will find the regions where the approximation is wrong. The objective therefore adds a per-token KL penalty back to the supervised policy and a share of the original pretraining gradient:\n\n$\\mathbb{E}\\left[r_\\theta(x,y) - \\beta \\log \\frac{\\pi^{\\mathrm{RL}}_\\phi(y \\mid x)}{\\pi^{\\mathrm{SFT}}(y \\mid x)}\\right] + \\gamma\\, \\mathbb{E}_{x \\sim D_{\\mathrm{pretrain}}}\\left[\\log \\pi^{\\mathrm{RL}}_\\phi(x)\\right]$\n\n$\\beta$ holds the policy near the distribution on which the reward model was fitted; $\\gamma$ exists because pure preference optimisation degraded academic benchmark scores — the alignment tax. Labelers preferred the aligned models by a wide margin, truthfulness on adversarial questions improved substantially, and toxicity fell when the model was asked to be respectful. Bias benchmarks moved very little."
+   },
+   {
+    "h": "Reward hacking, and whose preferences",
+    "b": "The reward model is a fixed approximation of a moving policy, and over-optimisation is measurable: past some KL distance, true preference falls while the proxy reward keeps rising. Later work fitted scaling laws to exactly that curve.\n\nThe cost is three training runs plus a standing labelling operation, and the alignment is to some forty contractors working from one organisation's written instructions — the paper says so, and does not claim otherwise.\n\nWhat survived: hallucination, susceptibility to well-framed harmful requests, and learned hedging and verbosity because those are rewarded. DPO later removed the reward model by deriving the optimal policy in closed form and reducing preference learning to a classification loss; Constitutional AI replaced human comparisons with model-generated ones."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Training Language Models to Follow Instructions with Human Feedback",
+    "y": 2022,
+    "url": "https://arxiv.org/abs/2203.02155"
+   },
+   {
+    "t": "Deep Reinforcement Learning from Human Preferences",
+    "y": 2017,
+    "url": "https://arxiv.org/abs/1706.03741"
+   }
+  ]
+ },
+ "bert": {
+  "lead": "BERT pretrained a deep bidirectional Transformer encoder by deleting tokens from the input and asking the model to reconstruct them, so every layer conditions on left and right context at once. Fine-tuned with a single added output layer, it lifted the GLUE benchmark by around seven points and pushed SQuAD past the reported human score, and for several years \"put a head on a pretrained encoder\" was simply how NLP was done.",
+  "blocks": [
+   {
+    "h": "Why left-to-right was not just a habit",
+    "b": "A standard language model must be causal: with full self-attention over the sequence, a token asked to predict itself has already seen itself, and the objective becomes vacuous. That is why GPT-1 masked the future.\n\nELMo obtained a kind of bidirectionality by training separate left-to-right and right-to-left LSTM language models and concatenating their states, but the two are trained independently and joined only at the top. Neither direction's internal representation is ever computed with knowledge of the other, so the bidirectionality is shallow.\n\nFor token-level work — extracting an answer span, tagging an entity — the disambiguating evidence sits on both sides at every layer. **The fix had to be a different objective, not a different architecture.**"
+   },
+   {
+    "h": "Masked language modelling and the 80/10/10",
+    "b": "Fifteen per cent of WordPiece tokens are selected and predicted from the full surrounding context. Replacing all of them with a `[MASK]` symbol would be simplest, but `[MASK]` never occurs during fine-tuning, so the model would be adapted to an input distribution it never sees again.\n\nThe compromise: a selected token becomes `[MASK]` 80% of the time, a random token 10% of the time, and is left unchanged 10% of the time. Because the model cannot tell which case applies at any position, it must maintain a contextual representation of every token rather than only of the corrupted ones, and the random substitutions force some capacity to correct rather than merely copy.\n\nThe cost is supervision density: only 15% of positions produce a training signal, so convergence takes more steps than a causal LM needs."
+   },
+   {
+    "h": "Sentence pairs and the [CLS] slot",
+    "b": "Inference and question answering are relations between two spans, so the input is formatted as `[CLS] A [SEP] B [SEP]` with a learned segment embedding marking each side. A second pretraining objective asks whether B genuinely followed A in the corpus, with a negative sampled half the time, which gives the `[CLS]` position a reason to summarise the pair.\n\nFine-tuning then updates every parameter for a few epochs with one linear layer on top — the `[CLS]` vector for classification, per-token vectors for span start and end. The same body serves GLUE, SQuAD and named-entity recognition, which is the practical reason the recipe spread so fast. Base and Large were trained on BooksCorpus and English Wikipedia."
+   },
+   {
+    "h": "What later work took apart",
+    "b": "Next-sentence prediction turned out to contribute little: RoBERTa dropped it, trained longer on more data with masks resampled each epoch, and improved across the board — evidence BERT was undertrained rather than mis-designed. ALBERT replaced it with sentence-order prediction, a harder discrimination.\n\nXLNet objected that MLM predicts masked positions independently given the context, so structure between two masked tokens is never modelled, and proposed permutation language modelling instead. ELECTRA attacked the sparse supervision by discriminating replaced tokens at every position.\n\nThe deeper limit is that an encoder cannot generate: there is no decoding order to sample from. Summarisation and dialogue stayed with decoders, and it was the decoder family that eventually took the general-purpose seat."
+   }
+  ],
+  "refs": [
+   {
+    "t": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+    "y": 2018,
+    "url": "https://arxiv.org/abs/1810.04805"
+   },
+   {
+    "t": "RoBERTa: A Robustly Optimized BERT Pretraining Approach",
+    "y": 2019,
+    "url": "https://arxiv.org/abs/1907.11692"
+   }
+  ]
+ },
+ "flashattn": {
+  "lead": "FlashAttention made exact attention several times faster by changing not the arithmetic but the memory traffic. Its observation is that attention on a GPU is bound by reads and writes to high-bandwidth memory rather than by floating-point work, so the fix is to never materialise the $n \\times n$ score matrix at all: tile the computation into on-chip SRAM, and recompute what the backward pass needs instead of storing it.",
+  "blocks": [
+   {
+    "h": "Attention was memory-bound, not FLOP-bound",
+    "b": "By 2021 the efficient-attention literature had produced a long list of ways to reduce attention's $O(n^2)$ arithmetic — sparse patterns, low-rank projections, kernel approximations. The FLOP reductions were real; the wall-clock gains often were not, and the approximations cost quality.\n\nThe reason is in the memory hierarchy. A standard implementation writes $S = QK^{\\top}/\\sqrt{d}$ to HBM, reads it back to apply the softmax, writes the result, then reads it again to multiply by $V$. That is $O(n^2)$ traffic in a matrix that is never wanted for its own sake. On an A100, on-chip SRAM is roughly an order of magnitude faster than HBM but holds only tens of megabytes. **The kernel spends most of its time waiting on memory**, so counting FLOPs measures the wrong thing."
+   },
+   {
+    "h": "Tiling around an online softmax",
+    "b": "The obstacle to tiling is that the softmax normalises across a whole row, which appears to require every score before any output can be written. The online softmax removes that dependency by carrying a running maximum $m$ and running denominator $\\ell$ and rescaling the accumulated output when a new block raises the maximum:\n\n$m^{\\mathrm{new}} = \\max(m, \\tilde{m}), \\qquad \\ell^{\\mathrm{new}} = e^{m - m^{\\mathrm{new}}}\\ell + e^{\\tilde{m} - m^{\\mathrm{new}}}\\tilde{\\ell}$\n\nwith the partial output scaled by the same factor $e^{m - m^{\\mathrm{new}}}$. FlashAttention splits $K$ and $V$ into blocks; for each, it loops over blocks of $Q$, updating each output block and its running softmax statistics in place, and keeps only the output and a per-row log-sum-exp — FlashAttention-2 later swapped the loops so that $Q$ is the outer one and the accumulator never leaves the chip. HBM accesses fall from $O(n^2)$ to roughly $O(n^2 d^2 / M)$ for SRAM of size $M$. The result is exact attention rather than an approximation — the same function as standard attention, computed in a different summation order and so agreeing with it up to floating-point rounding."
+   },
+   {
+    "h": "Recomputation is cheaper than storage",
+    "b": "The backward pass needs the attention probabilities. Rather than keep them, FlashAttention stores only the output and the $O(n)$ log-sum-exp statistics and rebuilds the scores on chip from $Q$, $K$ and $V$. This performs strictly more arithmetic than a conventional backward pass and is still faster, because the extra FLOPs are close to free against the memory traffic they avoid.\n\nThe side effect mattered as much as the speed: activation memory for attention becomes linear rather than quadratic in sequence length. Training runs reported around a threefold speedup on GPT-2 and a clear margin over the then-current MLPerf BERT-large record, and contexts that had been impractical became routine — including the first Transformer to beat chance on Path-X at 16K tokens."
+   },
+   {
+    "h": "What it did not change",
+    "b": "The FLOP count is untouched. FlashAttention is still quadratic in sequence length, and at very long contexts compute reasserts itself as the binding constraint, which is why linear-time architectures continued to be pursued alongside it.\n\nIt is also a hand-written kernel welded to one memory hierarchy. FlashAttention-2 rebalanced work across thread blocks and warps and cut non-matmul operations; FlashAttention-3 was rewritten again for Hopper's asynchronous copy engines and FP8. Each generation of accelerator needs the port redone.\n\nThe durable contribution is methodological. **IO-awareness became a design criterion rather than an implementation detail**, and the same accounting shows up afterwards in paged KV caches, fused normalisation and activation kernels, and the attention paths now shipped inside every serious framework."
+   }
+  ],
+  "refs": [
+   {
+    "t": "FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness",
+    "y": 2022,
+    "url": "https://arxiv.org/abs/2205.14135"
+   },
+   {
+    "t": "FlashAttention-2: Faster Attention with Better Parallelism and Work Partitioning",
+    "y": 2023,
+    "url": "https://arxiv.org/abs/2307.08691"
+   }
+  ]
+ },
+ "s4": {
+  "lead": "S4 took the linear state-space model of classical control, gave it a parameterisation that could actually be trained and evaluated at sequence length, and showed it carrying dependencies across sixteen thousand steps on a task where every attention and recurrent baseline sat at chance. The mechanism that made this practical is a structured decomposition of the state matrix that turns an intractable kernel computation into a Cauchy-kernel evaluation.",
+  "blocks": [
+   {
+    "h": "One layer, two computational modes",
+    "b": "A state-space layer maps a scalar input signal to a scalar output through a hidden state:\n\n$x'(t) = Ax(t) + Bu(t), \\qquad y(t) = Cx(t)$\n\nDiscretising with a step size gives $x_k = \\bar{A}x_{k-1} + \\bar{B}u_k$, $y_k = \\bar{C}x_k$. This can be run as a recurrence, which costs constant time and memory per step at generation, or unrolled into a convolution with kernel $\\bar{K} = (\\bar{C}\\bar{B}, \\bar{C}\\bar{A}\\bar{B}, \\dots, \\bar{C}\\bar{A}^{L-1}\\bar{B})$ and applied to the whole sequence with an FFT during training. **The same parameters serve parallel training and sequential inference**, which is precisely what an RNN cannot offer and a Transformer offers only at quadratic cost. The difficulty is producing $\\bar{K}$: computing $L$ powers of $\\bar{A}$ naively is both expensive and numerically unstable."
+   },
+   {
+    "h": "The state matrix is not free",
+    "b": "A randomly initialised or freely learned $A$ produces a layer with no more effective memory than an ordinary RNN — the state decays and old information is gone. The HiPPO framework supplied a specific $A$ derived by asking what matrix makes the state the coefficients of an optimal polynomial projection of the input history under a chosen weighting. Under that matrix the hidden state is a continuously maintained compression of everything the layer has seen, with an explicit approximation guarantee rather than an empirical hope.\n\nThe immediate predecessor, the Linear State Space Layer, used HiPPO directly and reproduced the long-memory behaviour, but was far too slow and memory-hungry to be used as a general layer. S4's problem was therefore narrow and concrete: keep HiPPO's memory, make it computable."
+   },
+   {
+    "h": "Normal plus low rank",
+    "b": "HiPPO's matrix is not normal and cannot be stably diagonalised, so the obvious shortcut is unavailable. S4 writes it instead as normal plus low rank, $A = \\Lambda - PQ^{*}$, and never forms the kernel entry by entry. It evaluates the kernel's generating function at the roots of unity, where the awkward matrix powers collapse into a single resolvent:\n\n$\\hat{K}(z) = \\sum_{k} \\bar{C}\\bar{A}^{k}\\bar{B}\\, z^{k} = \\bar{C}(I - \\bar{A}z)^{-1}\\bar{B}$\n\nThe Woodbury identity reduces the low-rank correction to a shift of the diagonal case, and what remains is a Cauchy matrix–vector product with well-known fast algorithms. An inverse FFT recovers the kernel. Total cost is near-linear in state size plus sequence length, $\\tilde{O}(N+L)$, against the $O(N^2L)$ operations and $O(NL)$ space of the naive route — a large enough change to move the method from demonstration to layer."
+   },
+   {
+    "h": "The linearity it could not escape",
+    "b": "S4 was the first model to rise above chance on Path-X, classified raw speech waveforms without a spectrogram front end, and did well on long sequential image tasks. But $A$, $B$ and $C$ are the same at every position and independent of what the layer is reading, so the whole thing is a fixed convolution. It can remember, but it cannot decide what is worth remembering: **selective copying and induction-style tasks, trivial for attention, are structurally out of reach**, and language modelling quality lagged.\n\nThe implementation was also forbidding — complex arithmetic, Cauchy kernels, careful initialisation. Diagonal variants such as DSS and S4D showed most of the quality survives a much simpler parameterisation, S5 moved to a parallel scan, and H3 attacked the language-modelling gap. Mamba resolved the deeper issue by discarding time invariance altogether."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Efficiently Modeling Long Sequences with Structured State Spaces",
+    "y": 2021,
+    "url": "https://arxiv.org/abs/2111.00396"
+   },
+   {
+    "t": "HiPPO: Recurrent Memory with Optimal Polynomial Projections",
+    "y": 2020,
+    "url": "https://arxiv.org/abs/2008.07669"
+   }
+  ]
+ },
+ "mamba": {
+  "lead": "Mamba made the state-space model's parameters functions of the input — the one thing S4's mathematics forbade — and paid for it by surrendering the FFT convolution. In its place is a parallel scan written to keep the recurrent state in on-chip memory, and the resulting model matched Transformers of roughly twice its size at the billion-parameter scale while training in linear time and generating with constant memory per step.",
+  "blocks": [
+   {
+    "h": "What time invariance costs",
+    "b": "An S4 layer applies the same convolution kernel regardless of content. That is what makes the FFT applicable and what makes the layer useless for anything content-addressed. Two toy tasks isolate it: selective copying, where the tokens to reproduce are marked by their content rather than their position, and induction heads, where a model must notice a bigram and reuse its continuation later. Attention does both by construction; a fixed convolution cannot do either, and induction heads are understood to be a substrate of in-context learning.\n\nOn the other side, the Transformer's own costs were unchanged — attention quadratic in sequence length during training, and a KV cache growing linearly with context that dominates memory during deployment. Neither family had both properties."
+   },
+   {
+    "h": "Selection through the step size",
+    "b": "Mamba makes $\\Delta$, $B$ and $C$ linear projections of the current token, leaving $A$ diagonal and shared. Discretisation then varies per position, with $\\bar{A}_t = \\exp(\\Delta_t A)$ and a matching $\\bar{B}_t$, so the recurrence $x_t = \\bar{A}_t x_{t-1} + \\bar{B}_t u_t$ has coefficients that depend on what is being read.\n\n$\\Delta_t$ carries most of the work. A large step means the current input dominates and the accumulated state is effectively flushed; a step near zero means the input is ignored and the state persists unchanged. **The familiar gate of an LSTM or GRU falls out of the discretisation rather than being posited**, which is the cleanest argument in the paper: selection is not an addition to the state-space formalism but the consequence of letting its one free timescale vary."
+   },
+   {
+    "h": "Why the kernel had to be hand-written",
+    "b": "With time-varying coefficients there is no global convolution kernel and no FFT. The recurrence remains associative, so a work-efficient parallel scan applies — but the state is $N$ times wider than the sequence itself, and writing it to HBM would consume the entire benefit. This is FlashAttention's accounting applied to a different operator.\n\nMamba fuses discretisation, scan and output projection into a single kernel: load the projected inputs into SRAM, run the scan there, write only the output, and recompute intermediate states during the backward pass rather than storing them. The surrounding architecture is deliberately plain — one homogeneous block, a gated MLP wrapped around the selective SSM, with no separate attention or feed-forward alternation."
+   },
+   {
+    "h": "A fixed state is still a fixed state",
+    "b": "Mamba reported roughly fivefold generation throughput against a comparable Transformer, competitive language modelling against dense baselines of about twice the parameter count at the scales tested, and strong results on DNA and raw audio where sequences are long and tokenisation is unnatural.\n\nSelection decides what to keep; it does not enlarge what can be kept. Everything must fit a fixed-size summary, so tasks requiring verbatim recall of arbitrary earlier content — multi-query associative recall, dictionary lookup, long-context retrieval — degrade in a way attention does not. The practical answer has been hybrids: interleaving a small number of attention layers, as in Jamba, Samba and Zamba, restores copying at modest cost. Mamba-2's state space duality then recast selective SSMs and a masked form of attention as two readings of the same structured-matrix product, which permitted matmul-heavy kernels and much larger states."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Mamba: Linear-Time Sequence Modeling with Selective State Spaces",
+    "y": 2023,
+    "url": "https://arxiv.org/abs/2312.00752"
+   },
+   {
+    "t": "Transformers are SSMs: Generalized Models and Efficient Algorithms Through Structured State Space Duality",
+    "y": 2024,
+    "url": "https://arxiv.org/abs/2405.21060"
+   }
+  ]
+ },
+ "moe": {
+  "lead": "The sparsely-gated mixture-of-experts layer broke the assumption that parameters and compute per example must rise together. A trainable gate sends each token to a handful of expert sub-networks out of thousands, so a layer can hold three orders of magnitude more parameters while the arithmetic each token triggers barely moves. Capacity became something one could buy without buying FLOPs.",
+  "blocks": [
+   {
+    "h": "Why conditional computation kept failing",
+    "b": "The idea dates to the mixture-of-experts work of the early 1990s and was revisited repeatedly through the 2010s, always with disappointing results. The obstacles were practical rather than conceptual.\n\nAccelerators want large dense matrix products, and data-dependent branching is exactly what breaks them. Gating is a discrete choice, so it is not obvious what gradient the gate should receive. Splitting a batch across $n$ experts leaves each expert a fraction of the examples, and small batches are the regime hardware handles worst. And earlier attempts used a few experts, where the capacity gained is too small to repay any of this trouble. **The contribution was making the idea survive contact with the hardware**, at a scale where the payoff was large enough to notice."
+   },
+   {
+    "h": "Noisy top-k gating",
+    "b": "The gate scores every expert, adds trainable per-expert Gaussian noise, keeps the best $k$ and sets the rest to $-\\infty$ before the softmax, so their weights are exactly zero and those experts are never evaluated:\n\n$G(x) = \\mathrm{softmax}(\\mathrm{KeepTopK}(H(x), k)), \\qquad y = \\sum_{i \\in \\mathrm{top}k} G(x)_i E_i(x)$\n\nTwo choices deserve their reasons. The noise is tunable per expert and smooths the ranking, giving the load-balancing machinery a continuous quantity to act on. And $k$ was taken to be at least two: with $k = 1$ the softmax over a single retained logit is identically one, so the gate appeared to receive no signal about the relative merit of its choice. That reasoning stood for four years before Switch tested it."
+   },
+   {
+    "h": "Balance is not automatic",
+    "b": "Routing is self-reinforcing. An expert favoured early receives more gradient, becomes better, and is favoured more; left alone the distribution collapses onto a few experts while the remainder go untrained. Two auxiliary losses counter it — an importance term penalising the squared coefficient of variation of the summed gate weights per expert across a batch, and a separate load term, since equal total importance can still hide very unequal token counts.\n\nThe shrinking-batch problem was solved by a change of parallelism rather than of algorithm. Experts are distributed across devices, and every device ships its tokens to the device owning the chosen expert, so each expert sees tokens pooled from the whole data-parallel batch. That exchange is an all-to-all, which makes the layer's speed a function of the interconnect."
+   },
+   {
+    "h": "What it proved, and what it left open",
+    "b": "The largest configurations placed MoE layers between stacked LSTMs with over a hundred billion parameters in the experts alone, and reported better perplexity on billion-word-scale corpora at comparable compute, plus translation gains over Google's production NMT system at lower training cost. The claim that capacity and compute could be decoupled was no longer speculative.\n\nThe recipe stayed delicate. The balancing losses needed tuning, all-to-all made performance sensitive to cluster topology, training was less stable than a dense model at reduced precision, and expert utilisation had to be watched. GShard carried the layer into the Transformer with explicit capacity factors and sharding annotations; Switch then removed the second expert, addressed the precision instability directly, and pushed the parameter count past a trillion."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Outrageously Large Neural Networks: The Sparsely-Gated Mixture-of-Experts Layer",
+    "y": 2017,
+    "url": "https://arxiv.org/abs/1701.06538"
+   },
+   {
+    "t": "GShard: Scaling Giant Models with Conditional Computation and Automatic Sharding",
+    "y": 2020,
+    "url": "https://arxiv.org/abs/2006.16668"
+   }
+  ]
+ },
+ "switch": {
+  "lead": "The Switch Transformer replaced each feed-forward block with a bank of experts and routed every token to exactly one — the configuration the mixture-of-experts literature had assumed could not train. Dropping the second expert cut router arithmetic, halved the buffer each expert must be sized for and halved the all-to-all traffic; with a handful of stability fixes the same recipe reached 1.6 trillion parameters.",
+  "blocks": [
+   {
+    "h": "Testing the k ≥ 2 rule",
+    "b": "The standing argument against top-1 routing was that the gate would receive no learning signal: a softmax over one retained logit is constant, so nothing tells the router whether its choice was good.\n\nThe counter-observation is that the router's probability still multiplies the expert output, $y = p_i(x)\\,E_i(x)$, so the loss gradient flows into $p_i$ and raises or lowers the chosen expert's score according to whether it helped. That is a weaker signal than comparing two experts, but it is not zero, and empirically it sufficed. **The savings then compound**: one expert evaluated instead of two, expert capacity buffers halved, and half the tokens crossing the network. At fixed compute those savings buy more experts, which is where the quality comes from."
+   },
+   {
+    "h": "Capacity factor and dropped tokens",
+    "b": "Because experts live on different devices, each needs a fixed-size buffer allocated before routing is known. Switch sets it as the tokens per batch divided by the number of experts, multiplied by a capacity factor above one. Tokens that overflow their expert's buffer are dropped — passed to the next layer through the residual connection with no expert applied at all. The capacity factor is therefore an explicit dial between wasted padding and lost computation.\n\nBalance is enforced by an auxiliary loss over the $N$ experts,\n\n$\\mathcal{L}_{\\mathrm{aux}} = \\alpha N \\sum_{i=1}^{N} f_i P_i$\n\nwhere $f_i$ is the fraction of tokens dispatched to expert $i$ and $P_i$ the mean router probability assigned to it. The product is minimised by a uniform split, and it is differentiable through $P$ even though $f$ is not. A coefficient of about $0.01$ balanced the load without visibly distorting the language-modelling objective."
+   },
+   {
+    "h": "Selective precision",
+    "b": "Sparse models diverged when trained in bfloat16, and the diagnosis was unusually specific. The router exponentiates its logits, and bfloat16's short mantissa means small round-off changes both which expert wins and the gate value that scales its output; that noise compounds through training.\n\nThe fix is local: cast to float32 inside the router only, and keep the float32 tensor from ever crossing a device boundary, so no additional communication is incurred. Alongside it, the initialisation scale was reduced, and fine-tuning used much heavier dropout inside the experts than elsewhere — a sparse model carries an enormous parameter count relative to a small downstream dataset, and overfits accordingly."
+   },
+   {
+    "h": "Results, and the seams that remained",
+    "b": "Against a dense T5 baseline at matched FLOPs per token, Switch reached the same quality in roughly a seventh of the training time; Switch-C, with 2048 experts, ran at 1.6 trillion parameters; gains held across the multilingual mT5 language set. Distillation back into a dense student recovered about a third of the sparse gain at roughly a twentieth of the size, which is the honest measure of how much of the benefit is portable.\n\nWhat stayed unsolved was memory and routing. Every parameter must be resident even though few are used per token, so serving cost tracks total parameters rather than active ones. Token dropping and capacity tuning persisted. ST-MoE added a router z-loss for stability, expert-choice routing inverted the assignment so that experts select tokens and load balances perfectly by construction — at the cost of some tokens being picked by several experts and others by none — and Mixtral returned to top-2 routing in an openly released model."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Switch Transformers: Scaling to Trillion Parameter Models with Simple and Efficient Sparsity",
+    "y": 2021,
+    "url": "https://arxiv.org/abs/2101.03961"
+   },
+   {
+    "t": "ST-MoE: Designing Stable and Transferable Sparse Expert Models",
+    "y": 2022,
+    "url": "https://arxiv.org/abs/2202.08906"
+   }
+  ]
+ },
+ "nnlm": {
+  "lead": "Bengio and colleagues replaced the count table at the heart of language modelling with a neural network that learns a real-valued vector for every word. Because words that behave alike end up near each other in that space, probability mass learned from one sentence transfers to sentences never seen — the generalisation a back-off n-gram can only imitate by redistributing counts.",
+  "blocks": [
+   {
+    "h": "What an n-gram cannot do",
+    "b": "A trigram model estimates $P(w_t \\mid w_{t-1}, w_{t-2})$ by counting, and everything interesting about it is the smoothing scheme that decides what to do when the count is zero. Back-off and Kneser–Ney discounting move mass to unseen triples by consulting shorter contexts, which is a statement about frequency and nothing else. The model has no space in which cat and dog are close, so having seen \"the cat is walking in the bedroom\" it knows nothing about \"a dog was running in a room\".\n\nThe failure is combinatorial rather than a shortage of data. With a vocabulary of $100{,}000$ and a ten-word context there are on the order of $10^{50}$ sequences to score, and any corpus leaves essentially all of them at zero."
+   },
+   {
+    "h": "One shared table of features",
+    "b": "Each of the $n-1$ preceding words is mapped through a shared matrix $C \\in \\mathbb{R}^{|V| \\times m}$, with $m$ of order 30 to 100, into a feature vector; the vectors are concatenated into $x$ and the whole vocabulary is scored through one hidden layer,\n\n$y = b + Wx + U\\tanh(d + Hx)$\n\nfollowed by a softmax over $y$. The row $C(w)$ is the same wherever $w$ falls in the window, so a word's representation is estimated from every context it ever appears in rather than once per position. That sharing is where the generalisation comes from: gradient descent has an incentive to move interchangeable words together, and once they are together the probability assigned to one sentence drags its neighbours with it. The $Wx$ term is a direct feature-to-output connection and is not essential."
+   },
+   {
+    "h": "The softmax was the bill",
+    "b": "Every step normalises over the whole vocabulary, so the output layer dominates both the forward pass and the gradient, scaling with $|V|$. The experiments — the Brown corpus of roughly a million words, and a larger set of Associated Press newswire — ran for weeks on a cluster of CPUs, and the paper spends real effort on splitting the output layer across machines.\n\nThat cost set the agenda for the following decade. Hierarchical softmax replaced flat normalisation with a tree of binary decisions; importance sampling estimated the denominator's gradient from a few sampled words instead, and noise-contrastive estimation and finally negative sampling dropped normalisation altogether in favour of discrimination against those samples. The perplexity gain over a well-smoothed trigram was real but not dramatic, and the best numbers came from interpolating the two models, which failed on different sentences."
+   },
+   {
+    "h": "The window, and the by-product",
+    "b": "The fixed context was inherited rather than questioned. The Markov assumption of the n-gram survives intact — only the estimator changed — so nothing before the $n-1$ given words can be conditioned on, and long-range agreement or topic stays out of reach. Recurrent language models removed the window a few years later by carrying state instead of a context buffer.\n\nThe other legacy was accidental. $C$ was a nuisance parameter here, a means to a probability. The field then decided it was the product. word2vec kept the table, threw away the hidden layer and the exact normalisation, and trained on corpora orders of magnitude larger — the same architecture with the expensive parts deleted."
+   }
+  ],
+  "refs": [
+   {
+    "t": "A Neural Probabilistic Language Model",
+    "y": 2003,
+    "url": "https://www.jmlr.org/papers/v3/bengio03a.html"
+   }
+  ]
+ },
+ "w2v": {
+  "lead": "word2vec is what remains of a neural language model once everything expensive is removed: no hidden layer, no normalisation over the vocabulary, and an objective that is binary classification against a handful of random words. It trained on billions of tokens on a single machine, and the vectors turned out to support linear analogy arithmetic that nobody had designed in.",
+  "blocks": [
+   {
+    "h": "Deleting the hidden layer",
+    "b": "Two models were proposed. CBOW averages the vectors of the surrounding words and predicts the centre; skip-gram does the reverse, predicting each context word from the centre, and maximises\n\n$\\frac{1}{T}\\sum_{t=1}^{T} \\sum_{-c \\le j \\le c,\\, j \\ne 0} \\log p(w_{t+j} \\mid w_t)$\n\nThe window size is resampled uniformly from $1$ to $c$ for each token, which weights nearer words more heavily without a separate weighting term. There is no nonlinearity anywhere: the model is two lookup tables and a dot product. Bengio's network spent most of its compute in the tanh layer and the full softmax, and the wager here was that neither was buying anything the embedding table needed. Removing them turned a cluster job into a laptop job."
+   },
+   {
+    "h": "Negative sampling",
+    "b": "The remaining cost was the softmax denominator, and skip-gram with negative sampling replaces it outright. For an observed pair the objective is\n\n$\\log \\sigma(v'^{\\top}_{w_O} v_{w_I}) + \\sum_{i=1}^{k}\\mathbb{E}_{w_i \\sim P_n(w)}\\left[\\log \\sigma(-v'^{\\top}_{w_i} v_{w_I})\\right]$\n\n— push the true context word up, push $k$ sampled words down. Nothing is normalised, so the per-step cost is $k+1$ dot products rather than $|V|$; $k$ around 5 to 20 suits a small corpus, 2 to 5 a large one. The noise distribution is the unigram raised to the power $3/4$, which outperformed both the plain unigram and the uniform in the authors' experiments and was never given a principled justification. Frequent tokens are also discarded with probability $1-\\sqrt{t/f(w)}$, which both saves time and effectively widens the window past the function words."
+   },
+   {
+    "h": "Analogies, and what they turned out to be",
+    "b": "The vectors placed $\\mathrm{vec}(\\text{king}) - \\mathrm{vec}(\\text{man}) + \\mathrm{vec}(\\text{woman})$ nearest to queen, and did so across thousands of semantic and syntactic analogy questions. This was an observation, not an objective: nothing in the loss asks for parallel offsets.\n\nLater analysis tempered both the mystery and the framing. Levy and Goldberg showed that skip-gram with negative sampling is implicitly factorising a word–context matrix of pointwise mutual information shifted by $\\log k$, which makes the fashionable opposition between predictive and count-based embeddings largely a difference of loss function and weighting. The analogy result itself is partly an artefact of the evaluation, which excludes the three query words from the answer set."
+   },
+   {
+    "h": "One vector per string",
+    "b": "A word type gets exactly one point, so every sense of bank is averaged into it in proportion to corpus frequency, and the downstream model must undo that from scratch. Morphology is invisible — runs, running and runner are unrelated strings — and anything outside the training vocabulary has no vector at all. fastText attacked both by summing character n-grams; ELMo and then BERT attacked the first properly by making the vector a function of the sentence.\n\nThe vectors also absorbed whatever regularities the corpus contained, including occupational gender stereotypes recoverable by the same analogy arithmetic that made them famous, which opened a line of work on measuring and removing such structure."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Efficient Estimation of Word Representations in Vector Space",
+    "y": 2013,
+    "url": "https://arxiv.org/abs/1301.3781"
+   },
+   {
+    "t": "Distributed Representations of Words and Phrases and their Compositionality",
+    "y": 2013,
+    "url": "https://arxiv.org/abs/1310.4546"
+   }
+  ]
+ },
+ "glove": {
+  "lead": "GloVe fits word vectors to corpus-wide co-occurrence counts instead of to a stream of local prediction problems. Its premise is that meaning is carried by ratios of co-occurrence probabilities rather than by the probabilities themselves, and the model is the weighted least-squares problem you get when you require a dot product to reproduce the logarithm of a count.",
+  "blocks": [
+   {
+    "h": "Ratios, not probabilities",
+    "b": "Take ice and steam and probe them with other words. Both co-occur often with water and rarely with fashion, so raw probabilities separate nothing. The ratio $P(k \\mid \\text{ice})/P(k \\mid \\text{steam})$ is large for solid, small for gas, and near $1$ for both water and fashion — it distinguishes the words that discriminate the pair from those that do not.\n\nDemanding that a vector space encode that ratio, and that it do so linearly in the difference of the two word vectors, forces the form of the model. Exponentiating the linear relation and absorbing the row and column normalisers into biases gives $w_i^{\\top}\\tilde w_k + b_i + \\tilde b_k = \\log X_{ik}$, where $X_{ik}$ is the number of times $k$ occurs in the context of $i$."
+   },
+   {
+    "h": "The weighted fit",
+    "b": "That equation is imposed as a regression over the co-occurrence matrix,\n\n$J = \\sum_{i,j=1}^{V} f(X_{ij})\\left(w_i^{\\top}\\tilde w_j + b_i + \\tilde b_j - \\log X_{ij}\\right)^2$\n\nwith $f(x) = (x/x_{\\max})^{\\alpha}$ below a cutoff and $1$ above, using $x_{\\max}=100$ and $\\alpha = 3/4$. The weighting does two jobs. Since $f(0)=0$, zero counts contribute nothing and the sum can run only over observed pairs, a small fraction of $V^2$; and the cap stops a handful of extremely frequent pairs from dominating the loss. This is the difference from the earlier matrix methods: latent semantic analysis applies SVD, which weights every cell equally, including the enormous number of uninformative near-zero ones. Counting is done once up front, so training then scales with the number of non-zero entries rather than with corpus length."
+   },
+   {
+    "h": "What the comparison actually showed",
+    "b": "GloVe reported better analogy and word-similarity scores than skip-gram at matched dimension and corpus, and the framing — global counts beating local prediction — was widely repeated. Levy, Goldberg and Dagan then showed that most of the reported differences across this whole family came from hyperparameters and preprocessing that had migrated unevenly between implementations: dynamic context windows, subsampling of frequent words, the shift applied to PMI, and the habit of summing the word and context vectors, $w + \\tilde w$, which GloVe used and the others generally did not. Held constant, GloVe's reported edge disappeared — skip-gram with negative sampling came out ahead of it on every task they tested — and across the family as a whole no approach held a global advantage. The durable contribution is the demonstration that predictive and count-based embeddings are fitting the same co-occurrence statistics under different losses."
+   },
+   {
+    "h": "What it did not address",
+    "b": "Everything word2vec left unsolved, GloVe leaves unsolved as well. There is still one vector per string, so polysemy is averaged away and out-of-vocabulary words have nothing; morphology is still invisible; and the co-occurrence matrix must be rebuilt from scratch to add data, with memory proportional to the observed pairs — for web-scale corpora, the largest object in the pipeline.\n\nWhat it did do is supply the era's default input layer. Pretrained 300-dimensional GloVe vectors on Wikipedia and Common Crawl were the standard initialisation for the LSTM models of 2015 to 2017, and they were displaced only when the embedding stopped being a fixed table and became a function of the surrounding sentence."
+   }
+  ],
+  "refs": [
+   {
+    "t": "GloVe: Global Vectors for Word Representation",
+    "y": 2014,
+    "url": "https://aclanthology.org/D14-1162/"
+   }
+  ]
+ },
+ "fasttext": {
+  "lead": "fastText represents a word as the sum of the vectors of its character n-grams, so morphology is built into the embedding table rather than left for each inflected form to learn independently. A word never seen in training still has a vector, because its pieces have been seen thousands of times.",
+  "blocks": [
+   {
+    "h": "The rare-word tail",
+    "b": "Skip-gram and GloVe estimate a distinct vector per string from that string's occurrences alone. Word frequencies are Zipfian, so most of the vocabulary appears a handful of times and most vectors are correspondingly poor, while anything outside the vocabulary gets nothing at all and the downstream system falls back to an unknown-word token.\n\nIn English this is a nuisance. In Finnish, Turkish, Czech or German it is disabling, because inflection and compounding multiply the number of types while keeping each one rare — the same lemma is split across dozens of strings, each individually undertrained. To skip-gram, run, runs, running and runner are four unrelated symbols, and the shared stem is information sitting in plain view that the model discards."
+   },
+   {
+    "h": "A bag of character n-grams",
+    "b": "Each word is bracketed with boundary symbols and decomposed into all character n-grams for $3 \\le n \\le 6$, plus the full word as its own token: where becomes <wh, whe, her, ere, re>, and <where>. The brackets matter — they keep the n-gram her, taken from where, distinct from the standalone word <her>. The scoring function of skip-gram with negative sampling is then replaced by\n\n$s(w,c) = \\sum_{g \\in \\mathcal{G}_w} z_g^{\\top} v_c$\n\nwhere $\\mathcal{G}_w$ is the word's n-gram set and $z_g$ its vector; the rest of the training procedure is untouched. The n-gram inventory is far larger than the word vocabulary, so n-grams are hashed into a fixed number of buckets — two million in the released models — trading collisions for bounded memory."
+   },
+   {
+    "h": "Where it helps and where it hurts",
+    "b": "The gains concentrate exactly where the argument predicts: morphologically rich languages, rare words, and syntactic analogies, where the n-grams effectively encode the suffix being tested. On English semantic analogies the improvement is small and sometimes negative, because character overlap is a noisy proxy for meaning and will happily pull together words that share substrings and nothing else.\n\nBecause the representation is compositional at the character level, misspellings, inflections and unseen compounds all receive sensible vectors, which is why fastText became the practical default for noisy web text and for languages without a large clean corpus. Its classification sibling — a linear model over bag-of-n-gram features with a hierarchical softmax — matched small neural text classifiers while training on a CPU in seconds."
+   },
+   {
+    "h": "Subwords outlived the embedding table",
+    "b": "Character n-grams are morphology only in the crudest sense. They carry no notion of a morpheme boundary, cannot represent suppletion such as go and went, and cannot separate a genuine affix from a coincidence of spelling. And the deeper problem is untouched: the vector for bank is still a single point, fixed before the sentence is read.\n\nWhat survived is not the embedding table but the decomposition. Subword units moved into the tokeniser — byte-pair encoding, WordPiece, SentencePiece — where the model itself composes the pieces through its own layers rather than by summing a lookup. That removes out-of-vocabulary words from the vocabulary altogether instead of patching over them at the embedding."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Enriching Word Vectors with Subword Information",
+    "y": 2016,
+    "url": "https://arxiv.org/abs/1607.04606"
+   },
+   {
+    "t": "Bag of Tricks for Efficient Text Classification",
+    "y": 2016,
+    "url": "https://arxiv.org/abs/1607.01759"
+   }
+  ]
+ },
+ "elmo": {
+  "lead": "ELMo made a word's vector a function of the sentence containing it. A two-layer bidirectional LSTM language model is pretrained on unlabelled text, and each downstream task learns its own weighted average of that model's internal states — a representation of a token in context, rather than a lookup by string.",
+  "blocks": [
+   {
+    "h": "The type/token problem",
+    "b": "Every static embedding assigns one vector per string, so play in a theatre and play in a match share a single point that is a frequency-weighted compromise between the senses. Task models papered over this with their own recurrent encoders trained on labelled data, which are minuscule beside the unlabelled text available.\n\nCoVe had already shown that the hidden states of a pretrained encoder could be used as contextual features, but it drew its supervision from machine translation and was therefore capped by the size of available parallel corpora. A language model needs nothing but raw text. That is the argument ELMo makes: the supply of supervision for contextual representation is effectively unlimited, provided the pretraining objective asks only for the next word."
+   },
+   {
+    "h": "The biLM and the layer mixture",
+    "b": "A forward language model predicts $w_{k+1}$ from the left context and a backward one predicts $w_{k-1}$ from the right; they share the token representation and the softmax and are trained to maximise the sum of the two log-likelihoods. The input layer is a character convolution, so any string — including one never seen — receives a representation.\n\nFor $L$ layers there are $2L+1$ vectors per token: the context-independent input plus both directions at each layer. These are collapsed per task as\n\n$\\mathrm{ELMo}_k^{\\mathrm{task}} = \\gamma^{\\mathrm{task}}\\sum_{j=0}^{L} s_j^{\\mathrm{task}}\\, \\mathbf{h}_{k,j}$\n\nwith $s$ softmax-normalised weights over layers and $\\gamma$ a scalar for overall scale. Both are learned by the downstream task while the language model stays frozen."
+   },
+   {
+    "h": "Why the mixture, not the top layer",
+    "b": "The layers are not redundant, and this is the paper's most useful empirical finding. **The lower LSTM layer is the better predictor of part of speech, and the higher layer the better predictor of word sense.** A task dominated by syntax and one dominated by semantics therefore want different mixtures, and earlier work that took the top layer alone — the natural thing to do with a pretrained encoder — was discarding the syntactic layer for free.\n\nIn use, ELMo vectors were concatenated to the inputs, and often the outputs, of an existing task architecture with no other change. That was enough to advance the state of the art on question answering, textual entailment, semantic role labelling, coreference, named-entity recognition and sentiment, with substantial relative error reductions across all six."
+   },
+   {
+    "h": "Shallow bidirectionality",
+    "b": "The two directions are separate models joined only by concatenation at the end. No layer ever computes a state conditioned jointly on left and right context, so a token whose reading depends on evidence from both sides is left for the task model to resolve. ELMo is also a feature extractor rather than a starting point: the language model is frozen, the task model is trained from scratch, and none of the pretrained capacity is available for the task itself.\n\nGPT answered the second objection by fine-tuning the entire stack, and BERT answered both, replacing the directional prediction objective with masked-token prediction so that one deep Transformer conditions on all surrounding context at once. Within roughly a year the LSTM underneath ELMo had gone as well."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Deep contextualized word representations",
+    "y": 2018,
+    "url": "https://arxiv.org/abs/1802.05365"
+   }
+  ]
+ },
+ "elman": {
+  "lead": "Elman's recurrent network gave a feed-forward net a memory of its own internal state: the hidden layer's activations are copied at each step into a set of context units and fed back as extra input on the next. Time stopped being a spatial window over the input and became something the network carried in its state, which made variable-length sequences representable at all — and made the vanishing-gradient problem the central obstacle in sequence modelling for the next twenty-five years.",
+  "blocks": [
+   {
+    "h": "Time as a fixed buffer",
+    "b": "The standard way to give a network temporal context in the late 1980s was to lay time out in space: a sliding window over the input, as in NETtalk, or a tapped delay line, as in the time-delay networks used for phonemes. Three things are wrong with that. The window width fixes in advance the longest dependency the model can represent. The same pattern arriving at two different offsets is a different input vector, so nothing learned at one offset transfers to another. And a sequence longer than the window simply has no encoding.\n\nJordan's earlier recurrent network fed the network's own output back as context, which limits its memory to what it has already committed to saying. Elman's change was to feed back the hidden layer instead, so the memory could be an internal representation the network was free to shape for itself."
+   },
+   {
+    "h": "The context layer, and how it was trained",
+    "b": "At each step the hidden activations are copied verbatim into context units — the recurrent connections have weight fixed at $1.0$ and are not learned — and on the following step those units are simply additional inputs alongside $x_t$:\n\n$h_t = \\sigma(W_x x_t + W_c h_{t-1} + b), \\qquad y_t = g(W_y h_t + c)$\n\nOnly $W_x$, $W_c$ and $W_y$ are trained. Crucially, training used ordinary backpropagation with $h_{t-1}$ treated as a fixed input: no gradient was passed through the copy. The network is therefore trained with a one-step truncation of backpropagation through time, and any longer dependency it acquires is acquired indirectly, because the hidden state that shortens today's error also happens to be useful tomorrow. The task throughout is next-item prediction, which needs no labels."
+   },
+   {
+    "h": "Structure discovered, not supplied",
+    "b": "The experiments matter as much as the architecture. Given a stream of consonants where each expands deterministically to a vowel sequence, the network's prediction error spikes at each consonant, which is genuinely unpredictable, then collapses across the vowels — the error curve itself segments the stream. Given sentences generated from templates over a small lexicon, with next-word prediction as the only objective, hierarchical clustering of the hidden-state vectors recovered a nesting nobody had encoded: verbs apart from nouns, animate from inanimate, transitive verbs from intransitive.\n\nThe representations were also token-level rather than type-level — the same word occupied different points in hidden space in different sentences. That is the property the whole distributional-representation line later depended on, and it fell out of a prediction objective on unlabelled text."
+   },
+   {
+    "h": "The gradient it could not carry",
+    "b": "Even trained with full backpropagation through time, the sensitivity of $h_t$ to $h_{t-k}$ is a product of $k$ Jacobians of the form $W_c^{\\top}\\mathrm{diag}(\\sigma')$. With saturating sigmoids $\\sigma' \\leq 1/4$, so unless the recurrent weights are large the product shrinks geometrically; make them large enough to avoid that and the same product explodes instead. Bengio, Simard and Frasconi made the trade formal in 1994: storing a bit robustly against noise over many steps requires the recurrence to be contracting in the relevant directions, and contraction is exactly what kills the gradient.\n\nIn practice Elman networks learned dependencies of about ten steps, and rarely more. Clipping later tamed the explosion; the decay needed an architectural answer, and that was the LSTM's constant error carousel."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Finding Structure in Time",
+    "y": 1990,
+    "url": "https://doi.org/10.1207/s15516709cog1402_1"
+   },
+   {
+    "t": "Learning Long-Term Dependencies with Gradient Descent is Difficult",
+    "y": 1994,
+    "url": "https://doi.org/10.1109/72.279181"
+   }
+  ]
+ },
+ "lstm": {
+  "lead": "The LSTM replaced the multiplicative recurrence of a plain RNN with an additive one: a memory cell whose self-connection has weight exactly one, so error flowing back through it is neither amplified nor attenuated. Multiplicative gates sit around that cell to decide when it is written to and when it is read from. It is worth saying plainly that the 1997 paper has only input and output gates — the forget gate arrived three years later, from Gers, Schmidhuber and Cummins, and it is arguably the single most important component of the unit as used today.",
+  "blocks": [
+   {
+    "h": "Two conflicts, not one problem",
+    "b": "Hochreiter's 1991 analysis showed that error signal in a recurrent net is scaled at each step by roughly $w\\,\\sigma'$; below one it decays exponentially, above one it explodes, and there is no setting that holds. But Hochreiter and Schmidhuber identified two further obstacles that a merely linear recurrence would not fix.\n\nThe **input weight conflict**: a single incoming weight must both admit inputs that are worth storing and reject the many that are not, and gradient descent pulls it in both directions at once. The symmetric **output weight conflict**: an outgoing weight must both protect the stored value from disturbing downstream units and release it at the one moment it is needed. Both are conflicts about timing, and neither can be resolved by a weight. They need a signal that varies with context — which is what a gate is."
+   },
+   {
+    "h": "The constant error carousel",
+    "b": "At the centre of the unit is a linear unit with a fixed self-recurrent connection of weight $1.0$. Its local derivative is exactly one, so error injected at step $t$ arrives at step $t-k$ undiminished, whatever $k$ is. Around it, an input gate and an output gate, each a sigmoid unit reading the current input and the previous hidden state, multiply the write path and the read path:\n\n$c_t = c_{t-1} + i_t \\odot g(W_c x_t + U_c h_{t-1}), \\qquad h_t = o_t \\odot \\mathrm{tanh}(c_t)$\n\nThe gates resolve both conflicts directly: the cell can be sealed against irrelevant input without losing what it holds, and can withhold its contents until the moment they matter. The original learning rule truncated the gradient at the gate inputs, deliberately, to keep the update local in time and constant in cost per step."
+   },
+   {
+    "h": "Learning to forget",
+    "b": "A pure carousel has no way to discard. On a continuous stream with no reset, the cell state drifts without bound and the output squash saturates. Gers, Schmidhuber and Cummins added a third gate, so the recurrence becomes\n\n$c_t = f_t \\odot c_{t-1} + i_t \\odot \\tilde{c}_t$\n\nand the per-step multiplier on the gradient is $f_t$ rather than $1$. The network now chooses its own time constant for each cell and can clear one when a segment ends. The modern LSTM is the 1997 unit plus that addition, plus untruncated backpropagation through time and, in some variants, peephole connections. Greff and colleagues' large ablation later found the forget gate and the output nonlinearity to be the two components whose removal consistently hurts; initialising the forget-gate bias positive, so cells default to remembering, is standard for the same reason."
+   },
+   {
+    "h": "What it unlocked, and the wall it hit",
+    "b": "With CTC it made unconstrained handwriting and large-vocabulary speech recognition work end to end; with the encoder-decoder framing it became the basis of neural machine translation and of production systems by 2016. It remained the default sequence model for close to a decade.\n\nWhat it never addressed is that the recurrence is serial. Step $t$ cannot begin until $t-1$ finishes, so training does not parallelise over length, and each step is a thin matrix-vector product that leaves a GPU bandwidth-bound rather than compute-bound. Attention attacked the fixed-width state; the Transformer attacked the seriality by removing recurrence entirely. The additive carry survived both — as the residual connection, and later as the input-dependent decay of gated linear recurrences that can be evaluated by a parallel scan."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Long Short-Term Memory",
+    "y": 1997,
+    "url": "https://doi.org/10.1162/neco.1997.9.8.1735"
+   },
+   {
+    "t": "LSTM: A Search Space Odyssey",
+    "y": 2015,
+    "url": "https://arxiv.org/abs/1503.04069"
+   }
+  ]
+ },
+ "gru": {
+  "lead": "The GRU is an LSTM with parts deliberately removed: no separate memory cell, no output gate, and the decisions to write and to erase tied to a single gate so that they sum to one. Cho and colleagues introduced it as a component of their encoder-decoder translation model rather than as a paper in its own right. A decade of comparisons has not established a consistent quality gap in either direction, which is itself the most informative result about what gating was doing.",
+  "blocks": [
+   {
+    "h": "What was actually wrong with the LSTM",
+    "b": "Nothing about its accuracy. The complaints were cost and opacity. An LSTM layer carries four weight matrices per input and four per recurrent connection, splits its state across a cell vector and a hidden vector, and runs three sigmoid gates whose individual contributions had never been isolated — the 1997 unit and the 2000 forget gate had simply accumulated. In 2014 the models being trained were translation systems where per-step cost multiplies by sequence length and again by corpus size, so a quarter fewer parameters and two fewer nonlinearities per step is a real saving.\n\nUnderneath sat a scientific question: of the carousel, the three gates and the two-part state, which parts earn their keep? The GRU is one answer to that question, offered by construction rather than by ablation."
+   },
+   {
+    "h": "Two gates and a convex combination",
+    "b": "A reset gate $r_t$ controls how much of the previous state enters the candidate; an update gate $z_t$ interpolates between keeping the old state and taking the new one:\n\n$\\tilde{h}_t = \\mathrm{tanh}(W x_t + U (r_t \\odot h_{t-1})), \\qquad h_t = z_t \\odot h_{t-1} + (1 - z_t) \\odot \\tilde{h}_t$\n\nThe sign convention on $z$ differs between the original paper and most library implementations; the structure does not. Two consequences follow. Input and forget are now tied: the unit cannot write without erasing in equal measure, where an LSTM can add to a cell it is also preserving. And the state is fully exposed — with no output gate there is no way to hold a value while hiding it from the rest of the network. The additive path survives: when $z_t$ approaches one the unit copies its state, and $\\partial h_t / \\partial h_{t-1} \\approx z_t$, a carousel with a learned leak."
+   },
+   {
+    "h": "The comparisons that followed",
+    "b": "Chung and colleagues ran the direct comparison on polyphonic music and raw speech and found GRU and LSTM comparable, with the winner dataset-dependent and both far ahead of a tanh recurrence. Jozefowicz and colleagues then searched over thousands of mutated gated architectures and found none that consistently beat both — and reported that setting the LSTM's forget-gate bias to one removed most of the GRU's apparent advantage on their tasks.\n\nThe honest reading is that the specific arrangement of gates matters much less than the presence of a multiplicative gate biased, at initialisation, toward copying the state. The GRU became the default where parameters or step latency were tight, the LSTM where a protected internal value helped, and practitioners stopped treating the choice as consequential."
+   },
+   {
+    "h": "Where the missing cell shows",
+    "b": "There is one clean separation. An LSTM's cell is an unbounded accumulator, so at finite precision it can implement a counter; Weiss, Goldberg and Yahav showed that an LSTM trained on $a^n b^n$ generalises to lengths well beyond training, while a GRU, whose state is a convex combination of values bounded by $\\mathrm{tanh}$, saturates instead and can only memorise the lengths it has seen. The output gate turns out to matter for the same reason: it lets the cell grow without the growth spilling into the hidden state.\n\nBoth units left the larger limitation untouched — computation still walks the sequence one step at a time. By 2017 that was the seam everyone attacked, and the LSTM-versus-GRU question stopped being interesting. The input-dependent decay of a selective state-space model is closer in spirit to the GRU's single interpolation than to the LSTM's separate cell."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Learning Phrase Representations using RNN Encoder-Decoder for Statistical Machine Translation",
+    "y": 2014,
+    "url": "https://arxiv.org/abs/1406.1078"
+   },
+   {
+    "t": "Empirical Evaluation of Gated Recurrent Neural Networks on Sequence Modeling",
+    "y": 2014,
+    "url": "https://arxiv.org/abs/1412.3555"
+   }
+  ]
+ },
+ "seq2seq": {
+  "lead": "Sutskever, Vinyals and Le showed that a general sequence transducer could be two LSTMs and nothing else: one reads the source into a single fixed-width vector, the other generates the target conditioned on it. Trained end to end on WMT'14 English-French, an ensemble of five such models reached 34.81 BLEU against 33.30 for a mature phrase-based system — a single model managed 30.59 — with no alignment model, no phrase table and no language-specific engineering anywhere in the pipeline.",
+  "blocks": [
+   {
+    "h": "The pipeline it replaced",
+    "b": "Statistical machine translation was an assembly of separately estimated parts: word and phrase alignment models fitted by expectation-maximisation, a phrase table extracted from those alignments, an n-gram language model trained on monolingual text, a reordering model, and a log-linear combination whose weights were tuned on a development set. Each piece optimised its own objective and none optimised translation quality directly. Neural networks had entered only as rescoring components bolted onto that stack.\n\nThe structural obstacle to replacing it wholesale was dimensional. A feed-forward network maps a fixed-size input to a fixed-size output, and translation maps variable to variable with no length correspondence and substantial reordering. Recurrent networks handled labelling problems where output length equals input length; translation is not one of those."
+   },
+   {
+    "h": "Read, summarise, generate",
+    "b": "The encoder LSTM consumes the source token by token and is then discarded except for its final state, which serves as a summary vector $v$. A second LSTM with entirely separate parameters is initialised from $v$ and factorises the target autoregressively,\n\n$p(y_1,\\dots,y_{T'} \\mid x) = \\prod_{t=1}^{T'} p(y_t \\mid v, y_{<t})$\n\nemitting an end-of-sequence symbol to decide its own length. Training maximises the log-likelihood of reference translations; decoding is a left-to-right beam search, and a beam of two already recovered most of the gain over greedy search. The model was four layers deep with 1000 cells and 1000-dimensional embeddings, a 160k source and 80k target vocabulary, with everything outside those vocabularies mapped to a single unknown token that cost BLEU directly. It trained for about ten days across eight GPUs."
+   },
+   {
+    "h": "Reversing the source, and what that admitted",
+    "b": "The paper's one trick was to reverse the word order of every source sentence while leaving the target alone. This lifted BLEU by several points and cut test perplexity substantially, and the explanation is precise: reversing leaves the average distance between corresponding source and target words unchanged, but collapses the **minimal lag** — the first few source words now sit adjacent to the first few target words, so the model gets an early foothold and the rest of the sentence follows from it.\n\nThat a purely presentational change was worth several BLEU is a statement about how far gradient signal could actually reach through the recurrence, not about the summary vector's capacity. It was the clearest available evidence that distance in the recurrence, and not representational width, was the binding constraint."
+   },
+   {
+    "h": "The bottleneck it handed on",
+    "b": "Everything about a source sentence must fit into one vector, written once and never revisited; the decoder has no way to look back at the input while generating. Cho and colleagues' companion analysis of the same encoder-decoder family showed BLEU peaking around ten source words and decaying steadily thereafter — well inside the lengths they trained on, and unchanged when they retrained on sentences of up to fifty words — exactly as that account predicts.\n\nTwo responses were available: make the summary bigger and better structured, or let the decoder re-read the encoder's states. Bahdanau, Cho and Bengio had already taken the second — their attention paper reached arXiv nine days before this one, answering the same bottleneck in the encoder-decoder line — and the fixed vector disappeared from serious systems almost immediately. What survived untouched is the skeleton — encode, condition, generate one token at a time under a likelihood objective — which is still the shape of the Transformer and of every decoder-only language model since."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Sequence to Sequence Learning with Neural Networks",
+    "y": 2014,
+    "url": "https://arxiv.org/abs/1409.3215"
+   },
+   {
+    "t": "On the Properties of Neural Machine Translation: Encoder-Decoder Approaches",
+    "y": 2014,
+    "url": "https://arxiv.org/abs/1409.1259"
+   }
+  ]
+ },
+ "bahdanau": {
+  "lead": "Bahdanau, Cho and Bengio deleted the single summary vector. Their decoder keeps the encoder's entire sequence of states and, at every output step, computes a fresh weighted average over them, with the weights produced by a small network trained jointly with the rest of the model. Alignment stopped being a separate model estimated beforehand and became a differentiable part of translation itself — the mechanism that, once detached from the recurrence around it, became the Transformer.",
+  "blocks": [
+   {
+    "h": "Diagnosing the fixed vector",
+    "b": "The encoder-decoder model of a few months earlier compressed a source sentence of any length into one vector of fixed width. The authors' diagnosis was that the burden on that vector grows with sentence length while its capacity does not, and they demonstrated it directly: their reimplemented baseline held its BLEU on short sentences and degraded steadily on long ones.\n\nThe contrast with what the neural model had replaced is sharp. Phrase-based systems had explicit alignment — latent correspondence variables between source and target positions, estimated by expectation-maximisation before translation training began. The neural encoder-decoder had none at all; whatever correspondence existed had to be reconstructed inside a recurrent state that was also carrying everything else. Giving it back, but learned end to end, is the whole of the contribution."
+   },
+   {
+    "h": "Score, normalise, average",
+    "b": "The encoder is a bidirectional RNN, so each source position $j$ yields an annotation $h_j$ concatenating a forward and a backward state and summarising the sentence with a bias toward the word at $j$. At target step $i$ the decoder scores every annotation against its previous state $s_{i-1}$, normalises, and takes the corresponding average:\n\n$e_{ij} = v_a^{\\top} \\mathrm{tanh}(W_a s_{i-1} + U_a h_j), \\qquad \\alpha_{ij} = \\frac{\\exp(e_{ij})}{\\sum_k \\exp(e_{ik})}, \\qquad c_i = \\sum_j \\alpha_{ij} h_j$\n\nThe score is a one-hidden-layer network — additive attention — evaluated once per (target step, source position) pair. Softness is what makes this trainable: because $c_i$ is a smooth function of every annotation, the translation loss supplies gradient to the alignment weights without any alignment supervision. A hard selection would have required a score-function estimator or an EM procedure, and neither was necessary."
+   },
+   {
+    "h": "Flat curves and readable matrices",
+    "b": "The attention model's quality no longer fell away with sentence length, where the fixed-vector baseline's did; on sentences composed entirely of in-vocabulary words it reached parity with the conventional phrase-based system, which no purely neural translator had managed. Perhaps as important, the $\\alpha$ matrices could be plotted and inspected: they were broadly monotonic, with clean off-diagonal blocks exactly where the two languages order constituents differently, such as English adjective-noun sequences mapping to French noun-adjective.\n\nThat readability drove adoption as much as the BLEU did. It should be held loosely, though — later work has argued at length that attention weights are not a faithful account of what a model's prediction depends on, and treating a bright cell as an explanation is a step the evidence does not support."
+   },
+   {
+    "h": "Still bolted to a recurrence",
+    "b": "The attention itself costs a score evaluation for every source-target position pair, which is quadratic, but it was not the binding cost: the encoder is serial in source length and the decoder serial in target length, so nothing parallelises across time and the RNN dominates. Luong and colleagues shortly replaced the scoring MLP with a dot product or a bilinear form and experimented with restricting attention to a local window, finding comparable quality more cheaply — which established that the alignment mechanism needed very little capacity of its own.\n\nThe remaining step was to notice that if attention could give the decoder direct access to any source position, the recurrence was no longer earning its place, and that the encoder could attend to itself in the same way. Less than three years later, the Transformer took it."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Neural Machine Translation by Jointly Learning to Align and Translate",
+    "y": 2014,
+    "url": "https://arxiv.org/abs/1409.0473"
+   },
+   {
+    "t": "Effective Approaches to Attention-based Neural Machine Translation",
+    "y": 2015,
+    "url": "https://arxiv.org/abs/1508.04025"
+   }
+  ]
+ },
+ "mixtral": {
+  "lead": "Mixtral 8x7B put a sparse mixture-of-experts model into the open under an Apache 2.0 licence. Every feed-forward block is replaced by eight of them and a router fires two per token, so the network holds roughly 47B parameters while spending the arithmetic of about 13B on any given token. At that cost it matched or beat Llama 2 70B across most benchmarks.",
+  "blocks": [
+   {
+    "h": "The trade MoE offers",
+    "b": "Sparse routing was not new. GShard and Switch Transformer had established the central trade — send each token to a small subset of a large parameter bank and the parameter count grows without the per-token FLOPs following — and Switch had pushed it past a trillion parameters with top-1 routing.\n\nThose were encoder-decoder models trained inside Google on infrastructure nobody else had, and although Switch's checkpoints were eventually published, nothing openly available was a sparse model you could actually chat with. Everything openly available was dense, which meant paying full compute for every parameter at every token. What remained untested in public was whether the trade still paid at a size a small team could actually serve, in a decoder-only chat model rather than on a masked-language benchmark."
+   },
+   {
+    "h": "Top-2 routing over eight experts",
+    "b": "Mixtral keeps the Mistral 7B backbone — grouped-query attention, RMSNorm, rotary embeddings — and swaps each feed-forward block for eight; the sliding-window attention is dropped, and the model attends over a full 32k context. A linear gate $W_g$ maps the token's hidden state to eight logits; the two largest are kept, a softmax is taken over just those two, and the layer output is their weighted sum:\n\n$y = \\sum_{i} \\mathrm{softmax}\\!\\left(\\mathrm{top}2(x W_g)\\right)_i \\, E_i(x)$\n\nwhere $E_i$ is the $i$-th SwiGLU expert. The decision is made per token and per layer, so any sequence of length exercises all eight many times over: what is saved is arithmetic, not storage. All 47B parameters must be resident to produce one token. Keeping two rather than one gives the gate a comparison to learn from; Switch showed top-1 can be made to work, but needed care over precision and initialisation to get there."
+   },
+   {
+    "h": "Experts that are not experts",
+    "b": "The name invites a reading the model does not support. The authors looked for topic-level specialisation in the routing over The Pile — an expert that claims mathematics, or code, or biology — and found essentially none; the distribution over experts is close to uniform across domains.\n\nWhat the routing does show is structure at the level of syntax and position. **Consecutive tokens go to the same expert far more often than chance**, and the effect deepens with the network: repetition at the first layer is close to random, while the middle and final layers sit well above it. The partition the gate learns suits optimisation rather than carving the data at any joint a person would name. That matters practically: you cannot prune away the experts a particular deployment does not need, because there is no such subset."
+   },
+   {
+    "h": "What sparsity does not buy",
+    "b": "The saving is in FLOPs alone, and for a served model the binding constraint is usually memory. Mixtral wants the VRAM of a 47B dense model while delivering the quality of something larger and the latency of something much smaller — a good trade on a multi-GPU server, an awkward one on a single card, and the reason expert offloading and expert-parallel serving grew into their own literature.\n\nTraining is also less forgiving. A load-balancing auxiliary loss is needed to stop the gate collapsing onto a few experts, and fine-tuning overfits more readily than a dense model of the same active size. Meta chose dense for Llama 3 and cited stability; DeepSeek went the other way, toward many finer-grained experts alongside shared always-on ones."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Mixtral of Experts",
+    "y": 2024,
+    "url": "https://arxiv.org/abs/2401.04088"
+   },
+   {
+    "t": "Switch Transformers: Scaling to Trillion Parameter Models with Simple and Efficient Sparsity",
+    "y": 2021,
+    "url": "https://arxiv.org/abs/2101.03961"
+   }
+  ]
+ },
+ "llama": {
+  "lead": "LLaMA is a family of dense decoder-only models from 7B to 65B, trained only on publicly available corpora and released with weights. Its argument was economic rather than architectural: Chinchilla's scaling law optimises training compute, but a model that will be served answers vastly more tokens than it was trained on, so the right move is to train a small model long past the point where the loss curve stops paying for itself.",
+  "blocks": [
+   {
+    "h": "The scaling law it argued with",
+    "b": "Chinchilla had shown that for a fixed training budget, parameters and tokens should scale together, and the field read this as licence to grow both. LLaMA takes the same result and points out what its objective leaves out: **inference cost is absent from the compute-optimal calculation**, and for a deployed model it dominates.\n\nSo the 7B and 13B were trained on a trillion tokens and were still improving; the 33B and 65B saw around 1.4T. The outcome was the point. The 13B model outperformed GPT-3 at 175B on most benchmarks, and the 65B was competitive with Chinchilla-70B and PaLM-540B while being small enough to run on hardware an academic group could obtain."
+   },
+   {
+    "h": "An architecture of borrowed parts",
+    "b": "Nothing in the model is novel and each choice has a stated source. Pre-normalisation with RMSNorm, which drops the mean-centring of LayerNorm and is cheaper for no measured loss. SwiGLU in place of ReLU, from PaLM. Rotary position embeddings rather than learned absolute ones, from GPTNeo.\n\nThe engineering carried as much weight as the architecture: a memory-efficient causal attention that never materialises the masked half of the score matrix, and hand-chosen activation checkpointing so the expensive intermediates are stored rather than recomputed. The 65B was trained on 2048 A100s over roughly three weeks. Publishing that recipe, with token counts and throughput, is what let others repeat it."
+   },
+   {
+    "h": "Public data, and what it settled",
+    "b": "The corpus was CommonCrawl and C4, GitHub, Wikipedia, books, ArXiv and StackExchange, with mixing proportions and filtering published. No licensed or proprietary source was required.\n\nThat disposed of the standard defence for closed weights — that the data could not be shared. It did not dispose of the copyright question: the book portion drew on Books3, which later sat at the centre of litigation over the training corpora of several models. \"Publicly available\" and \"cleared for use\" turned out to be different claims, and the paper does not distinguish them."
+   },
+   {
+    "h": "The leak and the ecosystem",
+    "b": "Weights went out under a non-commercial research licence, by application. Within a week they were circulating freely, and the consequences were immediate and almost entirely outside Meta's control: `llama.cpp` and 4-bit quantisation put a usable model on a laptop, LoRA and then QLoRA made fine-tuning a single-GPU exercise, and Alpaca and Vicuna showed what cheap instruction tuning could do on top.\n\nWhat shipped was a base model only. No instruction tuning beyond a brief ablation, no preference optimisation, no safety work, no commercial licence. LLaMA supplied a substrate and left alignment entirely to whoever downloaded it — which is exactly what made it useful, and exactly what Llama 2 was written to answer."
+   }
+  ],
+  "refs": [
+   {
+    "t": "LLaMA: Open and Efficient Foundation Language Models",
+    "y": 2023,
+    "url": "https://arxiv.org/abs/2302.13971"
+   },
+   {
+    "t": "Training Compute-Optimal Large Language Models",
+    "y": 2022,
+    "url": "https://arxiv.org/abs/2203.15556"
+   }
+  ]
+ },
+ "alpaca": {
+  "lead": "Alpaca and Vicuna demonstrated that the visible behaviour of a chat assistant could be transplanted onto an open base model for a few hundred dollars. Alpaca fine-tuned LLaMA 7B on 52,000 instruction–response pairs generated by an OpenAI model; blind comparison put it roughly level with the teacher on the evaluation set used. The year that followed was spent working out what that comparison did and did not measure.",
+  "blocks": [
+   {
+    "h": "What instruction tuning had cost",
+    "b": "InstructGPT's recipe needed a paid annotation workforce writing demonstrations, a second round of humans ranking model outputs, a reward model fitted to those rankings, and a PPO loop. Every stage was expensive and the whole thing was out of reach for a university group.\n\nSelf-Instruct had already shown a model could bootstrap instruction data from a small seed set. Alpaca's contribution was to point that pipeline at a much stronger teacher: 175 hand-written seed tasks, `text-davinci-003` asked to generate new instructions and their responses, light filtering for duplicates, 52K pairs, then ordinary supervised fine-tuning. **No reward model, no reinforcement learning, and three hours of training.**"
+   },
+   {
+    "h": "Vicuna, and judging by machine",
+    "b": "LMSYS took LLaMA 13B and fine-tuned it on roughly 70,000 conversations users had voluntarily shared from ChatGPT. Two differences from Alpaca mattered: the data were multi-turn, and they came from the real distribution of what people ask rather than from a synthesiser's idea of it.\n\nThe evaluation proved more consequential than the model. Lacking any benchmark for open-ended chat, they had GPT-4 compare pairs of responses and score them, reporting Vicuna at around ninety per cent of ChatGPT's quality. LLM-as-judge was cheap and agreed with human raters often enough to be adopted everywhere, and it grew into MT-Bench and Chatbot Arena. Its biases — toward the first-presented answer, and toward length — were documented later by the same group."
+   },
+   {
+    "h": "What imitation actually transfers",
+    "b": "The follow-up work was unkind. Scaling imitation data was found to leave human preference scores flat once they had saturated, and to close little or none of the gap on factuality and reasoning benchmarks: the students learned the teacher's register — the formatting, the hedging, the confident opening sentence — and raters rewarded that from the first few thousand examples. Capability stayed roughly where the base model had left it.\n\nThe honest reading is not that imitation is worthless but that it does something narrower than it appeared. A small, well-chosen supervised set surfaces behaviour the pretrained model already had, which is the superficial alignment hypothesis that LIMA later tested with a thousand examples. It does not install knowledge or reasoning that pretraining failed to produce."
+   },
+   {
+    "h": "What it left behind",
+    "b": "Three things. The data came from a competitor's model in breach of its terms, which made the whole lineage legally awkward and seeded the open corpora with synthetic teacher output that later models trained on in turn. The student inherits the teacher's errors and adds its own; Stanford withdrew the Alpaca demo partly over hallucination.\n\nMost importantly, supervised imitation carries no preference signal. It can only say what a good answer looks like, never that one acceptable answer is better than another, and it has no way to express a dispreferred response at all. Recovering that ordering without InstructGPT's machinery is the problem DPO went after."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Self-Instruct: Aligning Language Models with Self-Generated Instructions",
+    "y": 2022,
+    "url": "https://arxiv.org/abs/2212.10560"
+   },
+   {
+    "t": "The False Promise of Imitating Proprietary LLMs",
+    "y": 2023,
+    "url": "https://arxiv.org/abs/2305.15717"
+   }
+  ]
+ },
+ "llama2": {
+  "lead": "Llama 2 closed the gap the first release left open: a commercially licensed model shipped with its chat and safety pipeline rather than as a bare pretrained checkpoint. Its paper is the most detailed public account yet of an industrial RLHF programme — two separate reward models, five rounds of iteration, and a frank treatment of the conflict between being helpful and being safe that Anthropic had first documented. Llama 3 then scaled the pretraining data by an order of magnitude and quietly replaced PPO.",
+  "blocks": [
+   {
+    "h": "Two reward models, not one",
+    "b": "Helpfulness and safety pull against each other, and a single reward model trained on both learns a compromise that satisfies neither. Llama 2 fits two, on binary comparisons annotated with a margin recording how strongly the preference was held, and combines them at optimisation time.\n\nThe process is iterative. Five successive versions were trained, each round collecting fresh preference data on the outputs of the current policy — because **a reward model goes stale as soon as the policy drifts off the distribution it was fitted on**, and a policy optimised against a stale reward will find its errors. Rejection sampling, drawing several completions and fine-tuning on the highest-scoring, was used alongside PPO, with the largest model's selections distilled into the smaller ones."
+   },
+   {
+    "h": "Quality over quantity, and Ghost Attention",
+    "b": "For supervised fine-tuning they found a few tens of thousands of carefully written demonstrations beat much larger bought-in instruction sets, and stopped purchasing data once the annotators' own work was outperforming it.\n\nGhost Attention addressed a specific failure: a system instruction such as a persona or a language constraint is honoured for a turn or two and then forgotten. The fix is a training-data trick rather than an architectural one. Take a sampled dialogue, prepend the instruction synthetically to every user turn, fine-tune with the loss zeroed on all but the final response, and the model learns to keep attending to the original instruction. Crude, and effective."
+   },
+   {
+    "h": "Llama 3: dense, longer, simpler",
+    "b": "Llama 3 kept the shape and moved the numbers: roughly 15T pretraining tokens, a 128k-entry tokenizer, grouped-query attention at every size including the 8B, and context extended in stages to 128k. The 405B model followed.\n\nTwo decisions are worth naming. The architecture stayed dense despite Mixtral's showing, on the stated grounds of training stability at that scale. And post-training dropped PPO: the pipeline became supervised fine-tuning, rejection sampling, then DPO. Having the flagship open model settle on the simpler objective did more for its adoption than the original paper did."
+   },
+   {
+    "h": "Open weights is not open",
+    "b": "The training data is undisclosed, so nothing about the pretraining is reproducible; what is released is a result, not a method. The licence carries an acceptable-use policy and a clause excluding the very largest deployments, which keeps it outside any standard open-source definition.\n\nThe safety alignment is also shallower than the effort suggests. Fine-tuning on a few hundred adversarial examples has been shown to strip refusal behaviour from these models cheaply, and that is not a bug in the RLHF so much as a consequence of the release model: once the parameters are public, no post-training procedure retains control over the behaviour. Alignment that survives an open release remains unsolved."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Llama 2: Open Foundation and Fine-Tuned Chat Models",
+    "y": 2023,
+    "url": "https://arxiv.org/abs/2307.09288"
+   },
+   {
+    "t": "The Llama 3 Herd of Models",
+    "y": 2024,
+    "url": "https://arxiv.org/abs/2407.21783"
+   }
+  ]
+ },
+ "dpo": {
+  "lead": "DPO removes both the reward model and the reinforcement learning from RLHF while optimising the same objective. The observation is that the KL-constrained reward-maximisation problem has a closed-form solution, so the reward can be written as a function of the optimal policy; substitute that expression back into the preference likelihood and what is left is a binary classification loss that trains the language model directly on pairs.",
+  "blocks": [
+   {
+    "h": "The pipeline it replaced",
+    "b": "InstructGPT's procedure has three stages: supervised fine-tuning, fitting a reward model to pairwise human preferences, then PPO against that reward with a KL penalty holding the policy near its starting point.\n\nThe cost is not only conceptual. Training needs the policy, a frozen reference, the reward model and a value head in memory at once, with sampling from the policy inside the loop. The result is sensitive to the KL coefficient, to value-function initialisation and to batch composition, and reward hacking — the policy finding regions where the learned reward is high and the true preference is not — is the normal failure rather than the exceptional one. Few groups outside the large labs got it to work reliably."
+   },
+   {
+    "h": "The reward was already in the policy",
+    "b": "The KL-constrained objective $\\max_{\\pi} \\mathbb{E}[r(x,y)] - \\beta\\,\\mathrm{KL}(\\pi \\| \\pi_{\\mathrm{ref}})$ has a known optimum, an exponential tilt of the reference policy:\n\n$\\pi_r(y \\mid x) = \\tfrac{1}{Z(x)}\\, \\pi_{\\mathrm{ref}}(y \\mid x) \\exp\\!\\left(\\tfrac{1}{\\beta} r(x,y)\\right)$\n\nRearranged, $r(x,y) = \\beta \\log \\frac{\\pi_r(y|x)}{\\pi_{\\mathrm{ref}}(y|x)} + \\beta \\log Z(x)$. Put this into the Bradley–Terry likelihood, which depends only on the difference of two rewards for the same prompt, and **the intractable partition function $Z(x)$ cancels**. What remains is\n\n$-\\log \\sigma\\!\\left(\\beta \\log \\frac{\\pi_\\theta(y_w|x)}{\\pi_{\\mathrm{ref}}(y_w|x)} - \\beta \\log \\frac{\\pi_\\theta(y_l|x)}{\\pi_{\\mathrm{ref}}(y_l|x)}\\right)$\n\nfor a preferred $y_w$ and dispreferred $y_l$. The gradient is weighted by how badly the implicit reward currently ranks the pair, so correctly ordered examples contribute little. Only forward passes through two frozen-and-trained models are needed, and $\\beta$ inherits the role of the KL coefficient."
+   },
+   {
+    "h": "Off-policy, and what that costs",
+    "b": "DPO sees a fixed set of pairs, usually generated by some other model. It can re-rank what it is shown and nothing else, and the implicit reward is unconstrained wherever the dataset has no support — so the optimisation is free to move probability mass onto responses no annotator ever judged.\n\nThe characteristic empirical symptom is that the log-probability of the preferred response often falls during training alongside the dispreferred one; only their margin is in the loss. Mass displaced from both can land somewhere neither was intended. Length bias is the other reliable one: longer completions tend to win comparisons, and nothing in the objective corrects for it."
+   },
+   {
+    "h": "The variants it provoked",
+    "b": "IPO identified a specific pathology: when preferences in the data are deterministic, the Bradley–Terry likelihood is maximised by driving the margin to infinity, at which point the KL term no longer binds; replacing the log-sigmoid with a squared loss to a finite target margin fixes it. KTO drops the pairing requirement to learn from single thumbs-up or thumbs-down signals. ORPO folds the preference term into supervised fine-tuning and discards the reference model; SimPO normalises by length and does the same.\n\nIterative and online DPO restore the on-policy sampling that the derivation had removed, which is the honest admission that exploration was doing real work. GRPO went further back toward RL, keeping sampling but discarding the value network."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Direct Preference Optimization: Your Language Model is Secretly a Reward Model",
+    "y": 2023,
+    "url": "https://arxiv.org/abs/2305.18290"
+   },
+   {
+    "t": "Training language models to follow instructions with human feedback",
+    "y": 2022,
+    "url": "https://arxiv.org/abs/2203.02155"
+   }
+  ]
+ }
 }
