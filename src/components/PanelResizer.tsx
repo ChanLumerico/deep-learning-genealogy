@@ -17,6 +17,7 @@ export function PanelResizer({ width, onResize }: PanelResizerProps) {
       role="separator"
       aria-orientation="vertical"
       aria-label="Resize the panel"
+      title="Drag to resize · arrow keys when focused"
       onPointerDown={(ev) => {
         // the pointer belongs to this strip for the whole drag, even once it
         // travels out over the canvas

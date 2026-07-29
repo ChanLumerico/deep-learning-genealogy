@@ -156,32 +156,47 @@ html, body { overscroll-behavior: none; }
 }
 
 /* ── Panel resizer ───────────────────────────────────────────────────────
-   A 5px strip is a small target, so the hit area is widened to 13px and
-   centred on the border; only the 1px grip is painted.                    */
+   The strip runs the full height of the panel's inner edge, overhanging by
+   3px so the border itself is grabbable. `cursor` is set on the strip AND
+   the grip: the grip is what the pointer actually lands on over the handle,
+   and relying on inheritance there is one indirection too many.
+
+   The handle is visible at rest. An invisible affordance cannot be found —
+   the first version painted nothing until hover, which meant knowing where
+   to aim before you could see where to aim.                               */
 .gx-resizer {
   position: absolute;
   top: 0;
   bottom: 0;
-  left: -6px;
-  width: 13px;
+  left: -3px;
+  width: 16px;
   cursor: col-resize;
-  z-index: 2;
+  z-index: 5;
   display: flex;
+  align-items: center;
   justify-content: center;
   touch-action: none;
 }
 .gx-resizer-grip {
-  width: 1px;
-  height: 100%;
-  background: transparent;
-  transition: background 140ms ease;
+  cursor: col-resize;
+  width: 3px;
+  height: 34px;
+  border-radius: 3px;
+  background: rgba(233, 229, 221, 0.22);
+  transition: background 140ms ease, height 140ms ease;
 }
 .gx-resizer:hover .gx-resizer-grip,
 .gx-resizer:focus-visible .gx-resizer-grip {
-  background: rgba(233, 229, 221, 0.5);
-  width: 2px;
+  background: rgba(233, 229, 221, 0.72);
+  height: 56px;
 }
 .gx-resizer:focus-visible { outline: none; }
+
+/* A finger cannot hover, and a 16px strip beside a scrolling list is a
+   mis-tap waiting to happen. Panels are bottom sheets at that size anyway. */
+@media (pointer: coarse) {
+  .gx-resizer { display: none; }
+}
 
 /* ── Touch ───────────────────────────────────────────────────────────────
    A 28px control is comfortable under a cursor and cramped under a thumb.
