@@ -73,6 +73,13 @@ export interface PanelGroup {
   items: PanelItem[]
 }
 
+/** a heading plus body prose, from the lazily-loaded detail files */
+export interface PanelEssay {
+  lead: string
+  blocks: Array<{ h?: string; b: string }>
+  refs?: Array<{ t: string; y?: number; url?: string }>
+}
+
 export interface PanelVM {
   color: string
   kicker: string
@@ -81,6 +88,9 @@ export interface PanelVM {
   lead: string
   fields: PanelField[]
   groups: PanelGroup[]
+  /** null while the detail file is still in flight, or if there is none */
+  essay: PanelEssay | null
+  essayLoading: boolean
 }
 
 export interface ReadItemVM {

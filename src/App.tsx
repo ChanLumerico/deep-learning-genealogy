@@ -6,6 +6,8 @@ import {
 import type { EdgeKindKey, EdgeModel, Genealogy, LaneId, NodeModel } from './layout'
 import { loadGraphData } from './data/load'
 import { PaperCsv } from './data/csv'
+import { edgeKey, loadEdgeDetail, loadNodeDetail } from './data/detail'
+import type { Detail } from './data/detail'
 import type { ImportMode } from './data/csv'
 import { READ_FILTERS, ReadingLog } from './data/readingLog'
 import type { ReadFilterId, ReadMap } from './data/readingLog'
@@ -194,6 +196,25 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
   const selN = graph && sel ? graph.byId[sel] : null
   const tipN = graph && tip ? graph.byId[tip] : null
 
+  // ── long-form detail, fetched only for what is actually opened ───────────
+  // Keyed by whatever is selected so a stale response cannot land in a panel
+  // the reader has already moved on from.
+  const essayKey = selN ? `n:${selN.id}` : selE ? `e:${edgeKey(selE.from.id, selE.to.id)}` : null
+  const [essay, setEssay] = useState<{ key: string; value: Detail | null } | null>(null)
+
+  useEffect(() => {
+    if (!essayKey) { setEssay(null); return }
+    let live = true
+    const want = selN
+      ? loadNodeDetail(selN.lane.id).then((f) => f[selN.id])
+      : loadEdgeDetail(selE!.from.lane.id).then((f) => f[edgeKey(selE!.from.id, selE!.to.id)])
+    want.then((value) => { if (live) setEssay({ key: essayKey, value: value ?? null }) })
+    return () => { live = false }
+  }, [essayKey, selN, selE])
+
+  const shownEssay = essay && essay.key === essayKey ? essay.value : null
+  const essayLoading = !!essayKey && (!essay || essay.key !== essayKey)
+
   // ── detail panel: a node's own record, or one relation read end to end ──
   const panel: PanelVM | null = useMemo(() => {
     const relItem = (e: EdgeModel, other: NodeModel) => ({
@@ -213,6 +234,7 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
       return {
         color: selN.lane.c, kicker: selN.lane.label, title: selN.name,
         meta: selN.meta, lead: selN.contribution, fields, groups,
+        essay: shownEssay, essayLoading,
       }
     }
     if (selE) {
@@ -237,10 +259,11 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
             { name: b.name, kind: b.year + ' · result', note: b.contribution, c: b.lane.c, onClick: () => goNode(b.id) },
           ],
         }],
+        essay: shownEssay, essayLoading,
       }
     }
     return null
-  }, [selN, selE, goNode])
+  }, [selN, selE, goNode, shownEssay, essayLoading])
 
   // ── reading list: one section per domain, ticked from the same state ────
   const readCount = graph ? graph.nodes.filter((n) => !!read[n.id]).length : 0

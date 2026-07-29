@@ -1,0 +1,65 @@
+// ── Long-form detail ──────────────────────────────────────────────────────
+// The graph files under public/data carry what the LAYOUT needs: a name, a
+// year, a lane, and the one-line problem/idea/limitation triple. The essays
+// that explain a model or a lineage properly are an order of magnitude larger,
+// and nothing on screen needs them until something is selected.
+//
+// So they live apart, one file per lane, fetched on first use and cached. A
+// visitor who never opens a panel never pays for a byte of it, which is what
+// keeps the sheet as light on a phone as it was before any of this existed.
+
+import type { LaneId } from '../layout'
+
+/** A paragraph or two under an optional heading. */
+export interface DetailBlock {
+  /** section heading; omitted for the opening block */
+  h?: string
+  /** body text — see prose.ts for the markup it accepts */
+  b: string
+}
+
+export interface DetailRef {
+  t: string
+  y?: number
+  url?: string
+}
+
+export interface Detail {
+  /** two or three sentences: what this is, in one breath */
+  lead: string
+  blocks: DetailBlock[]
+  refs?: DetailRef[]
+}
+
+/** node detail is keyed by node id; edge detail by `${from}>${to}` */
+export type DetailFile = Record<string, Detail>
+
+export const edgeKey = (from: string, to: string) => `${from}>${to}`
+
+const base = import.meta.env.BASE_URL || '/'
+const url = (path: string) => base.replace(/\/$/, '') + '/' + path.replace(/^\//, '')
+
+// One in-flight promise per file, so ten rapid clicks fetch once.
+const cache = new Map<string, Promise<DetailFile>>()
+
+function load(path: string): Promise<DetailFile> {
+  let hit = cache.get(path)
+  if (!hit) {
+    hit = fetch(url(path))
+      .then((r) => (r.ok ? r.json() : {}))
+      // A missing or malformed detail file must never break the panel: the
+      // short p/i/l fields are always there to fall back on.
+      .catch(() => ({}))
+    cache.set(path, hit)
+  }
+  return hit
+}
+
+export function loadNodeDetail(lane: LaneId): Promise<DetailFile> {
+  return load(`data/detail/nodes/${lane}.json`)
+}
+
+/** edges are filed under the lane of their source node */
+export function loadEdgeDetail(lane: LaneId): Promise<DetailFile> {
+  return load(`data/detail/edges/${lane}.json`)
+}

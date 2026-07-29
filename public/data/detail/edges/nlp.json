@@ -1,0 +1,36 @@
+{
+  "bahdanau>transformer": {
+    "lead": "Bahdanau attention was a patch on a recurrent decoder: a way to let it look back at encoder states instead of squeezing a sentence through one fixed vector. The Transformer kept the patch and threw away the thing it was patching.",
+    "blocks": [
+      {
+        "h": "What Bahdanau established",
+        "b": "The 2014 seq2seq encoder compressed a whole source sentence into one final hidden state, and translation quality fell away sharply as sentences got longer — the vector was a bottleneck with a fixed budget. Bahdanau et al. let the decoder compute, at each output step, a weighted sum over **all** encoder states:\n\n$$c_i = \\sum_j \\alpha_{ij} h_j, \\qquad \\alpha_{ij} = \\frac{\\exp(e_{ij})}{\\sum_k \\exp(e_{ik})}$$\n\nwith $e_{ij} = a(s_{i-1}, h_j)$ a small feed-forward network scoring how well output position $i$ matches input position $j$. The alignment is learned jointly with translation rather than supplied, and the resulting $\\alpha$ matrix turned out to be legible as a soft word alignment.\n\nThe decisive property is that $c_i$ reaches $h_j$ in **one step, for any $j$**. Distance in the sequence stopped costing accuracy."
+      },
+      {
+        "h": "The step the Transformer took",
+        "b": "In Bahdanau's model attention is an auxiliary channel; the recurrence is still what carries state, and it is still sequential. Vaswani et al. observed that if a one-step path between arbitrary positions is what makes attention valuable, then recurrence is contributing mainly its cost — an unparallelisable loop over sequence length.\n\nThree changes make the removal work. Attention is applied **within** each sequence and not only across the two (self-attention), so a representation can be built without any recurrent state. The additive score $a(s,h)$ becomes a **scaled dot product**, which is a matrix multiplication and therefore fast on the hardware that was becoming available:\n\n$$e_{ij} = \\frac{q_i \\cdot k_j}{\\sqrt{d_k}}$$\n\nAnd because attention alone is order-blind, positional encodings replace the ordering that recurrence used to supply for free."
+      },
+      {
+        "h": "What changed as a result",
+        "b": "Training time on WMT14 English–German fell from weeks to around twelve hours on eight GPUs, at higher BLEU. That is the visible result; the structural one matters more. An architecture whose cost is dense matrix multiplication rather than a sequential loop scales with accelerators, and scaling with accelerators is the precondition for everything downstream — GPT, BERT, and the observation that loss falls predictably with compute.\n\nThe bill came due in the complexity: attending over all pairs is $O(n^2)$, where the recurrent model was $O(n)$ in sequence length. For 2017 sentence lengths that was a bargain. At 100k-token contexts it is the central problem, and a decade of efficient-attention work descends from it."
+      }
+    ]
+  },
+  "transformer>gpt1": {
+    "lead": "GPT-1 kept the Transformer's decoder, discarded its encoder, and changed what the model was for: not translating a given sentence, but predicting the next token over any text at all — which turns the whole internet into a supervised dataset.",
+    "blocks": [
+      {
+        "h": "Half the architecture, deliberately",
+        "b": "The original Transformer is an encoder–decoder built for translation: the encoder reads the source with bidirectional self-attention, the decoder generates the target while cross-attending into it. Remove the source and the encoder has nothing to read, so GPT-1 keeps only the decoder stack — twelve layers, masked self-attention, no cross-attention.\n\nThe mask is the load-bearing part. Position $i$ may attend to $j \\le i$ and no further, implemented by setting the disallowed scores to $-\\infty$ before the softmax. That constraint makes the model a valid autoregressive factorisation of the joint distribution:\n\n$$P(x) = \\prod_{i} P(x_i \\mid x_1,\\dots,x_{i-1})$$\n\nso every position in a sequence supplies a training signal at once, while still describing one coherent distribution over text."
+      },
+      {
+        "h": "Pre-train, then fine-tune",
+        "b": "The move GPT-1 is remembered for is not architectural. It trains on BooksCorpus with the plain likelihood objective\n\n$$L_1(\\mathcal{U}) = \\sum_i \\log P(u_i \\mid u_{i-k},\\dots,u_{i-1}; \\Theta)$$\n\nand then fine-tunes the same weights on each downstream task, feeding structured inputs as delimited token sequences rather than building a task-specific architecture. Task heads shrink to a linear layer.\n\nBefore this, NLP transfer mostly meant transferring **word vectors** — word2vec, GloVe — and learning the contextual machinery per task. GPT-1 transferred the machinery. It improved the state of the art on nine of twelve benchmarks, and reported that the pre-trained model already did non-trivially on some tasks with no fine-tuning at all: the observation GPT-2 and GPT-3 pushed on."
+      },
+      {
+        "h": "The trade against BERT",
+        "b": "BERT, months later, made the opposite call: keep the encoder, attend in both directions, and train by masking tokens instead of predicting the next one. Bidirectional context is strictly more informative for **understanding** a fixed input, and BERT duly overtook GPT-1 on classification and span-extraction benchmarks.\n\nWhat the causal mask preserves is the ability to **generate**, and a training signal at every position rather than at the ~15% that are masked. Which mattered more was not settled by argument but by scale: the autoregressive objective kept improving as models and corpora grew, and the line from here runs through GPT-2 and GPT-3 to the instruction-followed models."
+      }
+    ]
+  }
+}

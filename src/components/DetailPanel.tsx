@@ -1,4 +1,11 @@
 import type { PanelVM } from '../view/types'
+import { Prose } from './Prose'
+
+/** the small uppercase label that heads every section of the panel */
+const CAP: React.CSSProperties = {
+  fontSize: 8.5, letterSpacing: '0.2em', textTransform: 'uppercase',
+  fontWeight: 500, color: '#8a8275',
+}
 
 export interface DetailPanelProps {
   panel: PanelVM
@@ -64,21 +71,49 @@ export function DetailPanel({ panel, sheet = false, onClose }: DetailPanelProps)
 
         {panel.fields.map((f) => (
           <div key={f.k} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <div style={{
-              fontSize: 8.5, letterSpacing: '0.2em', textTransform: 'uppercase',
-              fontWeight: 500, color: '#8a8275',
-            }}>{f.k}</div>
+            <div style={CAP}>{f.k}</div>
             <div style={{ fontSize: 12.5, lineHeight: 1.6, color: f.c, fontStyle: f.it }}>{f.v}</div>
           </div>
         ))}
 
+        {/* The long-form essay, once its file has arrived. The short fields
+            above stay: they are the one-line version, and they are what the
+            reader has already seen on the node itself. */}
+        {panel.essayLoading && !panel.essay && (
+          <div style={{ ...CAP, color: '#6f6759' }}>Loading the full entry…</div>
+        )}
+
+        {panel.essay && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ height: 1, background: 'rgba(233,229,221,0.14)' }} />
+            <Prose body={panel.essay.lead} size={13.5} color="#ded7c9" />
+            {panel.essay.blocks.map((b, i) => (
+              <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {b.h && <div style={CAP}>{b.h}</div>}
+                <Prose body={b.b} />
+              </div>
+            ))}
+            {!!panel.essay.refs?.length && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div style={CAP}>Read next</div>
+                {panel.essay.refs.map((r, i) => (
+                  <div key={i} style={{ fontSize: 11.5, lineHeight: 1.5, color: '#9d9689' }}>
+                    {r.url
+                      ? <a href={r.url} target="_blank" rel="noreferrer noopener"
+                        style={{ color: '#bfb8aa', textDecoration: 'underline' }}>{r.t}</a>
+                      : r.t}
+                    {r.y ? <span style={{ color: '#6f6759' }}> · {r.y}</span> : null}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {panel.groups.map((grp) => (
           <div key={grp.k} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-              <div style={{
-                fontSize: 8.5, letterSpacing: '0.2em', textTransform: 'uppercase',
-                fontWeight: 500, color: '#8a8275',
-              }}>{grp.k}</div>
+              <div style={CAP}>{grp.k}</div>
               <div style={{ height: 1, flex: 1, background: 'rgba(233,229,221,0.14)' }} />
             </div>
             {grp.items.map((it, i) => (

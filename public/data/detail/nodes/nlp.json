@@ -1,0 +1,31 @@
+{
+  "transformer": {
+    "lead": "The Transformer removed recurrence from sequence modelling entirely, replacing it with attention alone. Every position attends to every other in a single parallel operation, so the path between any two tokens is one step rather than $O(n)$ — and training, freed from the sequential dependency of an RNN, finally scaled with the hardware.",
+    "blocks": [
+      {
+        "h": "The problem it inherited",
+        "b": "An LSTM reads a sequence one step at a time: the state at position $t$ cannot be computed until position $t-1$ is done. Two consequences follow, and both were binding by 2017.\n\nFirst, **training cannot be parallelised across the sequence**. GPUs were getting much faster at dense matrix products, and an architecture that serialises over length cannot use that.\n\nSecond, the **path length between distant tokens is linear**. Gradient signal between position $1$ and position $n$ passes through $n$ multiplicative steps, and the LSTM gate is a mitigation rather than a cure. Attention had already been bolted onto encoder–decoder RNNs in 2014 to give the decoder direct access to encoder states; the Transformer's wager was that the recurrence around it was no longer earning its place."
+      },
+      {
+        "h": "Scaled dot-product attention",
+        "b": "Each token is projected into a query, a key and a value. A query is compared against every key by dot product, the scores are normalised, and the output is the correspondingly weighted sum of values:\n\n$$\\mathrm{Attention}(Q,K,V) = \\mathrm{softmax}\\!\\left(\\frac{QK^{\\top}}{\\sqrt{d_k}}\\right)V$$\n\nThe $\\sqrt{d_k}$ divisor is not cosmetic. For queries and keys with independent unit-variance components, $q\\cdot k$ has variance $d_k$; at $d_k = 64$ the raw scores are spread wide enough to push the softmax into a regime where one weight is near $1$ and the gradient through the rest is effectively zero. Dividing by $\\sqrt{d_k}$ restores unit variance and keeps the softmax in its responsive range.\n\nThe whole operation is two matrix multiplications and a softmax — no loop over positions."
+      },
+      {
+        "h": "Multiple heads, and why one is not enough",
+        "b": "A single softmax produces one distribution per query, so one attention layer can only express one notion of relevance at a time. The Transformer runs $h = 8$ attention functions in parallel on $d_k = d_v = d_{\\mathrm{model}}/h = 64$-dimensional projections, then concatenates:\n\n$$\\mathrm{MultiHead}(Q,K,V) = \\mathrm{Concat}(\\mathrm{head}_1,\\dots,\\mathrm{head}_h)W^{O}$$\n\nBecause each head works in a subspace of $1/h$ the width, the total cost is roughly that of single-head attention at full width. Heads specialise readily — several in trained models track syntactic dependencies, others resolve coreference — though the tidy interpretations found post hoc should be treated with care."
+      },
+      {
+        "h": "Position has to be put back",
+        "b": "Attention is permutation-equivariant: shuffle the input and the output shuffles with it. The recurrence that was removed was also what carried order, so order must be re-injected. The paper adds fixed sinusoids to the input embeddings,\n\n$$PE_{(pos,2i)} = \\sin\\!\\left(\\frac{pos}{10000^{2i/d}}\\right), \\qquad PE_{(pos,2i+1)} = \\cos\\!\\left(\\frac{pos}{10000^{2i/d}}\\right)$$\n\nchosen so that $PE_{pos+k}$ is a fixed linear function of $PE_{pos}$ — relative offsets are linearly recoverable. Learned positional embeddings performed near-identically; the sinusoids were preferred for the hope of extrapolating past the training length, a hope later work found largely unrealised. Position encoding has been an active seam ever since, through relative schemes to RoPE."
+      },
+      {
+        "h": "What it cost",
+        "b": "Attention is $O(n^2)$ in both time and memory: the score matrix has an entry for every ordered pair of positions. At the paper's sequence lengths this was cheap next to the gain, and it bought a constant path length between any two tokens. At the context lengths of the models that followed it became the dominant cost, and the efficient-attention literature — sparse, low-rank, linear, and eventually the IO-aware exact methods — is the direct descendant of this one line in the complexity table."
+      }
+    ],
+    "refs": [
+      { "t": "Attention Is All You Need", "y": 2017, "url": "https://arxiv.org/abs/1706.03762" },
+      { "t": "Neural Machine Translation by Jointly Learning to Align and Translate", "y": 2014, "url": "https://arxiv.org/abs/1409.0473" }
+    ]
+  }
+}
