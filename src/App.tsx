@@ -27,6 +27,17 @@ import type {
 } from './view/types'
 
 const PANEL_W = 372
+const PANEL_STORE_KEY = 'dlg.panelWidth.v1'
+/** narrower than this and the essays stop being readable */
+const PANEL_MIN = 300
+/**
+ * The ceiling adapts: whatever the reader drags to, the sheet keeps a usable
+ * strip. On a 1280px laptop that caps the panel around 940px; on a tablet it
+ * is what stops the panel swallowing the graph entirely.
+ */
+const panelMax = (viewportW: number) =>
+  Math.max(PANEL_MIN, Math.min(920, viewportW - 340))
+
 /** what the camera is looking at — sets how far out zoom is allowed to go */
 const SHEET = { w: CANVAS.w, h: CANVAS.h }
 
@@ -71,6 +82,23 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
 
   // Chrome that has to fold away on a phone. The legend is a lookup aid, not a
   // control, so it stays shut until asked for when the sheet is the scarce thing.
+  // Panel width is the reader's, and it survives a reload like the reading log.
+  const [panelW, setPanelW] = useState(() => {
+    const stored = Number(window.localStorage.getItem(PANEL_STORE_KEY))
+    return Number.isFinite(stored) && stored > 0 ? stored : PANEL_W
+  })
+  const resizePanel = useCallback((next: number) => {
+    setPanelW(() => {
+      const clamped = Math.round(
+        Math.min(panelMax(window.innerWidth), Math.max(PANEL_MIN, next)),
+      )
+      try { window.localStorage.setItem(PANEL_STORE_KEY, String(clamped)) } catch { /* private mode */ }
+      return clamped
+    })
+  }, [])
+  // a stored width from a wider window, or a rotation, must not strand the graph
+  const panelWidth = Math.min(Math.max(panelW, PANEL_MIN), panelMax(vp.w))
+
   const [legendOpen, setLegendOpen] = useState(!vp.compact)
   const [controlsOpen, setControlsOpen] = useState(false)
   const [exporting, setExporting] = useState(false)
@@ -429,7 +457,7 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
   // A panel and the reading list occupy the same slot, so at most one is up.
   const sheetOpen = listOpen || !!panel
   // Side panels push the legend left; a phone's bottom sheet does not.
-  const legendRight = sheetOpen && !vp.phone ? PANEL_W + 18 : 18
+  const legendRight = sheetOpen && !vp.phone ? panelWidth + 18 : 18
 
   return (
     <div style={{
@@ -562,6 +590,8 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
             onClearAll={clearRead}
             hasRead={readCount > 0}
             sheet={vp.phone}
+            width={panelWidth}
+            onResize={resizePanel}
             onToggleRead={toggleRead}
             onToggleGroup={setAllRead}
             onClose={() => setListOpen(false)}
@@ -569,7 +599,11 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
         )}
 
         {panel && !listOpen && (
-          <DetailPanel panel={panel} sheet={vp.phone} onClose={clearSel} />
+          <DetailPanel
+            panel={panel} sheet={vp.phone}
+            width={panelWidth} onResize={resizePanel}
+            onClose={clearSel}
+          />
         )}
       </div>
     </div>

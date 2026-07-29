@@ -155,6 +155,34 @@ html, body { overscroll-behavior: none; }
   .gx-legend-toggle:hover { background: rgba(182,130,53,0.16); }
 }
 
+/* ── Panel resizer ───────────────────────────────────────────────────────
+   A 5px strip is a small target, so the hit area is widened to 13px and
+   centred on the border; only the 1px grip is painted.                    */
+.gx-resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -6px;
+  width: 13px;
+  cursor: col-resize;
+  z-index: 2;
+  display: flex;
+  justify-content: center;
+  touch-action: none;
+}
+.gx-resizer-grip {
+  width: 1px;
+  height: 100%;
+  background: transparent;
+  transition: background 140ms ease;
+}
+.gx-resizer:hover .gx-resizer-grip,
+.gx-resizer:focus-visible .gx-resizer-grip {
+  background: rgba(233, 229, 221, 0.5);
+  width: 2px;
+}
+.gx-resizer:focus-visible { outline: none; }
+
 /* ── Touch ───────────────────────────────────────────────────────────────
    A 28px control is comfortable under a cursor and cramped under a thumb.
    On a coarse pointer the chrome grows to the ~44px the platform guidelines

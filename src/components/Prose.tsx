@@ -3,7 +3,7 @@
 // it, and the library plus its fonts is larger than the rest of this app.
 
 import { useEffect, useState } from 'react'
-import { blocks } from '../view/prose'
+import { blocks, mathInRuns } from '../view/prose'
 import type { Inline } from '../view/prose'
 
 type Katex = typeof import('katex').default
@@ -78,7 +78,11 @@ function Tex({ tex, display, k }: { tex: string; display: boolean; k: Katex | nu
 function Run({ x, k }: { x: Inline; k: Katex | null }) {
   switch (x.t) {
     case 'bold':
-      return <strong style={{ fontWeight: 600, color: '#f0eadf' }}>{x.v}</strong>
+      return (
+        <strong style={{ fontWeight: 600, color: '#f0eadf' }}>
+          {x.kids.map((c, i) => <Run key={i} x={c} k={k} />)}
+        </strong>
+      )
     case 'code':
       return (
         <code style={{
@@ -103,8 +107,9 @@ export interface ProseProps {
 
 export function Prose({ body, size = 12.5, color = '#cdc6b8' }: ProseProps) {
   const parsed = blocks(body)
+  // nested: a formula inside bold still needs KaTeX
   const hasMath = parsed.some(
-    (b) => b.t === 'display' || b.kids.some((x) => x.t === 'math'),
+    (b) => b.t === 'display' || mathInRuns(b.kids).length > 0,
   )
   const k = useKatex(hasMath)
 

@@ -16,9 +16,41 @@ describe('inline runs', () => {
       { t: 'text', v: 'scale by ' },
       { t: 'math', v: '\\sqrt{d_k}' },
       { t: 'text', v: ' then ' },
-      { t: 'bold', v: 'softmax' },
+      { t: 'bold', kids: [{ t: 'text', v: 'softmax' }] },
       { t: 'text', v: ' the ' },
       { t: 'code', v: 'logits' },
+    ])
+  })
+
+  // The regression: bold used to be matched flat, so it swallowed any formula
+  // inside it and the panel rendered a literal `$j$` on the page.
+  it('keeps maths as maths when it sits inside bold', () => {
+    expect(inlines('**one step, for any $j$**')).toEqual([{
+      t: 'bold',
+      kids: [
+        { t: 'text', v: 'one step, for any ' },
+        { t: 'math', v: 'j' },
+      ],
+    }])
+  })
+
+  it('keeps code as code inside bold', () => {
+    expect(inlines('**call `fit()` first**')).toEqual([{
+      t: 'bold',
+      kids: [
+        { t: 'text', v: 'call ' },
+        { t: 'code', v: 'fit()' },
+        { t: 'text', v: ' first' },
+      ],
+    }])
+  })
+
+  it('does not let bold reach inside maths', () => {
+    // `**` here is TeX (a double superscript), not an emphasis marker
+    expect(inlines('$a^{**}$ and **b**')).toEqual([
+      { t: 'math', v: 'a^{**}' },
+      { t: 'text', v: ' and ' },
+      { t: 'bold', kids: [{ t: 'text', v: 'b' }] },
     ])
   })
 

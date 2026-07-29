@@ -1,4 +1,5 @@
 import type { ReadGroupVM, ToggleVM } from '../view/types'
+import { PanelResizer } from './PanelResizer'
 
 /** Shared by every button in the header strip. */
 const ACTION: React.CSSProperties = {
@@ -23,6 +24,9 @@ export interface ReadingListProps {
   hasRead: boolean
   /** phone: dock to the bottom instead of taking a full-height column */
   sheet?: boolean
+  /** side-panel width, reader-adjustable; ignored in sheet mode */
+  width?: number
+  onResize?: (next: number) => void
   onImport: (file: File) => void
   onExport: () => void
   onClearAll: () => void
@@ -41,7 +45,7 @@ export function ReadingList(p: ReadingListProps) {
       borderRadius: '12px 12px 0 0', boxShadow: '0 -18px 44px rgba(0,0,0,0.55)',
     }
     : {
-      position: 'absolute', right: 0, top: 0, bottom: 0, width: 372,
+      position: 'absolute', right: 0, top: 0, bottom: 0, width: p.width ?? 372,
       borderLeft: '1px solid rgba(233,229,221,0.3)', boxShadow: '-18px 0 44px rgba(0,0,0,0.5)',
     }
   return (
@@ -49,6 +53,9 @@ export function ReadingList(p: ReadingListProps) {
       display: 'flex', flexDirection: 'column', background: 'rgba(9,12,16,0.97)',
       ...frame,
     }}>
+      {!p.sheet && p.onResize && (
+        <PanelResizer width={p.width ?? 372} onResize={p.onResize} />
+      )}
       <div style={{ padding: '16px 18px 13px', borderBottom: '1px solid rgba(233,229,221,0.14)' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>

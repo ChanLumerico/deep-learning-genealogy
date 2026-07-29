@@ -75,6 +75,17 @@ export function useCamera(
       const r = el.getBoundingClientRect()
       return { x: ev.clientX - r.left, y: ev.clientY - r.top }
     }
+
+    /**
+     * The panels sit inside this element, so their wheel and pointer events
+     * bubble up here. Without this guard, scrolling a detail panel zoomed the
+     * canvas behind it and dragging to scroll a bottom sheet panned the sheet.
+     * Only gestures that begin on the canvas itself belong to the camera.
+     */
+    const onCanvas = (ev: Event) => {
+      const t = ev.target
+      return t instanceof Element && !!t.closest('.gx-sheet')
+    }
     const low = () => zoomFloor(
       { width: el.clientWidth, height: el.clientHeight },
       sheetRef.current.w, sheetRef.current.h,
@@ -82,6 +93,7 @@ export function useCamera(
 
     // ── wheel / trackpad ──────────────────────────────────────────────────
     const onWheel = (ev: WheelEvent) => {
+      if (!onCanvas(ev)) return   // a panel is scrolling; leave it alone
       ev.preventDefault()
       const p = local(ev)
       // ctrlKey means a trackpad pinch, which the platform sends as a wheel
@@ -127,8 +139,8 @@ export function useCamera(
     }
 
     const onDown = (ev: PointerEvent) => {
-      // the chrome keeps its own taps
-      if ((ev.target as HTMLElement).closest('input,button,label,select,textarea')) return
+      // a press that starts on a panel belongs to that panel — it is scrolling
+      if (!onCanvas(ev)) return
       const p = local(ev)
       active.set(ev.pointerId, p)
       origin.set(ev.pointerId, { ...p, type: ev.pointerType })
