@@ -737,7 +737,7 @@
       },
       {
         "h": "The straightness has to be paid for",
-        "b": "Reflow is not free: each round requires generating a full synthetic dataset by solving the ODE, then retraining. So the one-step model is bought with several multiples of the original training cost, and it is a distillation pipeline rather than a single training run.\n\nEach round also compounds on the previous model's errors, since the coupling it trains on is produced by an imperfect field, and quality can degrade as straightness improves. The usual practice is one or two reflow rounds rather than many.\n\nIn this graph the node stands alone — no lineage edge connects it, though its natural neighbours are flow matching, which shares its formulation, and the diffusion line it competes with on sampling cost."
+        "b": "Reflow is not free: each round requires generating a full synthetic dataset by solving the ODE, then retraining. So the one-step model is bought with several multiples of the original training cost, and it is a distillation pipeline rather than a single training run.\n\nEach round also compounds on the previous model's errors, since the coupling it trains on is produced by an imperfect field, and quality can degrade as straightness improves. The usual practice is one or two reflow rounds rather than many.\n\nIts place in this graph is between FFJORD, whose adaptive-solver cost it removes, and Stable Diffusion 3, whose training objective it is. Flow matching sits beside it rather than before or after: the two arrived at the same construction within weeks, from different starting points."
       }
     ],
     "refs": [

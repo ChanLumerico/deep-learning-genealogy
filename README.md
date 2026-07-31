@@ -1,6 +1,6 @@
 # Deep Learning Model Genealogy
 
-An interactive phylogeny of deep-learning architectures: **189 models** and **248 typed
+An interactive phylogeny of deep-learning architectures: **189 models** and **251 typed
 relationships** from the 1957 perceptron to 2025, laid out across six research-domain
 lanes with every edge orthogonally routed at load time.
 
@@ -104,23 +104,25 @@ restore the legacy behaviour, drop the `setTx`/`setTy` calls in the load effect 
 
 ### Baseline audit numbers
 
-The legacy layout is not perfectly clean, and the port reproduces it exactly:
+Two sets, and they are allowed to differ. The golden figures are the frozen input the
+port is checked against and never change; the live figures move whenever the graph does.
 
 ```
-nodes 189 · edges 248
-routes    ForwardRoute 120, BusRoute 125
-fallbacks 3
-overlaps 0 · edges through a node 0 · tight channels 1 (worst extent 42)
+GOLDEN   nodes 189 · edges 248 · ForwardRoute 120, BusRoute 125 · fallbacks 3
+LIVE     nodes 189 · edges 251 · ForwardRoute 123, BusRoute 125 · fallbacks 3
+         overlaps 0 · edges through a node 0 · tight channels 1 (worst extent 42)
 ```
 
-`npm test` asserts overlaps and through-node crossings stay at zero and that tight
-channels and fallbacks do not exceed these numbers.
+The legacy layout was not perfectly clean and the port reproduces it exactly. `npm test`
+asserts that overlaps and through-node crossings stay at zero on the live graph, and caps
+tight channels, worst extent and fallbacks at the numbers above — caps rather than
+equalities, so the sheet may get tidier and may not get messier.
 
 ## The writing is complete
 
 Every node carries `p` / `i` / `l` and every edge carries its `limit → fix` label —
-189 and 248 of them. Behind each is a long-form entry under `public/data/detail/`,
-fetched only when a panel opens: **189 model entries and 248 lineage entries**, with
+189 and 251 of them. Behind each is a long-form entry under `public/data/detail/`,
+fetched only when a panel opens: **189 model entries and 251 lineage entries**, with
 the equation stated wherever the contribution is carried by one.
 
 Adding to it is a data change and nothing more. The golden master is compared against

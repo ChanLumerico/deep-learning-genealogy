@@ -1169,5 +1169,94 @@
         "y": 2018
       }
     ]
+  },
+  "ffjord>rectflow": {
+    "lead": "FFJORD removed every architectural constraint on a continuous flow and left the training cost standing: each gradient step solves an ODE, and the solver takes more steps as the learned dynamics stiffen. Rectified flow attacks the cause rather than the symptom — if the difficulty is that the trajectory curves, prescribe a straight one and regress onto it.",
+    "blocks": [
+      {
+        "h": "The straightness observation",
+        "b": "Work following FFJORD had found that penalising the kinetic energy or the Jacobian norm of the learned field — pushing it towards straighter trajectories — made the ODE markedly cheaper to solve. That is a regulariser applied to a field whose path is otherwise whatever training produces.\n\nRectified flow takes the observation as the design. Pair a noise sample $X_0$ with a data sample $X_1$, define the linear interpolation $X_t = (1-t)X_0 + tX_1$, and note that its velocity is constant along the path and equal to $X_1 - X_0$. Regress a field onto that:\n\n$$\\min_{v} \\; \\mathbb{E}_{X_0, X_1, t}\\Big[\\big\\| (X_1 - X_0) - v(X_t, t) \\big\\|^2\\Big]$$\n\nThe path is specified in advance rather than discovered, and the target is available in closed form."
+      },
+      {
+        "h": "What that deletes",
+        "b": "No ODE is solved during training, so the adaptive solver leaves the gradient loop entirely and the cost per step becomes fixed and knowable. No divergence or trace is estimated, so Hutchinson's estimator and its noise are unnecessary. No likelihood is computed, so the change-of-variables machinery goes with them.\n\nWhat remains is a plain squared-error regression with the same practical profile as diffusion's noise prediction — which is why the method scales where FFJORD did not.\n\nThe learned field cannot follow the straight lines exactly, because many interpolation paths cross the same point with different velocities and the regression returns their average. What it produces is a valid ODE whose marginals match the interpolation's, which is enough for the endpoints to be right and leaves the trajectories curved."
+      },
+      {
+        "h": "Reflow, and the bill",
+        "b": "The averaging is what curves the paths and also what makes them improvable. Solving the learned ODE gives a **coupling** — each noise sample now maps to a specific data sample rather than an arbitrary one — and retraining on that coupling gives paths that cross far less. Repeating this **reflow** never increases the transport cost, and once trajectories are nearly straight a single Euler step suffices.\n\nSo the training cost FFJORD paid to a solver reappears in a different place. Each reflow round requires generating a full synthetic dataset by solving the ODE and then retraining, so a one-step model costs several multiples of the original run — a distillation pipeline rather than a single training. Each round also compounds on the previous field's errors, which is why one or two rounds is the usual practice rather than many."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Flow Straight and Fast: Learning to Generate and Transfer Data with Rectified Flow",
+        "y": 2023
+      },
+      {
+        "t": "FFJORD: Free-form Continuous Dynamics for Scalable Reversible Generative Models",
+        "y": 2019
+      },
+      {
+        "t": "How to Train Your Neural ODE: the World of Jacobian and Kinetic Regularization",
+        "y": 2020
+      }
+    ]
+  },
+  "rectflow>flowmatch": {
+    "lead": "Rectified flow and flow matching appeared within weeks of each other in late 2022, from different groups and different starting points, and arrive at the same construction: an ODE trained by regressing a velocity onto a prescribed interpolation, with no simulation in the loop. Neither derives from the other.",
+    "blocks": [
+      {
+        "h": "The same object, reached twice",
+        "b": "Rectified flow starts from transport — how do you move mass from one distribution to another along a path that is cheap to integrate — and answers with the straight line, then works on making the learned field follow it.\n\nFlow matching starts from continuous normalising flows and their intractable training objective, and shows that conditioning the probability path on a single data point makes the regression target closed-form while leaving the gradient identical to the marginal objective's.\n\nThe resulting algorithms coincide. Flow matching's optimal-transport path is a straight interpolation with constant velocity, which is rectified flow's; rectified flow's regression is flow matching's conditional objective. Stochastic interpolants, published in the same window, is a third arrival at the same place."
+      },
+      {
+        "h": "What each emphasises",
+        "b": "Flow matching's contribution is the **generality**. The framework makes the probability path a design parameter, shows that the Gaussian path of a variance-preserving diffusion recovers score-based training as a special case, and thereby contains diffusion rather than competing with it. The straight path is then one choice among many, argued for on measured grounds.\n\nRectified flow's contribution is **straightness as an objective** and the reflow procedure that pursues it. Flow matching notes that the optimal-transport path needs fewer solver steps; rectified flow asks what it would take to need exactly one, and answers with a coupling that is iteratively improved.\n\nSo the two are complementary in emphasis even where the loss is the same: one explains what class of methods this is, the other how far the sampling cost can be pushed down."
+      },
+      {
+        "h": "How the field kept both",
+        "b": "The vocabulary that stuck is mixed. \"Flow matching\" is the general term, used for the objective and the framework; \"rectified flow\" names the linear-path instance and the reflow procedure, and is what large systems cite when they mean the training loss.\n\nStable Diffusion 3 is the clearest case — its title is *Scaling Rectified Flow Transformers*, its comparison of formulations is framed in flow-matching terms, and its ablation over path schedules only makes sense inside the general framework. Both arrows into that node are real.\n\nThe open problem is shared. Both pair each data point with independently drawn noise, so the coupling is arbitrary and the marginal field still averages over crossing paths. Reflow and the minibatch optimal-transport variants attack that from either side, at the cost of extra training rounds."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Flow Straight and Fast: Learning to Generate and Transfer Data with Rectified Flow",
+        "y": 2023
+      },
+      {
+        "t": "Flow Matching for Generative Modeling",
+        "y": 2023
+      },
+      {
+        "t": "Building Normalizing Flows with Stochastic Interpolants",
+        "y": 2023
+      }
+    ]
+  },
+  "rectflow>sd3": {
+    "lead": "Stable Diffusion 3's title is *Scaling Rectified Flow Transformers for High-Resolution Image Synthesis*. The objective is this node's, taken to production scale — and the paper's contribution is less the adoption than the systematic comparison that justified it.",
+    "blocks": [
+      {
+        "h": "The objective, adopted",
+        "b": "Training regresses a velocity field onto straight interpolations between noise and data rather than predicting noise under a diffusion schedule. Because the conditional path is a straight line with constant velocity, the target is closed-form and the loss is a plain regression with the same profile as $\\epsilon$-prediction — and a better-conditioned trajectory, so fewer solver steps suffice at sampling time.\n\nWhat the paper adds is evidence. It evaluates a range of diffusion and flow formulations under matched conditions — same data, same architecture, same budget — and reports the rectified-flow variants ahead. The individual method papers each compared against their own baselines; this is the controlled comparison the field needed before switching."
+      },
+      {
+        "h": "Two corrections the original left open",
+        "b": "**Timestep sampling.** Uniform sampling over $t$ spends equal effort everywhere, and the middle of the trajectory is where the prediction problem is hardest — near $t=0$ the answer is nearly the data, near $t=1$ nearly the noise. SD3 samples $t$ from a logit-normal distribution, concentrating training in the middle, and reports a clear gain.\n\n**Resolution shift.** A larger image carries more redundancy, so a given noise level destroys proportionally less information about it. Keeping the difficulty matched as resolution rises requires shifting the schedule towards higher noise; without it a model trained at one resolution transfers poorly to another.\n\nNeither is in the original formulation, and both are the kind of thing that only surfaces when a method is trained at scale on real data."
+      },
+      {
+        "h": "Straighter, not straight",
+        "b": "The practical payoff is fewer sampling steps, and it is not one. Reaching a single-step model requires the reflow rounds or distillation that rectified flow's own paper describes, each costing a full synthetic dataset and a retraining pass.\n\nSD3 sits at the practical point on that curve: an objective cheaper to sample than diffusion, trained once, with one-step models left as a separate distillation problem. Everything else it carries comes from elsewhere in this lane — the latent autoencoder's ceiling from latent diffusion, the transformer backbone and its quadratic attention from DiT, and a dependence on very large frozen text encoders."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Scaling Rectified Flow Transformers for High-Resolution Image Synthesis",
+        "y": 2024
+      },
+      {
+        "t": "Flow Straight and Fast: Learning to Generate and Transfer Data with Rectified Flow",
+        "y": 2023
+      }
+    ]
   }
 }
