@@ -1,1 +1,945 @@
-{}
+{
+  "bellman>td": {
+    "lead": "The Bellman equation computes an expectation over successor states, which requires knowing the transition model. Temporal-difference learning replaces that expectation with a single sampled transition, and the recursion survives — an agent that can act but not predict can now estimate values.",
+    "blocks": [
+      {
+        "h": "Replacing a sum with a sample",
+        "b": "Dynamic programming evaluates $V(s) = \\mathbb{E}\\big[r + \\gamma V(s')\\big]$ by summing over every successor weighted by $P(s' \\mid s, a)$. Every term of that sum requires the model.\n\nTD learning observes one transition and moves the estimate towards what that transition suggests:\n\n$$V(s) \\leftarrow V(s) + \\alpha\\big[r + \\gamma V(s') - V(s)\\big]$$\n\nA single sample is a noisy but unbiased estimate of the expectation, and averaging over many visits with a decaying step size recovers it. The model is never needed because the environment supplies the samples.\n\nThis is the first of the two things standing between the Bellman equation and a working agent, and it is the one that does not require any representational change."
+      },
+      {
+        "h": "Bootstrapping is what is kept",
+        "b": "The alternative to sampling the expectation is Monte Carlo estimation: play the episode to its end and update towards the actual return. That is also model-free, and it discards the recursion — each state's estimate is formed independently from complete trajectories.\n\nTD keeps the recursion. Its target $r + \\gamma V(s')$ uses the current estimate of the successor, so the structure Bellman identified — value defined in terms of value — is doing the work, with sampling replacing only the expectation.\n\nThe practical consequences follow from that. Learning can happen at every step rather than at every episode, which is the only option for continuing tasks; and the variance is far lower, since one transition is a much smaller random quantity than a whole trajectory. The price is bias while the successor estimates are wrong."
+      },
+      {
+        "h": "What the sweep still costs",
+        "b": "The model is gone; the table is not. TD as stated stores one value per state and updates the entry it visits, so the curse of dimensionality that Bellman named remains untouched.\n\nThe convergence guarantee also depends on the tabular representation. With function approximation, off-policy data and bootstrapping together — Sutton and Barto's deadly triad — the estimate can diverge, and simple counterexamples exist. Every neural method in this lane operates inside that triad, which is why their stabilisers are engineering rather than derivations.\n\nQ-learning is the next step: estimate action values rather than state values, so a policy can be read off without a model, and take a maximum in the target so the values converge to the optimal ones regardless of the behaviour that generated the data."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Learning to Predict by the Methods of Temporal Differences",
+        "y": 1988
+      },
+      {
+        "t": "Dynamic Programming",
+        "y": 1957
+      }
+    ]
+  },
+  "td>qlearn": {
+    "lead": "TD learning evaluates whatever policy produced the data, so improving requires alternating evaluation and improvement. Q-learning collapses the two: estimate action values, and put a maximum over actions in the target, so the estimate converges to the optimal values no matter how the agent behaves.",
+    "blocks": [
+      {
+        "h": "The max makes it off-policy",
+        "b": "TD's target is $r + \\gamma V(s')$, where $s'$ is where the agent actually went under its own policy — so the fixed point is $V^\\pi$, the value of that policy.\n\nQ-learning's target is\n\n$$r + \\gamma \\max_{a'} Q(s', a')$$\n\nwhich refers to the best action available at $s'$, not the one taken. The fixed point is therefore $Q^\\star$, and the behaviour policy only has to keep visiting every state-action pair. An agent can explore as badly as it likes — randomly, even adversarially — and still learn the optimal values.\n\nWatkins and Dayan's proof makes this precise for the tabular case with decaying step sizes and infinite visitation. It is among the strongest results in the field and it is why Q-learning became the default."
+      },
+      {
+        "h": "Why action values",
+        "b": "The switch from $V$ to $Q$ is not incidental. A state value cannot be acted on without knowing where each action leads, which is the model again. $\\arg\\max_a Q(s,a)$ is a lookup.\n\nThe cost is a table of size $|S| \\times |A|$ rather than $|S|$, and in exchange control becomes model-free, not merely prediction. For a lane about acting rather than forecasting, that is the trade that matters, and every value-based method after this point estimates $Q$."
+      },
+      {
+        "h": "The bias the max introduces",
+        "b": "The same operator that buys off-policy learning introduces a systematic error. $\\mathbb{E}[\\max_a Q] \\geq \\max_a \\mathbb{E}[Q]$, so a maximum over noisy estimates is optimistic: whichever action is overrated by noise is the one selected and propagated.\n\nTabular estimates with decaying noise wash this out. Function approximation does not — errors are correlated across states and do not vanish — so overestimates feed the bootstrap and compound. That is the defect Double DQN was written for, and the reason twin critics appear in TD3 and SAC a decade later.\n\nThe other omission is exploration. Convergence assumes every pair is visited infinitely often and nothing in the update makes that happen, so $\\epsilon$-greedy or something better has to be attached from outside."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Learning from Delayed Rewards",
+        "y": 1989
+      },
+      {
+        "t": "Q-learning",
+        "y": 1992
+      }
+    ]
+  },
+  "qlearn>dqn": {
+    "lead": "Q-learning's table cannot hold a state space described by pixels, and replacing it with a neural network had been known to diverge for two decades. DQN makes the combination work — not by resolving the instability but by engineering around it with a replay buffer and a frozen target network.",
+    "blocks": [
+      {
+        "h": "Why the approximator was the hard part",
+        "b": "The table is the obvious problem: Atari from pixels has more states than can be enumerated, let alone visited. Function approximation is the obvious answer, since a network generalises across similar states rather than storing them.\n\nThe reason it had not worked is that off-policy learning, bootstrapping and function approximation together — the deadly triad — can diverge, and Q-learning uses all three. Two concrete mechanisms make it fail. Consecutive frames are nearly identical, so online updates are made on correlated samples and the network overwrites what it just learned as the policy shifts the data distribution. And the regression target is computed from the network being updated, so it moves with every step and there is no fixed point to settle into."
+      },
+      {
+        "h": "Replay and a frozen target",
+        "b": "**Experience replay** stores transitions in a large buffer and samples minibatches uniformly. Samples within a batch come from different episodes and different policies, so the correlation is broken and each transition is reused many times. This requires the method to be off-policy — the buffer holds data from old policies — which Q-learning already is, and which is why the pairing works.\n\n**A target network** $Q^-$ is a periodically refreshed copy of the weights, and the target becomes $r + \\gamma \\max_{a'} Q^-(s', a')$. Between refreshes the problem is ordinary supervised regression against a fixed target, so a moving fixed point becomes a sequence of stationary ones.\n\nNeither addresses the triad theoretically. Both make it behave in practice, which is the honest description of what DQN is."
+      },
+      {
+        "h": "What generalisation bought and cost",
+        "b": "The result was human-level or better play on a majority of the Atari suite with one architecture and one hyperparameter set across all games, learning from pixels and score alone. That generality — no per-task feature engineering — is what made the paper.\n\nWhat function approximation costs is every guarantee Q-learning had. Watkins' convergence proof assumes a table; with a network there is no such statement, and the observed failures are real — value estimates diverging above achievable returns, performance collapsing after apparent convergence.\n\nIt also amplifies the max operator's bias, since approximation errors are correlated across states rather than independent. Double DQN, the duelling architecture, prioritised replay and noisy exploration are each a targeted repair of one consequence, and Rainbow shows the repairs compose."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Human-level control through deep reinforcement learning",
+        "y": 2015
+      },
+      {
+        "t": "Q-learning",
+        "y": 1992
+      },
+      {
+        "t": "Reinforcement Learning: An Introduction",
+        "y": 2018
+      }
+    ]
+  },
+  "dqn>ddqn": {
+    "lead": "DQN inherited Q-learning's maximum and, with a function approximator, made its optimistic bias much worse. Double DQN corrects it with a rearrangement of machinery DQN already has: let the online network choose the action and the target network score it.",
+    "blocks": [
+      {
+        "h": "The bias, measured",
+        "b": "A maximum over noisy estimates is biased upward, because the $\\max$ selects whichever action noise has overrated. With a table and decaying noise that washes out; with a network whose errors are correlated across states and persistent, it does not.\n\nThe bootstrap then compounds it. An inflated target raises $Q(s,a)$, which becomes the target for the states preceding it. Van Hasselt et al. plot DQN's value estimates against the returns actually achieved on Atari and find them diverging far above anything the game permits.\n\nWhat makes this more than cosmetic is that the bias is not uniform across actions, so it does not cancel in the $\\arg\\max$ — it distorts which action looks best, not merely the scale of everything."
+      },
+      {
+        "h": "One line",
+        "b": "DQN's target is $y = r + \\gamma \\max_{a'} Q^-(s', a')$: one network both selects and evaluates, so its own noise confirms itself.\n\nDouble DQN splits the roles:\n\n$$y = r + \\gamma \\, Q^-\\Big(s',\\; \\arg\\max_{a'} Q(s', a'; \\theta)\\Big)$$\n\nThe online network names the action; the frozen target network says what it is worth. An action overrated by the online network's noise is unlikely to be overrated in the same way by a network trained on different data at a different time, so the inflated estimate is not confirmed.\n\nDQN already maintains both networks, so this costs nothing — no new parameters, no new hyperparameter, the same two networks in a different arrangement."
+      },
+      {
+        "h": "Partial, and revisited",
+        "b": "Value estimates become far more accurate and scores improve across much of the suite. The paper's more interesting demonstration is that better values and better policies move together here, which is not automatic — a uniformly wrong value function can still rank actions correctly.\n\nThe correction is partial and van Hasselt says so. $\\theta^-$ is a delayed copy of $\\theta$, so the two networks' errors are correlated; a longer delay decorrelates them and makes the target staler.\n\nThe fully decoupled version — two critics trained independently — is what TD3 uses in continuous control three years later, taking the minimum of the pair rather than trusting a delayed copy. That it was still worth doing then says the problem was reduced here rather than solved."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Deep Reinforcement Learning with Double Q-learning",
+        "y": 2016
+      },
+      {
+        "t": "Double Q-learning",
+        "y": 2010
+      }
+    ]
+  },
+  "dqn>dueling": {
+    "lead": "DQN's head emits one number per action, and in most states nearly all of that number is a property of the state rather than of the action. The duelling architecture splits the estimate into a state value and an action advantage, so the shared part is learned once instead of separately under every action.",
+    "blocks": [
+      {
+        "h": "The redundancy",
+        "b": "Write $Q(s,a) = V(s) + A(s,a)$, where the advantage measures how much better an action is than the state's average. In many states the advantage is near zero for every action — an Atari frame with nothing nearby has the same outcome whatever the joystick does.\n\nDQN must nonetheless learn $Q(s,a)$ separately for each $a$, and each estimate carries the whole of $V(s)$. The same quantity is represented $|A|$ times, and each copy is trained only on the transitions where that particular action was taken.\n\nThe duelling network computes a scalar $V(s)$ and a vector $A(s,a)$ from shared features. Now every transition from a state updates $V(s)$, whichever action was chosen, which is where the efficiency comes from."
+      },
+      {
+        "h": "Pinning the decomposition down",
+        "b": "The naive sum is not identifiable: adding a constant to $V$ and subtracting it from every $A$ leaves $Q$ unchanged, so the streams can drift arbitrarily.\n\nThe fix forces the advantage to average to zero over actions:\n\n$$Q(s,a) = V(s) + \\Big(A(s,a) - \\frac{1}{|\\mathcal{A}|}\\sum_{a'} A(s,a')\\Big)$$\n\nSubtracting the maximum instead is cleaner in theory — it makes $V$ exactly the greedy action's value — and the paper reports the mean version more stable, because its target moves less when the greedy action changes. A less principled choice kept for a stated empirical reason, which is worth noting as such."
+      },
+      {
+        "h": "Architecture only",
+        "b": "Nothing else changes: the loss, the replay buffer and the target network are DQN's. That is why it composes freely with Double DQN and prioritised replay, and why Rainbow can adopt all three at once.\n\nThe gain concentrates in states with many similarly-valued actions, so it scales with the action count and with how often the choice is inconsequential. Where actions genuinely differ there is little to share and the architecture buys nothing — and in Rainbow's ablation, with a distributional head already reducing variance in value estimation, removing duelling costs almost nothing.\n\nThe decomposition itself outlived the architecture. Advantage rather than raw return is what actor-critic methods estimate, for exactly the reason given here: subtracting the state's value removes variance carrying no information about the action."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Dueling Network Architectures for Deep Reinforcement Learning",
+        "y": 2016
+      },
+      {
+        "t": "Human-level control through deep reinforcement learning",
+        "y": 2015
+      }
+    ]
+  },
+  "dqn>per": {
+    "lead": "DQN's replay buffer breaks the correlation between consecutive samples and then draws from it uniformly, so a transition the agent has already mastered is replayed as often as one it still gets badly wrong. Prioritised replay samples by TD error, and pays for the resulting bias with an importance-sampling correction.",
+    "blocks": [
+      {
+        "h": "Surprise as a priority",
+        "b": "The magnitude of the TD error measures how wrong the current estimate was about a transition — how much there is still to learn from it. Sampling in proportion to it concentrates updates where the network disagrees with its own target.\n\nPure greedy prioritisation fails: a transition whose error is momentarily zero would never be revisited, and outliers would monopolise the buffer. So the priority is softened and floored,\n\n$$P(i) = \\frac{p_i^{\\alpha}}{\\sum_k p_k^{\\alpha}}, \\qquad p_i = |\\delta_i| + \\epsilon$$\n\nwith $\\alpha$ interpolating from uniform at $0$ to greedy at $1$. A rank-based variant using $1/\\mathrm{rank}$ is more robust to outliers at similar cost."
+      },
+      {
+        "h": "The bias, and its correction",
+        "b": "Q-learning's update assumes samples come from the distribution the loss is defined over. Changing the sampling distribution biases the gradient — the network is fitted to a reweighted version of the data.\n\nImportance sampling weights repair it, $w_i \\propto (1/(N P(i)))^{\\beta}$, normalised by their maximum for stability. The exponent $\\beta$ is annealed towards $1$ over training, so the bias is tolerated early, when estimates are wrong anyway and speed matters, and removed by the end when the solution is being fixed.\n\nSampling and updating priorities over a million-transition buffer needs a sum-tree to stay $O(\\log N)$, which is a real implementation cost that uniform sampling does not have."
+      },
+      {
+        "h": "Staleness, and where the idea recurs",
+        "b": "Priorities are recorded when a transition is sampled and every subsequent gradient step changes what its error would now be, so the buffer is ranked by an ageing snapshot. New transitions are inserted at maximum priority to guarantee one visit — a heuristic, not a fix.\n\nTwo hyperparameters appear, $\\alpha$ and the $\\beta$ schedule, and they interact with the learning rate: prioritisation effectively enlarges updates on high-error transitions, so the paper lowers the step size alongside it.\n\nThe gains are large and broad, and in Rainbow's ablation prioritised replay is among the two components whose removal costs most. The same instinct appears outside RL as hard example mining, and the focal loss is its continuous form — reweight rather than resample, so nothing is discarded and no importance correction is needed."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Prioritized Experience Replay",
+        "y": 2016
+      },
+      {
+        "t": "Human-level control through deep reinforcement learning",
+        "y": 2015
+      }
+    ]
+  },
+  "dqn>noisy": {
+    "lead": "DQN explores with $\\epsilon$-greedy: act at random with some probability, on a schedule decided in advance. Noisy networks put learnable noise in the weights instead, so exploration becomes part of the policy — directed by what the network has learned, and annealed by the gradient rather than by a schedule.",
+    "blocks": [
+      {
+        "h": "What is wrong with acting at random",
+        "b": "$\\epsilon$-greedy has two defects. It is **undirected** — the random action is drawn uniformly, ignoring everything the network knows about which alternatives are plausible. And it is **inconsistent across time**: an independent coin flip at every step, so a task requiring a sustained deviation from the greedy policy to reach a reward is exponentially unlikely to be explored.\n\nThe schedule is the third problem. $\\epsilon$ decays according to a curve fixed before training, identical across states, so exploration cannot persist where it is still needed or stop where it is not."
+      },
+      {
+        "h": "Noise in the parameters",
+        "b": "A noisy linear layer replaces each weight with a mean plus a scaled perturbation:\n\n$$y = (\\mu^w + \\sigma^w \\odot \\varepsilon^w)\\, x + (\\mu^b + \\sigma^b \\odot \\varepsilon^b)$$\n\nwith $\\varepsilon$ resampled per forward pass and $\\mu, \\sigma$ trained by backpropagation through the reparameterisation — the same mechanism a VAE uses.\n\nSampling the noise once per episode gives a **coherent** alternative policy: the agent commits to behaving differently for a while, rather than twitching randomly at each step. And because $\\sigma$ is learned, exploration anneals itself — driven towards zero where extra randomness no longer pays and left large where it does, at different rates in different games with no schedule specified.\n\n**Factorised** noise draws $p + q$ samples per layer instead of $p \\times q$ and forms the matrix as an outer product, which keeps generation linear in width."
+      },
+      {
+        "h": "Where it helps",
+        "b": "The benefit concentrates in hard-exploration games, which is where $\\epsilon$-greedy fails most visibly, and is modest elsewhere. In Rainbow's ablation it is useful but not among the largest contributors.\n\nThe costs are that every noisy layer doubles its parameters, and that weight-space noise has no interpretation — a perturbation is consistent, but nothing guarantees it corresponds to a sensible alternative strategy.\n\nThe broader claim it makes is that exploration should be part of the learned policy rather than a wrapper around it. Maximum-entropy methods make the same argument from the other direction: SAC rewards the policy for staying stochastic in the objective itself, rather than injecting stochasticity into a deterministic one."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Noisy Networks for Exploration",
+        "y": 2018
+      },
+      {
+        "t": "Human-level control through deep reinforcement learning",
+        "y": 2015
+      }
+    ]
+  },
+  "ddqn>rainbow": {
+    "lead": "Rainbow's premise is that DQN's known defects were fixed independently and never together. Double Q-learning is the first component it takes — the decoupling of action selection from evaluation — and the ablation's verdict on it is more interesting than the paper's headline.",
+    "blocks": [
+      {
+        "h": "What is carried over",
+        "b": "The mechanism is unchanged: the online network names the action, the target network scores it, so the noise that selects is not the noise that evaluates. It costs nothing, since both networks already exist.\n\nRainbow applies it inside the distributional setting, which needs a small adjustment. C51 predicts a distribution over returns rather than a scalar, so \"the best action\" means the one with the greatest **expected** value under the predicted distribution, and the target distribution is the one the target network assigns to that action."
+      },
+      {
+        "h": "Why the bias is worth attacking first",
+        "b": "Of the six components, this is the one with the clearest diagnosis behind it: a named statistical bias, measured against achieved returns, with a targeted correction. It is also the cheapest — no parameters, no hyperparameters, no architectural change.\n\nOverestimation also interacts with everything else in the stack. Prioritised replay ranks by TD error, and systematically inflated targets inflate those errors; multi-step returns compound the bias over more steps. Fixing it first makes the other components' signals cleaner."
+      },
+      {
+        "h": "The ablation's surprise",
+        "b": "Removing double Q-learning from the full Rainbow agent costs remarkably little — it is among the smallest of the six contributions, and on some games removing it helps.\n\nThe explanation the paper offers is that the distributional loss is already doing part of the same job. Predicting a full return distribution and taking an expectation is more robust to the outliers that drive overestimation than regressing a scalar towards a maximum, so the two overlap.\n\nThat is the finding an individual paper could not have produced, and it is Rainbow's real contribution: a component's value depends on what else is present, and the literature's practice of comparing each fix against a bare DQN systematically overstates them."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Rainbow: Combining Improvements in Deep Reinforcement Learning",
+        "y": 2018
+      },
+      {
+        "t": "Deep Reinforcement Learning with Double Q-learning",
+        "y": 2016
+      }
+    ]
+  },
+  "dueling>rainbow": {
+    "lead": "The duelling architecture is a pure change to the network's head, which is what makes it trivially composable — Rainbow adopts it alongside five other modifications with no interaction to negotiate, except for one adjustment forced by the distributional output.",
+    "blocks": [
+      {
+        "h": "Two streams over a distribution",
+        "b": "A plain duelling head produces a scalar $V(s)$ and a vector $A(s,a)$, combined with the advantage mean subtracted so the decomposition is identifiable.\n\nRainbow's output is not a scalar but a distribution over a fixed support of return atoms, so the streams must produce distributions too. The value stream emits one distribution over atoms; the advantage stream emits one per action; and they are combined atom by atom, with the advantage mean over actions subtracted at each atom, then normalised by a softmax.\n\nIt is the same construction lifted one dimension, and it works without further modification — which is the sort of thing that only becomes apparent when someone tries to combine six papers."
+      },
+      {
+        "h": "Why it composes so easily",
+        "b": "Duelling touches nothing but the architecture. The loss, the replay buffer, the target network and the exploration mechanism are untouched, so there is no interaction with double Q-learning, prioritised replay or noisy networks to resolve.\n\nThat is not true of every component. Prioritised replay ranks by TD error and the distributional loss replaces the TD error with a KL divergence, so the two had to be reconciled; multi-step returns fold into the distributional target by shifting and scaling the support. Duelling simply drops in."
+      },
+      {
+        "h": "The smallest contribution",
+        "b": "In the ablation, removing duelling from the combined agent is close to neutral — the smallest effect of the six — even though it clearly helps a plain DQN.\n\nThe reason is the same overlap that reduces double Q-learning's contribution. Duelling reduces variance in value estimation by sharing the state's value across actions; the distributional head reduces variance in its own way by modelling the whole return distribution. Both are addressing noise in the value estimate, and the second largely subsumes the first.\n\nSo the honest summary is that duelling is a good idea whose measured benefit depends entirely on the company it keeps — and that the decomposition it introduced, $Q$ as $V$ plus advantage, has been far more influential in the policy-gradient family than the architecture ever was here."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Rainbow: Combining Improvements in Deep Reinforcement Learning",
+        "y": 2018
+      },
+      {
+        "t": "Dueling Network Architectures for Deep Reinforcement Learning",
+        "y": 2016
+      }
+    ]
+  },
+  "per>rainbow": {
+    "lead": "Prioritised replay is one of the two components Rainbow depends on most, and it is also the one that required the most adjustment — because it ranks transitions by TD error and Rainbow's loss is not a TD error.",
+    "blocks": [
+      {
+        "h": "Ranking by a divergence instead",
+        "b": "Prioritised replay samples in proportion to $|\\delta|^{\\alpha}$, where $\\delta$ is the scalar temporal-difference error. Rainbow's distributional loss replaces that scalar regression with a KL divergence between the projected target distribution and the predicted one.\n\nSo the priority becomes the KL term itself. It plays the same role — a measure of how wrong the network currently is about a transition — and the paper reports it working better than using the expected-value TD error would, since it registers a transition whose predicted *shape* is wrong even when the mean happens to be right.\n\nThe importance-sampling weights and the annealed $\\beta$ carry over unchanged, since the bias being corrected is a property of the sampling distribution rather than of the loss."
+      },
+      {
+        "h": "Why it matters more in combination",
+        "b": "Prioritisation and multi-step returns are the two components whose removal costs most across the suite, and consistently rather than on particular games.\n\nBoth are about getting the learning signal to where it is useful faster — multi-step by propagating reward over more steps per update, prioritisation by spending updates on transitions that still carry error. Neither changes what is being estimated; both change how quickly the estimate improves, and in a family whose defining weakness is sample efficiency that is where the leverage is.\n\nThe components that change *what* is estimated — duelling, double Q-learning — turn out to matter less once the distributional head is present."
+      },
+      {
+        "h": "What it costs the agent",
+        "b": "The sum-tree and the priority bookkeeping are real implementation complexity, and the staleness problem is unchanged: priorities age between visits, and new transitions are inserted at maximum priority as a heuristic.\n\nTwo hyperparameters come with it and interact with the learning rate, since prioritisation effectively enlarges the updates on high-error transitions. Rainbow inherits all of this, and its hyperparameters are tuned for the combination rather than transferred from the individual papers — which is part of why reproducing the agent is harder than assembling six modules."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Rainbow: Combining Improvements in Deep Reinforcement Learning",
+        "y": 2018
+      },
+      {
+        "t": "Prioritized Experience Replay",
+        "y": 2016
+      }
+    ]
+  },
+  "noisy>rainbow": {
+    "lead": "Rainbow replaces $\\epsilon$-greedy entirely with noisy layers, which is the only one of the six components that changes how the agent behaves rather than how it learns — and the one whose benefit is most unevenly distributed across the games.",
+    "blocks": [
+      {
+        "h": "Exploration folded into the network",
+        "b": "Every linear layer in the value and advantage streams becomes noisy: weights are a learned mean plus a learned scale times resampled Gaussian noise, with the factorised variant used to keep noise generation cheap.\n\n$\\epsilon$-greedy is removed outright, along with its decay schedule. That deletes a hyperparameter that had to be tuned per task and could not adapt within one, and replaces it with a quantity the gradient controls — $\\sigma$ shrinks where extra randomness stops paying and persists where it does not.\n\nBecause the noise is resampled per forward pass rather than per step within an episode, the exploration is less temporally coherent than the original paper's episodic sampling, which is a simplification Rainbow makes without comment."
+      },
+      {
+        "h": "The one behavioural change",
+        "b": "The other five components alter the target, the loss, the sampling distribution or the architecture — what the agent learns from data it was going to collect anyway. Noisy networks alter what data is collected.\n\nThat makes its interaction with the rest indirect and hard to predict. Better exploration changes the buffer's contents, which changes what prioritised replay ranks highly, which changes what the distributional head is fitted to. The ablation measures the net effect and cannot separate those paths."
+      },
+      {
+        "h": "Uneven, and concentrated where it matters",
+        "b": "Removing noisy networks from Rainbow costs moderately on average and heavily on the hard-exploration games — the ones where $\\epsilon$-greedy's undirected, temporally inconsistent randomness fails outright.\n\nThat is the expected shape: on a game where any reasonable policy stumbles into reward, exploration method is nearly irrelevant; on one requiring a long specific sequence before any reward appears, it is the whole problem.\n\nNeither noisy networks nor anything else in Rainbow solves that harder case. Montezuma's Revenge and its relatives remained unsolved by this family, and the methods that eventually made progress — intrinsic motivation, count-based bonuses, episodic memory — attack exploration as a distinct problem rather than as a modification to the policy's noise."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Rainbow: Combining Improvements in Deep Reinforcement Learning",
+        "y": 2018
+      },
+      {
+        "t": "Noisy Networks for Exploration",
+        "y": 2018
+      }
+    ]
+  },
+  "reinforce>ac": {
+    "lead": "REINFORCE multiplies each action's log-probability gradient by the return of the entire trajectory, which is unbiased and so noisy that learning is impractical. Actor-critic replaces that return with a learned value estimate, accepting bias in exchange for a large reduction in variance.",
+    "blocks": [
+      {
+        "h": "Why the Monte Carlo return is too noisy",
+        "b": "The estimator multiplies $\\nabla_\\theta \\log \\pi_\\theta(a_t \\mid s_t)$ by $R(\\tau)$, the sum of rewards over a whole trajectory. That scalar depends on every subsequent action and every environment transition, almost none of which the action at time $t$ influenced.\n\nSo the signal attributed to one action is dominated by variance from elsewhere, and its magnitude grows with the horizon. If all returns are large and positive, every action's probability is increased and learning depends on small differences between large numbers.\n\nA baseline helps — subtracting any function of the state leaves the estimator unbiased, since $\\mathbb{E}[\\nabla_\\theta \\log \\pi_\\theta] = 0$ — and the variance-minimising baseline is close to the state's expected return. Learning that baseline with a second network is what makes the method an actor-critic."
+      },
+      {
+        "h": "Bootstrapping the return away",
+        "b": "The critic goes further than a baseline. Rather than subtract $V(s)$ from a Monte Carlo return, replace the return with a bootstrapped estimate, and the advantage becomes the one-step TD error:\n\n$$\\hat{A}_t = r_t + \\gamma V_w(s_{t+1}) - V_w(s_t)$$\n\nThis involves one reward and one transition rather than a whole trajectory, so its variance is bounded by the reward scale instead of growing with the horizon. It inherits whatever error is in $V_w$, which is the bias being bought.\n\nThe trade is favourable because the critic's error is systematic and shrinking while Monte Carlo's variance is irreducible. Intermediate settings exist — $n$-step returns, and generalised advantage estimation averaging over all $n$ with a geometric weight — giving the same dial TD($\\lambda$) provides for prediction."
+      },
+      {
+        "h": "What the coupling costs",
+        "b": "Two learners now depend on each other. A wrong critic biases the actor's gradient in a way no amount of data corrects while the critic remains wrong, and an actor that moves quickly changes the distribution the critic is being fitted to.\n\nThe theory has a condition addressing this — the gradient is unbiased if the critic is *compatible*, meaning its features are the policy's score function — and no practical implementation satisfies it, since critics are ordinary networks with their own architecture. Every actor-critic method in use is therefore outside what is proved, which is worth stating rather than glossing.\n\nWhat remains from REINFORCE is that the method is on-policy: the expectation is over trajectories from the current policy, so each batch is used and discarded. A3C attacks that with parallel environments; the step-size problem it leaves — a policy update changes the states visited, so too large a step is unrecoverable — is what TRPO and PPO are for."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Policy Gradient Methods for Reinforcement Learning with Function Approximation",
+        "y": 2000
+      },
+      {
+        "t": "Simple Statistical Gradient-Following Algorithms for Connectionist Reinforcement Learning",
+        "y": 1992
+      },
+      {
+        "t": "High-Dimensional Continuous Control Using Generalized Advantage Estimation",
+        "y": 2016
+      }
+    ]
+  },
+  "ac>a2c": {
+    "lead": "An actor-critic method is on-policy, so it cannot use DQN's replay buffer to decorrelate its updates — and without decorrelation, learning from a single environment is unstable. A3C gets the decorrelation from parallelism instead: many environments stepping at once, so a batch is already diverse.",
+    "blocks": [
+      {
+        "h": "Decorrelating across space rather than time",
+        "b": "Replay breaks the correlation between consecutive transitions by mixing across time, which requires storing old data and therefore learning off-policy. A policy gradient's expectation is over the current policy's trajectories, so stored data is invalid the moment the policy changes.\n\nRunning $N$ environment copies breaks the correlation across **space**. At any moment the workers are in unrelated states of unrelated episodes, so a batch assembled from one step of each is decorrelated by construction, and every sample is fresh.\n\nThat makes the whole on-policy family usable at scale, which had previously been the blocker. The paper's practical headline is that A3C trained on a multi-core CPU in less wall-clock time than GPU-based DQN needed — a change in who could run these experiments."
+      },
+      {
+        "h": "Asynchronous, and then not",
+        "b": "In A3C each worker holds its own parameter copy, computes gradients on its own rollout, and applies them to a shared parameter server without locking. Workers are slightly stale relative to each other, and the paper argues this adds a further decorrelating effect.\n\nThe synchronous variant A2C — all workers step together, gradients averaged, one update applied — was found to work as well or better. It removes the stale-gradient complication and, decisively for later practice, batches the forward passes so a GPU is used efficiently.\n\nThat A2C matches A3C is the informative result: the asynchrony was never doing the work, the parallelism was."
+      },
+      {
+        "h": "What comes with it",
+        "b": "Three details recur throughout everything downstream. Returns are $n$-step rather than one-step, propagating reward faster at a modest cost in bias. An **entropy bonus** in the objective rewards the policy for staying uncertain, expressing exploration in the loss rather than as injected noise — the direction SAC later takes much further. And actor and critic share a trunk with two heads, which halves the compute and makes their relative loss weighting a hyperparameter that matters.\n\nThe standing cost is that on-policy means one gradient step per batch: every sample is used once and discarded. A3C is far less sample-efficient than DQN per environment interaction, and its advantage is wall-clock time where interactions are cheap. That confines the family to simulation rather than robotics, and it is exactly what PPO's clipped objective relaxes by squeezing several epochs out of each batch."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Asynchronous Methods for Deep Reinforcement Learning",
+        "y": 2016
+      },
+      {
+        "t": "Policy Gradient Methods for Reinforcement Learning with Function Approximation",
+        "y": 2000
+      }
+    ]
+  },
+  "ac>trpo": {
+    "lead": "An actor-critic method reduces the variance of the policy gradient and says nothing about how far to follow it. That omission is more serious in reinforcement learning than in supervised learning, because a policy that steps too far changes the states it visits, and the data needed to recover is no longer being collected.",
+    "blocks": [
+      {
+        "h": "Why the step size is not a tuning detail",
+        "b": "In supervised learning an oversized step raises the loss and the next batch corrects it, because the data distribution is fixed. A policy's data distribution is generated by the policy, so a bad update degrades the data as well as the parameters, and the degradation is self-sustaining.\n\nThe same change in $\\theta$ also means different things at different points: a small step can flip a near-deterministic policy's preferred action, and a large one can barely perturb a diffuse one. Euclidean distance in parameter space says nothing about distance between the distributions the policy induces, so no fixed learning rate is safe throughout training."
+      },
+      {
+        "h": "A constraint in distribution space",
+        "b": "TRPO starts from a bound: the true return of a new policy is at least a surrogate computed under the old one, minus a penalty in their KL divergence. The prescribed penalty is far too conservative to be practical, so it becomes a hard constraint:\n\n$$\\max_{\\theta} \\; \\mathbb{E}\\left[\\frac{\\pi_\\theta(a \\mid s)}{\\pi_{\\text{old}}(a \\mid s)} \\, \\hat{A}\\right] \\quad \\text{s.t.} \\quad \\mathbb{E}\\big[D_{\\mathrm{KL}}(\\pi_{\\text{old}} \\,\\|\\, \\pi_\\theta)\\big] \\leq \\delta$$\n\nThe advantage $\\hat{A}$ is the actor-critic estimate, so the critic's role is unchanged; what is added is the constraint and the importance ratio, which lets one batch score a policy that did not generate it.\n\nBecause $\\delta$ bounds a divergence rather than a parameter distance, it means the same thing at every point in training and across architectures — which is why TRPO is unusually insensitive to hyperparameters."
+      },
+      {
+        "h": "The machinery, and what replaced it",
+        "b": "Solving the constrained problem needs a second-order method: a quadratic approximation to the KL constraint whose matrix is the Fisher information, a linear approximation to the objective, conjugate gradient using Fisher-vector products so the matrix is never formed, and a line search to enforce the constraint exactly.\n\nThat is a substantial implementation burden, it interacts badly with parameter sharing between actor and critic, and it does not extend cleanly to recurrent or otherwise structured architectures.\n\nPPO's contribution is getting most of the effect from a first-order objective — clip the importance ratio so the surrogate stops rewarding large moves — which is why PPO rather than TRPO became the default. The trust-region framing, though, is what every policy-gradient method since assumes."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Trust Region Policy Optimization",
+        "y": 2015
+      },
+      {
+        "t": "A Natural Policy Gradient",
+        "y": 2001
+      }
+    ]
+  },
+  "trpo>ppo": {
+    "lead": "TRPO's trust region is correct and expensive — conjugate gradient, Fisher-vector products and a line search on every update. PPO gets a comparable effect from a first-order objective: clip the importance ratio so that moving too far stops improving the surrogate, and the constraint enforces itself through the gradient.",
+    "blocks": [
+      {
+        "h": "The clip, and the min",
+        "b": "With $r_t(\\theta) = \\pi_\\theta(a_t \\mid s_t) / \\pi_{\\text{old}}(a_t \\mid s_t)$,\n\n$$L^{\\text{CLIP}}(\\theta) = \\mathbb{E}_t\\Big[\\min\\big(r_t \\hat{A}_t, \\; \\mathrm{clip}(r_t, 1-\\epsilon, 1+\\epsilon)\\hat{A}_t\\big)\\Big]$$\n\nwith $\\epsilon = 0.2$ typically. The clip removes the incentive to push a ratio past the band: with positive advantage, raising $r_t$ above $1+\\epsilon$ yields nothing further.\n\nThe $\\min$ is what makes it usable, and it is asymmetric on purpose. It leaves the objective **unclipped in the direction that undoes an excessive move**, so a ratio that has already gone too far still has a gradient pulling it back. Clipping alone, without the $\\min$, would flatten the objective in both directions and strand the policy where it landed."
+      },
+      {
+        "h": "Several epochs from one batch",
+        "b": "TRPO takes one constrained step per batch. PPO's bounded surrogate makes it safe to run several epochs of minibatch updates over the same rollout before collecting more, because the clip limits how badly the importance correction can behave as the policy drifts from the one that generated the data.\n\nThat is worth several times the data efficiency, and it places PPO between the on-policy and off-policy families — not as efficient as a replay-buffer method, far better than A2C, and without the instability that off-policy value learning brings.\n\nEverything else is inherited: GAE for the advantages, a value-function loss, an entropy bonus, and parallel environments for decorrelation."
+      },
+      {
+        "h": "How much the clip is actually doing",
+        "b": "PPO became the default and is used from continuous control to Dota to the RLHF pipelines behind instruction-tuned language models, largely because it is simple and forgiving.\n\nLater ablations complicated the credit. A substantial share of PPO's advantage over TRPO traces to implementation details reported as incidental — observation and reward normalisation, orthogonal initialisation, learning-rate annealing, gradient clipping, advantage normalisation — rather than to the clipped objective. Reproducing published numbers depends on them.\n\nAnd the clip does not guarantee a trust region: nothing bounds the KL divergence, which can exceed any intended limit within an epoch. The algorithm is excellent; the mechanism it is named for is doing less of the work than the paper implies, and that is worth saying plainly."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Proximal Policy Optimization Algorithms",
+        "y": 2017
+      },
+      {
+        "t": "Trust Region Policy Optimization",
+        "y": 2015
+      },
+      {
+        "t": "Implementation Matters in Deep RL: A Case Study on PPO and TRPO",
+        "y": 2020
+      }
+    ]
+  },
+  "ppo>grpo": {
+    "lead": "PPO needs a critic to supply the baseline, and when the policy is a large language model that critic is a second network of comparable size. GRPO deletes it: sample a group of responses to the same prompt, score them, and use the group's own mean and spread as the baseline.",
+    "blocks": [
+      {
+        "h": "The group replaces the value network",
+        "b": "A policy gradient needs a baseline or its variance is unusable. PPO learns one — a value network predicting the return from each state, which for a language model means training a full transformer alongside the policy and fitting it to a single scalar arriving at the end of a long sequence.\n\nGRPO observes that when a prompt can be answered several times and each answer scored, the group supplies the baseline directly:\n\n$$\\hat{A}_i = \\frac{r_i - \\mathrm{mean}(r_1, \\ldots, r_G)}{\\mathrm{std}(r_1, \\ldots, r_G)}$$\n\nThe mean is an unbiased estimate of the expected reward for that prompt — exactly what the critic was approximating — computed from samples instead of learned. Dividing by the standard deviation normalises across prompts of differing difficulty, so a prompt where every sample scores alike contributes little signal, which is the right behaviour.\n\nThe clipped surrogate and the KL term to a reference policy are kept; GRPO applies the KL as a separate term rather than folding it into the reward."
+      },
+      {
+        "h": "What that changes in practice",
+        "b": "A PPO-based RLHF setup keeps four models resident: policy, reference, reward model, and critic. Removing the critic takes out roughly a quarter of the memory, all the compute spent training it, and a source of error — a poorly fitted critic biases every update, and critics for language models are hard to fit.\n\nThe cost is $G$ generations per prompt instead of one. Where the reward is a cheap programmatic check — a maths answer against a reference, a unit test against generated code — that trade is strongly favourable, since generation is the expensive part and scoring is nearly free."
+      },
+      {
+        "h": "Where the substitution holds",
+        "b": "The design assumes several responses to one prompt can be meaningfully compared. That is natural when correctness is checkable and weaker when the reward is a learned preference model over open-ended text, where the group mean is an estimate from a noisy scorer and the variance normalisation can amplify noise on prompts whose responses are all similar.\n\nGRPO's prominence comes from reasoning models trained against verifiable rewards, which is the regime it was designed in. The further it moves from checkable answers, the more its advantage over a well-fitted critic narrows.\n\nIt is one of three answers to the same complaint about PPO in alignment. DPO removes the RL loop entirely, deriving a supervised objective on preference pairs; rejection sampling simplifies by generating, filtering and training supervised. GRPO keeps the loop and deletes the critic, which sits between the two."
+      }
+    ],
+    "refs": [
+      {
+        "t": "DeepSeekMath: Pushing the Limits of Mathematical Reasoning in Open Language Models",
+        "y": 2024
+      },
+      {
+        "t": "Proximal Policy Optimization Algorithms",
+        "y": 2017
+      }
+    ]
+  },
+  "ac>dpg": {
+    "lead": "A stochastic policy gradient integrates over the action space, and in $d$ continuous dimensions that integral needs a great many samples. The deterministic policy gradient does not integrate over actions at all — it differentiates the critic with respect to its action input and pushes that gradient back through the actor.",
+    "blocks": [
+      {
+        "h": "Differentiating the critic instead of sampling it",
+        "b": "The stochastic policy gradient weights $\\nabla_\\theta \\log \\pi_\\theta(a \\mid s)$ by an advantage estimate and averages over sampled actions, so its variance grows with the action dimensionality.\n\nFor a deterministic policy $a = \\mu_\\theta(s)$ the gradient takes a chain-rule form with no expectation over actions:\n\n$$\\nabla_\\theta J(\\theta) = \\mathbb{E}_{s \\sim \\rho}\\Big[\\nabla_\\theta \\mu_\\theta(s) \\; \\nabla_a Q^{\\mu}(s, a)\\big|_{a = \\mu_\\theta(s)}\\Big]$$\n\nThe critic already provides $Q(s,a)$ as a differentiable function of the action, so $\\nabla_a Q$ is a backward pass. The actor is then told the direction in action space that increases value, rather than being scored on sampled attempts.\n\nThe paper shows this is the limit of the stochastic gradient as the policy's variance goes to zero, and demonstrates the advantage growing with $d$ — which had not been obvious, since the standard derivation depends on the expectation over actions that this form dispenses with."
+      },
+      {
+        "h": "Why continuous control needed it",
+        "b": "Q-learning cannot act in a continuous action space, because $\\arg\\max_a Q(s,a)$ is itself a nonlinear optimisation at every timestep, and discretising makes the action count exponential in the dimension.\n\nA deterministic actor is a learned replacement for that maximisation: it is trained to output the action the critic rates highest, so at run time the $\\arg\\max$ is a forward pass. That reframing is what makes the continuous-control branch of this lane possible at all."
+      },
+      {
+        "h": "Exploration leaves the algorithm",
+        "b": "A deterministic policy emits the same action for a state every time, so it explores nothing. DPG is therefore off-policy by construction: a stochastic behaviour policy collects the data and the deterministic target policy is learned from it.\n\nThe off-policy correction is unusually simple, since there is no action distribution to reweight — but exploration becomes a design choice outside the method, with its own noise process and scale to tune, and a poor one leaves the critic uninformed about the actions the actor is about to move towards.\n\nThe 2014 paper works with linear approximation. Applying it to neural networks runs straight into the deadly triad, which is what DDPG's replay buffer and target networks are for, and the overestimation that comes with an off-policy bootstrapped critic is what TD3 then addresses."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Deterministic Policy Gradient Algorithms",
+        "y": 2014
+      },
+      {
+        "t": "Policy Gradient Methods for Reinforcement Learning with Function Approximation",
+        "y": 2000
+      }
+    ]
+  },
+  "dpg>ddpg": {
+    "lead": "DPG supplied a gradient for continuous actions and worked with linear function approximation. With a neural critic it is the deadly triad — off-policy, bootstrapped, approximated — and diverges. DDPG is the assembly that makes it train: DPG's actor update with DQN's replay buffer and target networks.",
+    "blocks": [
+      {
+        "h": "DQN's stabilisers, softened",
+        "b": "The critic is trained by ordinary Q-learning regression with the target taken from frozen copies:\n\n$$y = r + \\gamma \\, Q^-\\big(s', \\mu^-(s')\\big)$$\n\nThe $\\max$ over actions is replaced by the target actor's output, which is the whole point of the deterministic formulation — the intractable maximisation becomes a forward pass.\n\nThe change from DQN is how targets are refreshed. Instead of a hard copy every few thousand steps, DDPG uses a **soft** update $\\theta^- \\leftarrow \\tau\\theta + (1-\\tau)\\theta^-$ with $\\tau \\approx 0.001$. Both actor and critic have targets and the two are coupled, so a discrete jump in either perturbs the other; a slowly trailing average keeps them moving together. This became standard for actor-critic methods."
+      },
+      {
+        "h": "Noise, added from outside",
+        "b": "Since the actor is deterministic, exploration is a wrapper. The paper adds an Ornstein-Uhlenbeck process to the actor's output during data collection — temporally correlated noise, on the argument that physical control has momentum and independent per-step perturbations largely cancel.\n\nLater work found uncorrelated Gaussian noise works about as well in most environments, which is a small illustration of how much of this lane's practice is empirical rather than derived. Either way the noise scale is a hyperparameter with its own schedule, and it is exactly what SAC replaces by putting entropy in the objective."
+      },
+      {
+        "h": "Working, and brittle",
+        "b": "DDPG solved a broad set of continuous-control tasks — locomotion, manipulation, driving — with one architecture and one hyperparameter set, from state vectors and from pixels. Before it, continuous control meant task-specific methods.\n\nIts reputation for being difficult to get working came with it, and the diagnosis arrived later. The actor is trained to **maximise** the critic, so any action the critic overrates is one the actor is pulled towards: errors are not merely inherited but actively sought, and an overestimated action attracts the actor, gets visited, and has its error reinforced.\n\nPerformance can collapse after appearing to converge, and results vary widely across random seeds — part of the reproducibility problem documented across the field around this time. TD3 addresses it with twin critics, delayed actor updates and target smoothing; SAC addresses it from the entropy side."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Continuous control with deep reinforcement learning",
+        "y": 2016
+      },
+      {
+        "t": "Deterministic Policy Gradient Algorithms",
+        "y": 2014
+      }
+    ]
+  },
+  "dqn>ddpg": {
+    "lead": "DDPG's actor update is DPG's; everything that makes it trainable is DQN's. The replay buffer, the target network and the off-policy setting cross over intact from discrete Atari control to continuous robotics, which is what this arrow records.",
+    "blocks": [
+      {
+        "h": "What crosses over",
+        "b": "**Experience replay** stores transitions and samples minibatches uniformly, breaking the correlation between consecutive samples and reusing each transition many times. It requires the method to be off-policy, which DPG already is by construction, so the pairing is natural rather than forced.\n\n**Target networks** hold the regression target still while the critic is fitted to it, converting a moving fixed point into a sequence of stationary ones.\n\nBoth address the same instability in both settings: a bootstrapped target computed from the network being updated, on correlated data, with a function approximator. Nothing about that diagnosis depends on the action space being discrete, which is why the transplant works."
+      },
+      {
+        "h": "What had to change",
+        "b": "The one place the transplant does not fit is the target's $\\max$. DQN evaluates $\\max_{a'} Q^-(s', a')$ by enumerating the actions; in a continuous space that enumeration does not exist.\n\nThe deterministic actor is the substitute — the target becomes $Q^-(s', \\mu^-(s'))$, with the target actor supplying the action. So there are now two networks with targets rather than one, and they are coupled: the critic's target depends on the actor, and the actor's gradient depends on the critic.\n\nThat coupling is why the hard periodic copy is replaced by a soft trailing average. A discrete jump in either target perturbs the other's learning problem, and moving both slowly keeps the pair consistent."
+      },
+      {
+        "h": "The bias crosses over too",
+        "b": "Q-learning's overestimation arrives with the machinery, and in this setting it is worse. In DQN the bias inflates value estimates; in DDPG the actor is explicitly trained to maximise the critic, so it seeks out precisely the actions whose values are most overestimated.\n\nThe result is a feedback loop with no counterpart in the discrete case, and it is the principal reason DDPG is harder to train than DQN despite being a straightforward combination of two working methods.\n\nDouble DQN's fix — a delayed copy for evaluation — is too weak here, since the target and online critics are too similar. TD3's twin critics, trained from independent initialisations with the minimum taken, are the continuous-control answer, and SAC adopts the same device."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Continuous control with deep reinforcement learning",
+        "y": 2016
+      },
+      {
+        "t": "Human-level control through deep reinforcement learning",
+        "y": 2015
+      },
+      {
+        "t": "Addressing Function Approximation Error in Actor-Critic Methods",
+        "y": 2018
+      }
+    ]
+  },
+  "ddpg>td3": {
+    "lead": "DDPG's actor maximises its critic, so overestimation is not merely inherited from Q-learning but actively sought — the actor finds whichever actions the critic has overrated. TD3 attacks the loop at three points, and measures the bias directly rather than assuming it.",
+    "blocks": [
+      {
+        "h": "Twin critics, and the minimum",
+        "b": "Double DQN decouples selection from evaluation using a delayed copy, which in an actor-critic setting is too weak: target and current critic are too similar for their errors to differ usefully.\n\nTD3 trains **two independent critics** and takes the smaller value for the target:\n\n$$y = r + \\gamma \\min_{i=1,2} Q^-_{\\theta_i}\\big(s', \\tilde{a}\\big)$$\n\nThe minimum is deliberately pessimistic. Where the critics disagree — which is where at least one is wrong — it takes the lower estimate. That introduces a bias in the opposite direction, and the paper's argument is that underestimation is the safe error: the actor is not drawn towards actions it undervalues, so nothing amplifies it."
+      },
+      {
+        "h": "Delaying the actor, smoothing the target",
+        "b": "**Delayed policy updates.** The actor and the target networks are updated once every two critic updates. A critic that is still badly wrong produces a badly wrong actor, whose data makes the critic worse; letting the critic settle first breaks the tightest loop.\n\n**Target policy smoothing.** Noise is added to the action used in the target, $\\tilde{a} = \\mu^-(s') + \\mathrm{clip}(\\varepsilon, -c, c)$. This is a regulariser expressing that similar actions should have similar values. Without it, a narrow spike of overestimation — a sharp error at one action — is exactly what the actor will find and exploit; averaging over a small neighbourhood makes such spikes unattractive."
+      },
+      {
+        "h": "Measured, and still three heuristics",
+        "b": "The paper's method is worth noting: it plots the critic's predicted value against the return actually achieved, showing DDPG's estimate diverging far above what the policy obtains while TD3's tracks it. Each of the three changes is introduced with an ablation rather than as a bundle.\n\nWhat results is markedly more stable than DDPG and became a standard baseline. It is nonetheless a set of targeted repairs rather than a reformulation, and each brings a constant — the update delay, the smoothing scale, the noise clip. The minimum over two critics is blunt, with pessimism unrelated to how uncertain the critics actually are.\n\nSAC arrives the same year from a different premise and also uses twin critics, which suggests the twin-critic minimum was the durable part and the rest was scaffolding around DDPG's particular failure."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Addressing Function Approximation Error in Actor-Critic Methods",
+        "y": 2018
+      },
+      {
+        "t": "Continuous control with deep reinforcement learning",
+        "y": 2016
+      }
+    ]
+  },
+  "ddpg>sac": {
+    "lead": "DDPG explores by adding a tuned noise process to a deterministic actor, which is brittle and schedule-dependent. SAC changes the objective instead: reward the policy for keeping entropy, so stochasticity is something the agent optimises rather than something applied on top of it.",
+    "blocks": [
+      {
+        "h": "Entropy in the return",
+        "b": "The objective augments reward with the policy's entropy at every step:\n\n$$J(\\pi) = \\sum_t \\mathbb{E}\\Big[r(s_t, a_t) + \\alpha \\, \\mathcal{H}\\big(\\pi(\\cdot \\mid s_t)\\big)\\Big]$$\n\nThe optimal policy is now a distribution rather than a point — energy-based, proportional to $\\exp(Q(s,a)/\\alpha)$ — so it retains probability on every near-optimal action instead of collapsing onto one.\n\nThree things follow. Exploration is directed towards actions the critic considers plausible rather than perturbed uniformly. Multiple solutions to a task are represented, so the policy degrades gracefully when one stops working. And the objective is smoother in the policy parameters than a hard maximum, which makes optimisation better behaved."
+      },
+      {
+        "h": "A stochastic actor, still differentiable",
+        "b": "DDPG's efficiency comes from differentiating the critic with respect to the action. SAC keeps that with a stochastic policy by using the **reparameterisation** trick: $a = \\tanh(\\mu_\\theta(s) + \\sigma_\\theta(s) \\odot \\epsilon)$, with the $\\tanh$ squashing into the action bounds.\n\nThe critic's gradient therefore flows through the sampled action into the policy parameters, exactly as in DPG, rather than through a high-variance score-function estimator. The policy loss reduces to maximising $\\mathbb{E}[Q(s,a) - \\alpha \\log \\pi(a|s)]$ — the critic's opinion, penalised by the policy's confidence.\n\nTwin critics with the minimum are used, arrived at independently of TD3 in the same year."
+      },
+      {
+        "h": "Removing the last hyperparameter",
+        "b": "$\\alpha$ is delicate: too high and the policy is aimlessly random, too low and it collapses to deterministic, and the right value shifts during training and across tasks since it trades against the reward scale.\n\nThe follow-up paper turns entropy into a **constraint** — require $\\mathbb{E}[-\\log \\pi(a|s)] \\geq \\bar{\\mathcal{H}}$ and update $\\alpha$ by dual gradient descent — with the target set from the action dimensionality, so nothing task-specific remains.\n\nThat is most of why SAC displaced DDPG and TD3 as the default: off-policy, sample-efficient, and working across tasks without per-task tuning. What it does not escape is the deadly triad, the million-step sample requirement for locomotion, or the fact that the deployed policy — usually the mean action — is not the stochastic one training optimised."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Soft Actor-Critic: Off-Policy Maximum Entropy Deep Reinforcement Learning with a Stochastic Actor",
+        "y": 2018
+      },
+      {
+        "t": "Soft Actor-Critic Algorithms and Applications",
+        "y": 2019
+      },
+      {
+        "t": "Continuous control with deep reinforcement learning",
+        "y": 2016
+      }
+    ]
+  },
+  "dqn>alphago": {
+    "lead": "DQN maps a state to action values and acts on them immediately — a reactive policy with no lookahead. AlphaGo keeps the learned evaluation and puts it inside a search: the network proposes and evaluates, and Monte Carlo tree search uses those judgements to look ahead before committing.",
+    "blocks": [
+      {
+        "h": "What a reactive policy cannot do",
+        "b": "DQN's $\\arg\\max_a Q(s,a)$ is a single forward pass. Whatever the network has learned about consequences is compiled into those values, and no further computation is spent at decision time.\n\nFor Atari that is largely sufficient, since the relevant horizon is short and reactive. For Go it is not: the value of a position depends on sequences dozens of moves deep, and no static evaluation of a board captures that. The branching factor of about 250 also puts the game far beyond the alpha-beta search that solved chess, and decades of effort had failed to produce a usable hand-written evaluation function.\n\nSo Go needed both halves — a learned evaluator, which DQN showed was possible, and a search to use it in."
+      },
+      {
+        "h": "Networks inside the tree",
+        "b": "AlphaGo trains three networks. A supervised policy network predicts human expert moves; a self-play-improved policy network is derived from it by policy gradients; and a value network is trained by regression on self-play outcomes to estimate a position's result.\n\nMCTS uses them to reduce the search in both directions. The policy's prior narrows **breadth** — only plausible moves are expanded — through a PUCT selection rule balancing accumulated value against prior and visit count:\n\n$$a_t = \\arg\\max_a \\Big( Q(s,a) + c \\, P(s,a) \\frac{\\sqrt{\\sum_b N(s,b)}}{1 + N(s,a)} \\Big)$$\n\nThe value network reduces **depth** — a line can be cut short and evaluated rather than played out. Leaves are scored by a mixture of the value network and a fast rollout to the end, which the paper finds better than either alone."
+      },
+      {
+        "h": "Search and learning improving each other",
+        "b": "The combination is what wins. Search corrects the policy's mistakes by examining consequences the network misjudged; the policy makes search affordable by concentrating it on a few thousand plausible lines rather than millions of arbitrary ones. Neither alone is close to professional strength.\n\nThat relationship is the durable idea. AlphaGo Zero makes it explicit by treating search as a **policy improvement operator** and training the network towards its output, which is what removes the need for human games entirely.\n\nWhat search demands in exchange is a perfect simulator: hypothetical positions must be playable, so the rules must be known and cheap to apply, and the environment deterministic and fully observed. Atari offers none of that from the agent's side, which is why this branch of the lane could not simply absorb the model-free one — and why MuZero's learned latent dynamics is the step that reunites them."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Mastering the game of Go with deep neural networks and tree search",
+        "y": 2016
+      },
+      {
+        "t": "Human-level control through deep reinforcement learning",
+        "y": 2015
+      },
+      {
+        "t": "Bandit based Monte-Carlo Planning",
+        "y": 2006
+      }
+    ]
+  },
+  "alphago>agz": {
+    "lead": "AlphaGo learned from thirty million human moves before it ever played itself. AlphaGo Zero starts from random weights, sees no human game, and is stronger — because search is reinterpreted from a way of playing into a way of generating training targets.",
+    "blocks": [
+      {
+        "h": "Search as policy improvement",
+        "b": "Run MCTS from a position using the current network's policy as its prior. The visit counts that result are a **better** policy than the prior, because search has looked ahead and corrected some of its mistakes.\n\nSo train the network's policy head towards those visit counts and its value head towards the game's outcome:\n\n$$\\ell = (z - v)^2 - \\boldsymbol{\\pi}^{\\top} \\log \\mathbf{p} + c\\|\\theta\\|^2$$\n\nThe network chases the search; the improved network makes the next search better; that search produces better targets again. It is policy iteration with MCTS as the improvement operator, and it needs no external data because search generates its own supervision.\n\nThe loop bootstraps from random play and passes the human-trained AlphaGo within days. That is the result which reframes the human data as scaffolding rather than foundation."
+      },
+      {
+        "h": "Three simplifications",
+        "b": "**One network** with two heads replaces the separate policy and value networks, on a residual trunk. The paper reports the combined network stronger than the pair, since the two objectives regularise each other.\n\n**No rollouts.** Leaves are evaluated by the value head alone, where AlphaGo mixed it with a fast simulated playout using a hand-engineered policy.\n\n**No hand-crafted features.** Input is the raw board plus a short history and the colour to play.\n\nWhat remains is the board, the rules, and the loop — a much simpler system that is much stronger, which is unusually clean evidence about what was load-bearing."
+      },
+      {
+        "h": "Keeping the loop from stalling",
+        "b": "A self-improvement loop can converge on itself: a confident network makes search follow its prior, games become repetitive, and the data stops containing anything new.\n\nTwo mechanisms prevent it. Dirichlet noise is added to the prior at every search root, so some unlikely moves are always tried. And early moves in self-play are sampled from the visit distribution proportionally rather than greedily, so openings vary.\n\nBoth are small and both are load-bearing — a self-play loop with no source of novelty converges to a fixed point that may be far from optimal. That is the fragility underneath the whole family, and it is why the exploration terms are not incidental details."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Mastering the game of Go without human knowledge",
+        "y": 2017
+      },
+      {
+        "t": "Mastering the game of Go with deep neural networks and tree search",
+        "y": 2016
+      }
+    ]
+  },
+  "agz>alphazero": {
+    "lead": "AlphaGo Zero removed the human data and remained a Go program, with Go-specific input planes, Go-specific augmentation and a Go-specific outcome model. AlphaZero strips those out and runs the same algorithm unchanged on chess and shogi.",
+    "blocks": [
+      {
+        "h": "Three assumptions that were Go's",
+        "b": "**Symmetry.** Go's board is invariant under eight rotations and reflections, which AlphaGo Zero exploits both to augment its training data and to average evaluations during search. Chess breaks that — castling and pawn direction are not symmetric — so the augmentation is removed entirely.\n\n**Binary outcomes.** Go cannot be drawn under the rules used; chess frequently is. The value head is retrained to estimate an expected outcome over win, draw and loss rather than a win probability.\n\n**Evaluation gating.** AlphaGo Zero kept a best-so-far network and replaced it only after a challenger won a match by a margin. AlphaZero maintains one continuously updated network and drops the gating matches — simpler and, the paper reports, no worse."
+      },
+      {
+        "h": "Against decades of accumulated engineering",
+        "b": "Stockfish and Elmo are the product of long human effort: hand-tuned evaluation functions with hundreds of terms, opening books, endgame tablebases, and alpha-beta search with elaborate pruning.\n\nAlphaZero has the rules and nothing else. Its search is also different in kind — MCTS examining tens of thousands of positions per move against alpha-beta's tens of millions, relying on evaluating them far better rather than on volume.\n\nThe analysis of its opening play is the more interesting evidence: it discovers standard human openings, plays them at measurable rates, and then discards some of them — a system rediscovering and re-evaluating a body of accumulated theory."
+      },
+      {
+        "h": "General within a class",
+        "b": "The claim is generality across a family, not generality outright. Chess, shogi and Go differ in board, pieces, move generation and outcome structure, and the same code and hyperparameters handle all three with only the rules module swapped — which the specialised-engine paradigm had assumed impossible.\n\nAll three are nonetheless two-player, zero-sum, deterministic, perfectly observed, and equipped with an exact simulator. Every one of those conditions is load-bearing: search plays out hypothetical futures, which requires the rules; stochasticity breaks the tree; partial observation makes a position insufficient as a state.\n\nSo this arrow marks the end of a line that removed human knowledge and game-specific engineering and cannot take the next step. MuZero does, by learning a latent dynamics model whose only obligation is to predict what planning consumes."
+      }
+    ],
+    "refs": [
+      {
+        "t": "A general reinforcement learning algorithm that masters chess, shogi, and Go through self-play",
+        "y": 2018
+      },
+      {
+        "t": "Mastering the game of Go without human knowledge",
+        "y": 2017
+      }
+    ]
+  },
+  "alphazero>muzero": {
+    "lead": "AlphaZero plans by playing out real moves in a real simulator, so it works only where the rules are given. MuZero learns a model instead — not of the environment, but of exactly the quantities planning consumes: reward, value and policy. The latent state it invents need not resemble anything.",
+    "blocks": [
+      {
+        "h": "Value equivalence, not reconstruction",
+        "b": "The obvious model-based approach predicts the next observation, and it fails twice: most of an observation is irrelevant to the decision, and reconstruction error is a poor proxy for planning usefulness. A model can render pixels beautifully and be useless for choosing a move.\n\nMuZero abandons reconstruction. Three functions are learned jointly — a **representation** $h$ mapping the observation history to a latent $s^0$, a **dynamics** $g$ mapping $(s^k, a)$ to the next latent and an immediate reward, and a **prediction** $f$ mapping a latent to a policy and a value.\n\nThe latent has no prescribed meaning and is never decoded. It is trained only so that unrolling $g$ and reading $f$ reproduces what search needs — the model must be *value equivalent* to the environment, not similar to it."
+      },
+      {
+        "h": "Training by unrolling, searching in latent space",
+        "b": "For each trajectory the network is unrolled $K$ steps from a real observation using the actions actually taken, with three losses at every step: predicted policy against the MCTS visit counts at that real timestep, predicted value against an $n$-step bootstrapped return, and predicted reward against the observed one. Gradients flow back through the whole unroll into the dynamics and representation.\n\nNothing supervises the latent directly; it is shaped entirely by having to support those predictions several steps ahead.\n\nMCTS then runs entirely in latent space, expanding nodes by applying $g$ with no environment interaction — so planning costs network evaluations rather than simulator calls, and the requirement for rules disappears."
+      },
+      {
+        "h": "One algorithm over two very different domains",
+        "b": "MuZero matches AlphaZero on Go, chess and shogi **without being given the rules**, and simultaneously reaches state of the art on Atari — a domain the AlphaZero line could not touch, since it has no rules module and gives rewards throughout rather than at the end.\n\nThat both are covered is the result. Board games need deep precise search; Atari needs perception and reactive control with shallow lookahead. Reward prediction inside the dynamics function is what makes the second work.\n\nWhat the latent cannot do is be inspected. It has no interpretation, so the model cannot be checked or reused for any question outside the three it was trained on, and it will confidently unroll into latent states corresponding to nothing when planning far from the data. The compute is also substantial — search at every step during both training and acting — which is the standing trade of this track, bought against sample efficiency."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Mastering Atari, Go, Chess and Shogi by Planning with a Learned Model",
+        "y": 2020
+      },
+      {
+        "t": "A general reinforcement learning algorithm that masters chess, shogi, and Go through self-play",
+        "y": 2018
+      },
+      {
+        "t": "The Value Equivalence Principle for Model-Based Reinforcement Learning",
+        "y": 2020
+      }
+    ]
+  },
+  "worldmodels>dreamer": {
+    "lead": "World Models trained a tiny controller by evolution inside a frozen dynamics model, with the three components fitted in sequence. Dreamer makes the model differentiable and trains through it — the policy gradient flows backwards through imagined rollouts — which turns a demonstration into a method competitive with model-free state of the art.",
+    "blocks": [
+      {
+        "h": "Removing the separation",
+        "b": "In World Models, V is fitted to random-policy data, M is fitted to V's encodings, and C is searched by CMA-ES inside the frozen pair. The staging is what keeps the controller small enough for a derivative-free optimiser, and it is also the weakness: V never sees the states a good policy visits, and no gradient connects the controller's performance back to the model's representation.\n\nDreamer trains the world model and the behaviour together, alternating between fitting the model on replayed real experience and improving actor and critic on trajectories imagined within it. The representation is therefore shaped by data the current policy actually generates."
+      },
+      {
+        "h": "Backpropagation through imagination",
+        "b": "Once the dynamics are differentiable, the actor need not be scored on sampled returns. Dreamer rolls the model forward from encoded real states for a fixed horizon, evaluates with a learned critic, and differentiates that value **through the dynamics** into the actor's parameters.\n\nThe gradient is analytic rather than estimated — the same advantage the deterministic policy gradient has over REINFORCE, extended across a multi-step imagined rollout.\n\nThe model itself is a recurrent state-space model with both a deterministic recurrent component and a stochastic one. The split matters: a purely deterministic model cannot express uncertainty about what happens next, and a purely stochastic one struggles to carry information over long horizons. The KL between the posterior state, which sees the observation, and the prior state, which must predict it blind, is what forces the model to be able to imagine forward at all."
+      },
+      {
+        "h": "What v3 fixed, and what remains",
+        "b": "The first versions worked and needed per-domain tuning, which for a method claiming generality is the substantive objection. DreamerV3 is mostly about scale invariance: a **symlog** transform on rewards and reconstruction targets so signals differing by orders of magnitude become comparable, **two-hot** distributional prediction of values and rewards instead of scalar regression, and KL terms clipped below a floor. One configuration then handles continuous control, Atari, and collecting diamonds in Minecraft from scratch.\n\nThe ceiling is unchanged. Everything the actor learns comes from imagined rollouts, so a systematic model error becomes a systematic policy error, and the optimiser actively seeks the model's mistakes — the exploitation problem World Models met and answered with noise. Dreamer bounds it with a short imagination horizon and continual refitting, which is mitigation rather than a solution. And the reconstruction objective spends capacity on visual detail whether or not control needs it, which is exactly what MuZero's value-equivalent model avoids by never reconstructing anything."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Dream to Control: Learning Behaviors by Latent Imagination",
+        "y": 2020
+      },
+      {
+        "t": "Mastering Diverse Domains through World Models",
+        "y": 2023
+      },
+      {
+        "t": "World Models",
+        "y": 2018
+      }
+    ]
+  },
+  "sac>cql": {
+    "lead": "SAC is off-policy and still assumes it can keep interacting. Fix the dataset and it fails, for a specific reason: the bootstrap queries $Q$ at actions the data never contains, those values are unconstrained, and the actor is trained to find whichever is highest.",
+    "blocks": [
+      {
+        "h": "Why off-policy is not offline",
+        "b": "Off-policy means the data need not come from the current policy. Offline means no more data will arrive, and the difference is the correction loop.\n\nOnline, an overestimated action gets tried, produces a poor outcome, and is corrected. Offline that loop is broken: nothing tests the estimate, so an arbitrarily wrong value can persist and grow through the bootstrap. And the direction is fatal — the target's maximisation selects precisely the action whose value is most overestimated, so extrapolation error is sought rather than averaged out.\n\nEmpirically, SAC and its relatives trained on a fixed buffer often perform worse than behavioural cloning on the same data, which for a nominally off-policy method is a striking failure."
+      },
+      {
+        "h": "Regularising the values, not the policy",
+        "b": "Earlier approaches constrained the policy to stay near the behaviour policy, which requires estimating that policy and is conservative in a way that ignores the value function.\n\nCQL regularises the critic instead. A term pushes $Q$ down on actions the learned policy would take and up on actions present in the data:\n\n$$\\min_{Q} \\; \\alpha \\Big( \\mathbb{E}_{s \\sim \\mathcal{D},\\, a \\sim \\mu}\\big[Q(s,a)\\big] - \\mathbb{E}_{(s,a) \\sim \\mathcal{D}}\\big[Q(s,a)\\big] \\Big) + \\mathcal{L}_{\\text{TD}}(Q)$$\n\nUnder stated conditions the result is a **lower bound** on the true value, so a policy maximising it cannot be relying on an overestimate. No behaviour policy is estimated, and the term drops into any actor-critic method — SAC in the paper's implementation, which is why this arrow runs from there."
+      },
+      {
+        "h": "Conservatism, and how to tune it",
+        "b": "The pessimism is uniform: applied wherever the policy departs from the data, regardless of whether that departure is well-supported. On a narrow dataset that is exactly right; on a broad, high-quality one it suppresses good actions slightly off-distribution, and CQL underperforms methods that trust the data more.\n\nThe strength $\\alpha$ controls this and there is no principled way to set it offline — the natural procedure is to evaluate candidates in the environment, which is what the setting forbids. Offline policy evaluation is its own unsolved problem, and in practice offline RL's hyperparameters are tuned using exactly the online access the premise excludes.\n\nWhat CQL does not question is the premise that offline RL should be dynamic programming with a correction. Decision Transformer takes the other route: if bootstrapping is what queries unseen actions, do not bootstrap."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Conservative Q-Learning for Offline Reinforcement Learning",
+        "y": 2020
+      },
+      {
+        "t": "Soft Actor-Critic: Off-Policy Maximum Entropy Deep Reinforcement Learning with a Stochastic Actor",
+        "y": 2018
+      },
+      {
+        "t": "Offline Reinforcement Learning: Tutorial, Review, and Perspectives on Open Problems",
+        "y": 2020
+      }
+    ]
+  },
+  "cql>dt": {
+    "lead": "CQL keeps dynamic programming and adds a penalty so the bootstrap cannot exploit unseen actions. Decision Transformer removes dynamic programming entirely: model the trajectory as a sequence, condition on the return you want, and train by supervised next-token prediction. There is no value function to be wrong.",
+    "blocks": [
+      {
+        "h": "Two ways to avoid extrapolation",
+        "b": "Both papers accept the same diagnosis — offline failure comes from querying $Q$ at actions the data does not contain, and from the maximisation that seeks out whichever such value is highest.\n\nCQL's answer is to make those values pessimistic, so maximising cannot rely on them. It keeps the Bellman backup and adds a correction.\n\nDecision Transformer's answer is to have no values at all. A trajectory is tokenised as a repeating triple of return-to-go, state and action:\n\n$$\\tau = \\big(\\hat{R}_1,\\, s_1,\\, a_1,\\; \\hat{R}_2,\\, s_2,\\, a_2,\\; \\ldots\\big), \\qquad \\hat{R}_t = \\sum_{t'=t}^{T} r_{t'}$$\n\nand a causal transformer is trained to predict the action tokens by cross-entropy or regression. Nothing bootstraps, nothing is maximised, so no unseen action is ever evaluated. At test time the desired return is a prompt, decremented by the reward received after each step."
+      },
+      {
+        "h": "Conditioning in place of optimising",
+        "b": "The model learns $p(a \\mid \\text{state}, \\text{desired return}, \\text{history})$ from data containing trajectories of many qualities. Poor ones teach it what low-return behaviour looks like, good ones what high-return behaviour looks like, and conditioning on a high return selects the latter branch.\n\nThis is upside-down reinforcement learning: rather than searching for the policy that maximises return, model the relationship between stated return and behaviour and read off the branch you want.\n\nAttention also changes credit assignment. A reward can be connected directly to an action many steps earlier within the context window, where a bootstrapped value must propagate it through every intermediate step — which is where TD methods accumulate error over long horizons."
+      },
+      {
+        "h": "Stitching is the thing lost",
+        "b": "Dynamic programming can compose. Given trajectories that each solve part of a task, a value function can stitch them into a policy better than any single demonstrated trajectory. Sequence modelling cannot — it reproduces conditional behaviour present in the data, and a return never observed is a prompt it cannot honour.\n\nSo on datasets requiring stitching, CQL and its relatives clearly win, and Decision Transformer's own results show it. Conditioning beyond the dataset's maximum return degrades rather than extrapolating, which is the expected behaviour of a conditional model.\n\nLater analysis found much of the reported advantage holds on datasets where stitching is not required, and that filtered behavioural cloning — train on the best trajectories only — is a strong baseline in the same regime. What survives is the framing: casting control as sequence modelling brings the entire transformer toolchain with it, and the generalist agents that followed are built on that."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Decision Transformer: Reinforcement Learning via Sequence Modeling",
+        "y": 2021
+      },
+      {
+        "t": "Conservative Q-Learning for Offline Reinforcement Learning",
+        "y": 2020
+      },
+      {
+        "t": "Offline Reinforcement Learning as One Big Sequence Modeling Problem",
+        "y": 2021
+      }
+    ]
+  },
+  "apprentice>maxentirl": {
+    "lead": "Feature matching leaves the reward badly under-determined — many weight vectors explain the same demonstrations, and max-margin picks one by a heuristic. Maximum-entropy IRL replaces the heuristic with a principle: among all distributions over behaviour consistent with the observed features, take the one that assumes nothing more.",
+    "blocks": [
+      {
+        "h": "The ambiguity being resolved",
+        "b": "A reward of zero everywhere makes every policy optimal, so it explains any demonstration. Scaling a reward changes nothing. Adding a potential-based shaping term leaves the optimal policy identical. The demonstrations constrain the reward in some directions and not at all in others.\n\nApprenticeship learning selects by max-margin — find the weights that most separate the expert from the alternatives found so far — which is reasonable and is a choice, not a consequence.\n\nZiebart et al. observe that the ambiguity is properly handled by putting a distribution over behaviours rather than picking a single reward, and that the maximum-entropy distribution is the one that commits to nothing beyond the constraints."
+      },
+      {
+        "h": "Exponential in reward",
+        "b": "The model is\n\n$$P(\\tau \\mid \\theta) = \\frac{1}{Z(\\theta)} \\exp\\big(\\theta^\\top \\mathbf{f}_\\tau\\big)$$\n\nwhich is the maximum-entropy distribution subject to matching the expert's feature counts. Better trajectories are exponentially more likely; worse ones are merely less likely.\n\nThat second property is the practical gain. Apprenticeship learning treats the expert as optimal, so every deviation must be explained by a reward that rationalises it. Real demonstrators are noisy, and a framework that models suboptimality as noise rather than as evidence about the reward fits them far better — which is why the paper's application is taxi drivers' route choices rather than a simulated agent.\n\nThe gradient is the standard exponential-family form: the difference between the expert's empirical feature counts and those expected under the current reward. Feature matching reappears, now as the stationary condition of a likelihood rather than as the objective."
+      },
+      {
+        "h": "The partition function",
+        "b": "$Z(\\theta)$ sums over all trajectories, and computing the expected feature counts requires a forward-backward sweep over the MDP — tractable only when the state space is small enough to enumerate.\n\nSo the principle is clean and the algorithm does not scale, which is the same shape as apprenticeship learning's inner RL loop. Guided cost learning later makes it work in continuous domains with neural rewards by approximating the partition function with samples.\n\nGAIL takes the sharper route: it shows that the occupancy-measure matching this framework implies can be performed adversarially, with a discriminator as the implicit reward — which removes both the partition function and the inner optimisation at once. The maximum-entropy framing survives there as GAIL's entropy regulariser, so the principle outlived the algorithm that introduced it."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Maximum Entropy Inverse Reinforcement Learning",
+        "y": 2008
+      },
+      {
+        "t": "Apprenticeship Learning via Inverse Reinforcement Learning",
+        "y": 2004
+      }
+    ]
+  },
+  "maxentirl>gail": {
+    "lead": "MaxEnt IRL recovers a reward and then optimises it, with an intractable partition function on one side and a full reinforcement-learning solve on the other. GAIL shows the whole two-stage procedure is equivalent to matching occupancy measures, and that the matching can be done adversarially in one loop.",
+    "blocks": [
+      {
+        "h": "Occupancy measures",
+        "b": "A policy induces a distribution over state-action pairs, its occupancy measure $\\rho_\\pi$. Two policies with the same occupancy measure are indistinguishable in every way that matters, so imitation is a distribution-matching problem.\n\nHo and Ermon's theoretical result is that running IRL with a particular regulariser and then solving the resulting MDP is **equivalent** to matching $\\rho_\\pi$ to $\\rho_{\\pi_E}$ under that same regulariser. Different regularisers give different known imitation algorithms — and choosing the one corresponding to the GAN objective gives\n\n$$\\min_{\\pi} \\max_{D} \\; \\mathbb{E}_{\\pi}\\big[\\log D(s,a)\\big] + \\mathbb{E}_{\\pi_E}\\big[\\log(1 - D(s,a))\\big] - \\lambda H(\\pi)$$\n\nThe discriminator is the reward, implicitly. No reward is ever recovered explicitly, and no MDP is solved to optimality inside a loop."
+      },
+      {
+        "h": "What is removed",
+        "b": "Two costs disappear together. MaxEnt IRL's partition function, intractable beyond small discrete spaces, is gone because the model never normalises a distribution over trajectories. And apprenticeship learning's inner loop — solve an MDP for every candidate reward — is gone because the policy and the discriminator improve simultaneously rather than in nested stages.\n\nThe entropy term $H(\\pi)$ is the maximum-entropy framing carried across explicitly, so the connection is structural rather than a coincidence of form.\n\nWhat replaces the removed machinery is a policy-gradient method — TRPO in the paper — using $-\\log D(s,a)$ as a reward. The discriminator's gradient cannot flow back through the environment into the policy, so reinforcement learning does the credit assignment over time and the adversarial game supplies only the objective."
+      },
+      {
+        "h": "What is given up",
+        "b": "The reward is not recovered in usable form. The discriminator separates two specific distributions, so it is entangled with the dynamics it was trained under and does not transfer to a changed environment — which forfeits the main argument for doing inverse RL rather than cloning in the first place. AIRL constrains the discriminator's form to recover a disentangled reward.\n\nGAIL also inherits the adversarial family's instability: oscillation, a discriminator that becomes too strong and stops providing a useful signal, and mode collapse appearing as a policy that reproduces one expert behaviour and ignores the rest.\n\nIt is very efficient in expert demonstrations and hungry in environment interactions, since every policy update needs fresh on-policy rollouts. Which resource is scarce decides whether the trade is worth taking."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Generative Adversarial Imitation Learning",
+        "y": 2016
+      },
+      {
+        "t": "Maximum Entropy Inverse Reinforcement Learning",
+        "y": 2008
+      },
+      {
+        "t": "Learning Robust Rewards with Adversarial Inverse Reinforcement Learning",
+        "y": 2018
+      }
+    ]
+  },
+  "apprentice>dagger": {
+    "lead": "Behavioural cloning fails because the learner's own mistakes take it to states the expert never visited. Apprenticeship learning answers by inferring **why** the expert acted, so the reward transfers to those states. DAgger answers by collecting expert labels **at** those states. The two are the field's standing fork on imitation.",
+    "blocks": [
+      {
+        "h": "The same diagnosis",
+        "b": "Both start from the observation that supervised learning's assumption fails in sequential control: the policy generates the states it will be evaluated on, so a small error moves it slightly off-distribution, the next error is larger, and the deviation compounds. Regret grows as $T^2\\epsilon$ over a horizon $T$ rather than linearly.\n\nMore demonstrations do not help, because they cover the expert's distribution better and the problem is the states the expert never enters."
+      },
+      {
+        "h": "Infer the reward, or fix the distribution",
+        "b": "Apprenticeship learning treats the reward as the compact, transferable description of the task. Recover it — via feature-expectation matching — and the learner can act correctly anywhere, including states no demonstration covers, because the reward is defined there too. The cost is an ambiguous solution and a full RL solve in the inner loop.\n\nDAgger keeps the cheap supervised objective and changes the data. It runs the current policy, records the states it actually visits, and asks the expert what it would have done at each — then retrains on the **aggregate** of all data collected so far, which is what makes it a no-regret online learning algorithm with regret linear rather than quadratic in $T$.\n\nThe labels are the expert's action at states the expert did not choose to be in, which is exactly the recovery behaviour cloning never observes."
+      },
+      {
+        "h": "Which is cheaper depends on what is scarce",
+        "b": "DAgger requires a **queryable** expert throughout training, not a recorded dataset. For a human that means labelling thousands of out-of-context states one at a time, and a person asked what they would do in a situation they would never have reached often cannot say. Where the expert is an algorithm — a planner, an optimal controller, a privileged policy with simulator access — queries are cheap, and that is where DAgger is used most.\n\nThe inverse route needs only fixed demonstrations, and pays with an expensive optimisation and a reward that is not uniquely determined.\n\nSo the fork resolves on resources rather than on principle. If expert queries are cheap and the task will not change, DAgger is far simpler. If demonstrations are fixed and the reward must survive a change of dynamics, inferring it is the only option."
+      }
+    ],
+    "refs": [
+      {
+        "t": "A Reduction of Imitation Learning and Structured Prediction to No-Regret Online Learning",
+        "y": 2011
+      },
+      {
+        "t": "Apprenticeship Learning via Inverse Reinforcement Learning",
+        "y": 2004
+      }
+    ]
+  },
+  "trpo>apprentice": {
+    "lead": "TRPO optimises a policy against a reward that is given. Apprenticeship learning addresses the case where it is not — where the task is demonstrated rather than specified — and the two are opposite ends of the same pipeline, which is why inverse reinforcement learning has a policy optimiser inside it.",
+    "blocks": [
+      {
+        "h": "Two halves of one problem",
+        "b": "Reinforcement learning takes a reward and produces a policy. Inverse reinforcement learning takes a policy — observed as demonstrations — and produces a reward.\n\nThe second contains the first. Apprenticeship learning's algorithm alternates: given the policies found so far, find the reward weights that most separate the expert from them; given those weights, **solve the resulting MDP** for its optimal policy. That inner solve is a full reinforcement-learning problem, and in the original paper it is assumed available as a subroutine.\n\nSo the fork is not between two rival methods but between two questions. TRPO answers how to optimise a specified objective reliably; apprenticeship learning answers what the objective is when nobody can write it down."
+      },
+      {
+        "h": "Why the reward is worth recovering",
+        "b": "The case for inferring a reward rather than cloning a policy is transfer. A reward function remains valid when the dynamics change, the agent's body changes, or the initial states differ; a cloned policy is valid only where it was demonstrated.\n\nThat is the argument for paying the inner loop's cost, and it holds only if the recovered reward is well-determined — which it is not. A zero reward explains any demonstration, scaling changes nothing, and potential-based shaping leaves the optimal policy identical. Max-margin picks one explanation by a criterion that is a heuristic, which is what MaxEnt IRL was written to improve.\n\nMany tasks are also far easier to demonstrate than to specify. Writing a reward for driving well or folding a shirt is notoriously hard, and specifying it badly produces an agent that optimises the letter of it — which is the practical reason the inverse route persists."
+      },
+      {
+        "h": "Where both ends met again",
+        "b": "GAIL collapses the two stages: matching occupancy measures adversarially removes the reward-recovery step and the inner MDP solve at once, while still using a policy-gradient method — TRPO, in the paper's implementation — to do the credit assignment. So the optimiser stays and the outer loop disappears.\n\nThe same pairing reappears at scale in language-model alignment. A reward model learned from human preferences is an inferred reward, and PPO optimises a policy against it — inverse and forward reinforcement learning composed, with all of the ambiguity and shaping problems this arrow's endpoints identified, now applied to text."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Apprenticeship Learning via Inverse Reinforcement Learning",
+        "y": 2004
+      },
+      {
+        "t": "Trust Region Policy Optimization",
+        "y": 2015
+      },
+      {
+        "t": "Generative Adversarial Imitation Learning",
+        "y": 2016
+      }
+    ]
+  },
+  "ppo>instructgpt": {
+    "lead": "PPO was built for continuous control and Atari, where the reward is supplied by the environment. InstructGPT applies it to language, where no reward exists — so one is learned from human comparisons first, and the policy is a pretrained language model rather than a small control network.",
+    "blocks": [
+      {
+        "h": "Three stages",
+        "b": "**Supervised fine-tuning** trains the pretrained model on demonstrations of the desired behaviour, giving a policy that is already in the right region.\n\n**Reward modelling** collects human rankings of several model outputs for the same prompt and fits a model to them under a Bradley-Terry objective, so the reward is learned from comparisons rather than absolute scores — people rank reliably and rate inconsistently.\n\n**Reinforcement learning** optimises the policy against that reward model with PPO, with a per-token KL penalty against the supervised model:\n\n$$r_{\\text{total}} = r_\\phi(x, y) - \\beta \\, \\log \\frac{\\pi_{\\text{RL}}(y \\mid x)}{\\pi_{\\text{SFT}}(y \\mid x)}$$\n\nThe KL term is doing something specific. The reward model is an imperfect proxy, and an unconstrained optimiser will find inputs that score highly and are degenerate — reward hacking. Anchoring to the supervised policy keeps the search inside the region where the proxy remains meaningful."
+      },
+      {
+        "h": "What transfers and what does not",
+        "b": "PPO's clipped surrogate, its advantage estimation and its value function all carry over unchanged. What differs is everything around them.\n\nThe episode is a single generated response, so the reward is one scalar at the end of a long sequence — an extreme case of sparse, delayed credit assignment. The action space is the vocabulary, tens of thousands of discrete tokens, at every step. And the policy is initialised from a model with enormous prior competence, so exploration is not the problem it is in control; the task is shaping existing behaviour rather than discovering it.\n\nThe result was that a 1.3B-parameter InstructGPT was preferred by human raters over a 175B GPT-3, which is the finding that made alignment a distinct engineering stage rather than a research topic."
+      },
+      {
+        "h": "What it cost, and the responses",
+        "b": "Four models must be resident — policy, reference, reward model and value network — which is the practical objection that shaped everything after. The reward model is also a fixed proxy trained on a fixed distribution, so as the policy drifts it is scored by a model that has never seen its outputs.\n\nEach became a line of work. **GRPO** deletes the value network by using a group of sampled responses as the baseline. **DPO** derives a supervised objective on preference pairs from the same KL-regularised optimum, removing the RL loop entirely. Rejection sampling simplifies differently, by generating, filtering and fine-tuning.\n\nThe deeper open problem is the one the KL penalty only manages: optimising hard against a learned proxy for human judgement produces outputs that satisfy the proxy rather than the judgement, and no amount of RL machinery addresses that."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Training language models to follow instructions with human feedback",
+        "y": 2022
+      },
+      {
+        "t": "Proximal Policy Optimization Algorithms",
+        "y": 2017
+      },
+      {
+        "t": "Deep Reinforcement Learning from Human Preferences",
+        "y": 2017
+      }
+    ]
+  }
+}
