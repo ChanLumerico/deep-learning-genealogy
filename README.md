@@ -105,13 +105,20 @@ overlaps 0 · edges through a node 0 · tight channels 1 (worst extent 42)
 `npm test` asserts overlaps and through-node crossings stay at zero and that tight
 channels and fallbacks do not exceed these numbers.
 
-## Known data gaps
+## The writing is complete
 
-The schema lists `p` (problem) and `l` (limitation) as required, but they are missing on
-**93 of 189 nodes**, and 100 of 248 edges carry no `l` label. Half the graph therefore
-falls back to a plain timeline in the detail panel. Backfilling this is the natural next
-change, and it is deliberately kept separate from the port so that any visual difference
-is attributable to code, not data.
+Every node carries `p` / `i` / `l` and every edge carries its `limit → fix` label —
+189 and 248 of them. Behind each is a long-form entry under `public/data/detail/`,
+fetched only when a panel opens: **189 model entries and 248 lineage entries**, with
+the equation stated wherever the contribution is carried by one.
+
+The one gap left is structural rather than editorial. `rectflow` is the only node
+with no lineage edge, and wiring it would change the edge count that the golden
+master asserts at 248 — so adding any node or edge currently fails `npm test`, and
+regenerating the golden master to pass it is the one thing this repository forbids.
+Growing the graph means first deciding what the golden master is for: a frozen
+record that the port matches the original engine, or a live check on current data.
+It cannot be both.
 
 ## Phones and tablets
 
