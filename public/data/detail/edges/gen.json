@@ -1,1 +1,1173 @@
-{}
+{
+  "ae>vae": {
+    "lead": "An autoencoder learns a code and says nothing about how codes are distributed, so decoding a random one produces nothing. The VAE adds the two pieces that close that gap: the encoder emits a distribution rather than a point, and a divergence term pulls that distribution towards a prior you can sample from.",
+    "blocks": [
+      {
+        "h": "What was missing",
+        "b": "The autoencoder's objective, $\\|x - g(f(x))\\|^2$, constrains the decoder only on codes the encoder actually produces. Those may occupy an arbitrary, disconnected region of latent space, so there is no distribution to draw from and no reason a randomly chosen $z$ should decode to anything.\n\nThe model compresses and reconstructs. It does not define $p(x)$, cannot evaluate a likelihood, and cannot generate — which is why it sits at the head of this lane rather than in it."
+      },
+      {
+        "h": "Two changes",
+        "b": "First, the encoder outputs the parameters of a distribution, $q_\\phi(z \\mid x) = \\mathcal{N}(\\mu_\\phi(x), \\sigma_\\phi^2(x))$, and a sample is drawn from it. Because nearby codes must now decode to similar outputs, the latent space is forced to be locally smooth rather than an arbitrary scatter.\n\nSecond, the objective gains a term:\n\n$$\\log p_\\theta(x) \\;\\geq\\; \\underbrace{\\mathbb{E}_{q_\\phi}\\big[\\log p_\\theta(x \\mid z)\\big]}_{\\text{the autoencoder's loss}} \\;-\\; \\underbrace{D_{\\mathrm{KL}}\\big(q_\\phi(z \\mid x) \\,\\|\\, p(z)\\big)}_{\\text{the new part}}$$\n\nThe first term is reconstruction, which is what the autoencoder was already doing. The second pulls every example's posterior towards $\\mathcal{N}(0, I)$, so the aggregate of all codes approximates a distribution that can be sampled. Generation becomes: draw $z \\sim \\mathcal{N}(0, I)$, decode.\n\nThe reparameterisation trick, $z = \\mu + \\sigma \\odot \\epsilon$, is what allows gradients through the sampling step, and without it neither change would be trainable."
+      },
+      {
+        "h": "What the regulariser costs",
+        "b": "The KL term is in direct tension with reconstruction. Pulling posteriors towards the prior makes codes overlap, and overlapping codes cannot be told apart by the decoder, so reconstructions are worse than a plain autoencoder's at the same capacity.\n\nAt the extreme this becomes **posterior collapse**: if the decoder is strong enough to model the data unconditionally, setting $q_\\phi(z \\mid x) = p(z)$ for every $x$ drives the KL to zero at no cost to the reconstruction term, and the latent carries nothing at all. That failure is what motivates VQ-VAE's discrete codes, $\\beta$-VAE's explicit weighting of the trade, and the KL-annealing schedules that became standard practice.\n\nThe blur is the other standing complaint, and it is the same tension seen from the sampling side — a likelihood bound rewards covering the data over concentrating on it."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Auto-Encoding Variational Bayes",
+        "y": 2014
+      },
+      {
+        "t": "Reducing the Dimensionality of Data with Neural Networks",
+        "y": 2006
+      }
+    ]
+  },
+  "vae>vqvae": {
+    "lead": "The VAE's KL term can be driven to zero by ignoring the latent, and with a strong decoder that is the cheapest thing to do. VQ-VAE removes the possibility rather than discouraging it: quantise the latent against a learned codebook, and the term that could collapse is gone.",
+    "blocks": [
+      {
+        "h": "Collapse, by construction impossible",
+        "b": "With a continuous Gaussian posterior, $D_{\\mathrm{KL}}(q_\\phi(z \\mid x) \\| p(z))$ is a cost the model pays for using the latent, and a decoder capable of modelling $p(x)$ alone can avoid it entirely by making the posterior equal the prior.\n\nVQ-VAE's posterior is deterministic and one-hot — the index of the nearest codebook entry. Against a uniform prior over $K$ entries the KL is $\\log K$, a constant, independent of the parameters. There is nothing to minimise, so there is no incentive to ignore the code, and the decoder receives a latent that must carry information because it is the only input it has."
+      },
+      {
+        "h": "Training through the lookup",
+        "b": "Nearest-neighbour assignment has no gradient, so the **straight-through** estimator copies the gradient from the quantised vector back to the encoder's output unchanged. That trains the encoder and decoder; the codebook needs its own terms:\n\n$$\\mathcal{L} = \\log p(x \\mid z_q(x)) + \\big\\|\\mathrm{sg}[z_e(x)] - e\\big\\|_2^2 + \\beta \\big\\|z_e(x) - \\mathrm{sg}[e]\\big\\|_2^2$$\n\nThe middle term moves each entry towards the encodings assigned to it; the last commits the encoder to the codebook so its outputs do not drift away faster than the entries can follow. The stop-gradient operators are what keep the two from fighting."
+      },
+      {
+        "h": "The prior becomes a separate problem",
+        "b": "Discreteness costs something the VAE had: a prior you can sample from directly. A uniform distribution over index grids produces noise, because the codes are spatially structured and their joint distribution is not uniform.\n\nSo VQ-VAE is a two-stage model. Fit the autoencoder, encode the dataset to index grids, then fit an autoregressive model over those grids — a PixelCNN for images, a WaveNet for audio. The generative capability lives in the second stage, and the first is only a tokeniser.\n\nThat separation is what makes the design so consequential. Once an image is a short sequence of discrete symbols, any sequence model applies, and replacing the PixelCNN with a Transformer and prepending text tokens gives DALL-E. The trade is that nothing optimises the two stages together, and that sampling inherits the autoregressive model's sequential cost."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Neural Discrete Representation Learning",
+        "y": 2017
+      },
+      {
+        "t": "Auto-Encoding Variational Bayes",
+        "y": 2014
+      }
+    ]
+  },
+  "vqvae>vqvae2": {
+    "lead": "One codebook at one resolution has to encode both the arrangement of an image and its texture, and whichever resolution it operates at, one of the two is short-changed. VQ-VAE-2 splits them across levels, with a separate autoregressive prior fitted to each.",
+    "blocks": [
+      {
+        "h": "The resolution bind",
+        "b": "A $32 \\times 32$ code grid over a $256 \\times 256$ image gives each symbol an $8 \\times 8$ pixel region — enough for layout, not for hair or fabric. A $64 \\times 64$ grid captures the texture and quadruples the sequence the prior must model, which for a PixelCNN is a quadratic increase in the dependency structure it has to learn and a fourfold increase in sampling steps.\n\nOne grid cannot be both, and the choice is forced at design time."
+      },
+      {
+        "h": "A hierarchy with conditioning between levels",
+        "b": "The encoder produces a **top** latent at low resolution and a **bottom** latent at higher resolution, each with its own codebook. The top is decoded first, and its reconstruction conditions the bottom, so the fine grid only encodes the residual — what the coarse level could not express.\n\nThe division emerges rather than being imposed; decoding each level in isolation shows the top carrying global structure and the bottom carrying local detail.\n\nThe priors are fitted separately and to suit. The top-level prior is a PixelCNN with self-attention, affordable because the grid is small and necessary because global coherence is decided there. The bottom-level prior is conditioned on the top and stays purely convolutional, since with the layout given the remaining structure is local. Generation runs top-down."
+      },
+      {
+        "h": "Diversity as the argument",
+        "b": "The paper's claim is against GANs on their own ground. A likelihood-based model pays for every mode it fails to cover; an adversarial one does not, and mode dropping is invisible to its objective.\n\nVQ-VAE-2's samples at $256 \\times 256$ were markedly more diverse than BigGAN's at broadly comparable fidelity, measured with classification-accuracy-score and precision-recall diagnostics rather than FID alone. It is one of the clearest demonstrations that the fidelity gap was narrower than assumed and the diversity gap ran the other way.\n\nThe seam remains: the autoencoder is trained first and frozen, so the code distribution the priors must model is whatever it happened to produce, with no feedback. And sampling is thousands of sequential steps across two grids — the cost that latent diffusion later removed by replacing the autoregressive prior with a diffusion model over a continuous latent."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Generating Diverse High-Fidelity Images with VQ-VAE-2",
+        "y": 2019
+      },
+      {
+        "t": "Neural Discrete Representation Learning",
+        "y": 2017
+      }
+    ]
+  },
+  "pixelcnn>vqvae": {
+    "lead": "PixelCNN models an image exactly and pays for it one pixel at a time, which at $256 \\times 256$ is sixty-five thousand sequential forward passes. VQ-VAE keeps the model and shortens what it has to model: an autoregressive prior over a grid of a few hundred discrete codes rather than over raw pixels.",
+    "blocks": [
+      {
+        "h": "The same model, a different sequence",
+        "b": "VQ-VAE's second stage is a PixelCNN, unmodified in kind — masked convolutions producing a factorised distribution over a 2-D grid in raster order. What changes is the grid. Instead of $256 \\times 256$ positions with 256 intensity values each, it is $32 \\times 32$ positions with 512 codebook indices.\n\nThe sequence is shorter by nearly three orders of magnitude, so sampling cost falls proportionally and the dependencies the model must capture span far less distance in token terms. A PixelCNN that would struggle to keep global coherence over sixty-five thousand pixels manages easily over a thousand codes, because the codes already encode content rather than intensity."
+      },
+      {
+        "h": "The weaknesses stop mattering",
+        "b": "PixelCNN's known defects are largely artefacts of operating on pixels. The raster ordering asserts that a pixel depends on its neighbour above but not below, which no property of images supports; the masked receptive field has a blind spot that gated PixelCNN had to engineer around; and the model is much better at texture than at composition, because texture is local in raster order and composition is not.\n\nOn a code grid these matter far less. Texture has already been handled by the decoder, so the prior is only responsible for arranging content, and at that resolution the raster ordering's asymmetry spans a small number of steps. The paper's audio results make the same point with WaveNet as the prior."
+      },
+      {
+        "h": "What the pairing became",
+        "b": "The structure — a discrete tokeniser plus an autoregressive prior over its codes — is the template for a substantial part of what followed. VQ-VAE-2 adds a hierarchy of priors. DALL-E swaps the PixelCNN for a Transformer and prepends text tokens, so conditioning is just more sequence. VQGAN sharpens the decoder with an adversarial loss and hands the codes to a Transformer, which supplied the tokeniser for a generation of vision-language models.\n\nWhat none of them removes is the sequential sampling, which is the autoregressive model's defining cost. That is what latent diffusion finally escapes, by keeping the two-stage structure and replacing the prior with a model whose steps do not scale with output size."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Neural Discrete Representation Learning",
+        "y": 2017
+      },
+      {
+        "t": "Conditional Image Generation with PixelCNN Decoders",
+        "y": 2016
+      }
+    ]
+  },
+  "pixelcnn>wavenet": {
+    "lead": "PixelCNN's raster ordering over an image is an arbitrary convention imposed on a two-dimensional signal. Applied to audio the same machinery has no such arbitrariness — a waveform genuinely is a sequence — and WaveNet is the architecture moved to the domain where its assumption is true.",
+    "blocks": [
+      {
+        "h": "What carries over unchanged",
+        "b": "The factorisation is identical: $p(x) = \\prod_t p(x_t \\mid x_{<t})$, with causality enforced by masking so no output depends on a future sample, and an exact likelihood available with no bound.\n\nThe output parameterisation carries over too. Both models emit a softmax over 256 discrete values rather than a continuous density, which lets a conditional be multimodal — \"this sample is either near the peak or near the trough\" — where a Gaussian output would average them. For audio the 256 values come from $\\mu$-law companding,\n\n$$f(x_t) = \\mathrm{sign}(x_t)\\, \\frac{\\ln(1 + \\mu|x_t|)}{\\ln(1 + \\mu)}, \\qquad \\mu = 255$$\n\nwhich allocates resolution logarithmically to match perception, since a linear 16-bit quantisation would need 65,536 classes.\n\nThe gated activation $\\tanh(W_f * x) \\odot \\sigma(W_g * x)$ is shared between the two papers, and both report it beating a rectifier."
+      },
+      {
+        "h": "Dilation, because the sequence is long",
+        "b": "The change is receptive field. An image's context is a few hundred pixels away; speech at 16 kHz has structure over thousands of samples, and a stack of ordinary causal convolutions would need to be thousands of layers deep to reach it.\n\nWaveNet spaces the taps out geometrically — dilation $1, 2, 4, \\ldots, 512$, then repeat — so the receptive field grows exponentially in depth. A few tens of layers cover tens of thousands of samples. This is the one substantive architectural addition, and it is what makes the transplant viable rather than merely possible.\n\nThe same operator reached vision from the other direction as atrous convolution in DeepLab, where it widens spatial context without discarding resolution."
+      },
+      {
+        "h": "Conditioning, and the wall",
+        "b": "WaveNet adds a conditioning mechanism PixelCNN did not need: a global vector for speaker identity added to every gate, and a local time series — linguistic features, later a mel spectrogram — upsampled to the audio rate. That is what makes it a vocoder rather than a curiosity, since something else can supply the acoustic plan and WaveNet renders it.\n\nThe sequential cost is inherited whole, and here it is worse. One second of audio is sixteen thousand forward passes, which put the original orders of magnitude below real time. Parallel WaveNet resolves it by distilling the trained model into an inverse autoregressive flow that generates all samples at once — the same fast-density-slow-sampling asymmetry that MAF and IAF formalise, exploited as a training-and-deployment split."
+      }
+    ],
+    "refs": [
+      {
+        "t": "WaveNet: A Generative Model for Raw Audio",
+        "y": 2016
+      },
+      {
+        "t": "Pixel Recurrent Neural Networks",
+        "y": 2016
+      },
+      {
+        "t": "Parallel WaveNet: Fast High-Fidelity Speech Synthesis",
+        "y": 2018
+      }
+    ]
+  },
+  "vae>gan": {
+    "lead": "The VAE and the GAN appear within a year of each other and answer the same question in opposite ways. One maximises a bound on the likelihood and gets coverage with blur; the other minimises a divergence estimated by an adversary and gets sharpness with mode dropping. The fork organises the next six years of the lane.",
+    "blocks": [
+      {
+        "h": "What each objective rewards",
+        "b": "A likelihood-based model is punished severely for assigning near-zero probability to real data — the log makes that cost unbounded — and only mildly for assigning some probability to implausible samples. The optimum under uncertainty is therefore to spread mass, and for images the visible consequence is blur.\n\nAn adversarial model has no likelihood term at all. Its only pressure is to produce samples a discriminator cannot reject, and nothing in that objective refers to the data the model fails to cover. So the optimum concentrates on whatever it can render convincingly, and mode collapse is not a bug in the loss but a strategy the loss permits.\n\nSharp-but-incomplete against complete-but-soft is not a tuning difference; it is what the two objectives ask for."
+      },
+      {
+        "h": "The structural consequences",
+        "b": "The VAE has an encoder, so every real image has a latent, obtainable in one forward pass. It has a likelihood, so models can be compared numerically and validation loss means something. Its training is a single stable minimisation.\n\nThe GAN has none of these. There is no inference path — recovering the latent of a real image requires a separate optimisation, which is what the GAN-inversion literature exists for. There is no likelihood, so evaluation falls back on proxies like FID and Inception score. And training is a two-player game whose equilibrium is a saddle point, so it oscillates, collapses, and has to be stopped by watching samples.\n\nThe generator is also freed by having no density: it need not be invertible, need not have full-dimensional support, and can be an arbitrary map from noise to pixels. That freedom is where the sharpness comes from."
+      },
+      {
+        "h": "How the fork closed",
+        "b": "The two lines borrowed from each other continually. VAE-GAN and the perceptual-plus-adversarial autoencoders add a discriminator to the reconstruction loss, which is exactly what Stable Diffusion's first stage does — the sharp latent decoder that makes latent diffusion work is a VAE with a GAN term. VQ-VAE's discrete codes and VQGAN's adversarial decoder are the same move.\n\nWhat ended the fork was neither side winning. Diffusion arrived with a likelihood-based derivation, a stationary regression objective, no adversary, and sample quality that matched and then exceeded GANs — coverage and sharpness at once. What it conceded is sampling speed, which is the axis the whole lane has been working on since, and the axis on which the GAN's single forward pass is still unbeaten."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Generative Adversarial Networks",
+        "y": 2014
+      },
+      {
+        "t": "Auto-Encoding Variational Bayes",
+        "y": 2014
+      },
+      {
+        "t": "Diffusion Models Beat GANs on Image Synthesis",
+        "y": 2021
+      }
+    ]
+  },
+  "vqvae>dalle": {
+    "lead": "VQ-VAE turns an image into a grid of discrete symbols and hands the modelling to an autoregressive prior. DALL-E takes that literally: if an image is a sequence of tokens and text is a sequence of tokens, concatenate them and train one Transformer on the whole thing with an ordinary next-token objective.",
+    "blocks": [
+      {
+        "h": "One sequence, two modalities",
+        "b": "A discrete VAE compresses a $256 \\times 256$ image to a $32 \\times 32$ grid of tokens from a vocabulary of 8192. The text caption is BPE-tokenised to up to 256 tokens. The two are concatenated — text first, then image — and a decoder-only Transformer is trained to predict the next token over the joint sequence of 1280.\n\nNothing about the objective knows there are two modalities. Conditioning is not a mechanism bolted on; it is a consequence of ordering, since the image tokens are generated after the text and attend to it. Sampling a caption's image is autoregressive continuation, and the same model can be run at different temperatures or reranked, which DALL-E does with CLIP.\n\nThe tokeniser is trained separately and frozen, exactly as in VQ-VAE, so the two-stage structure is inherited whole."
+      },
+      {
+        "h": "What changed in the tokeniser",
+        "b": "The discrete VAE differs from VQ-VAE in how it handles the non-differentiable lookup. Rather than the straight-through estimator, DALL-E uses a **Gumbel-softmax relaxation** with a temperature annealed towards zero during training, so the assignment is soft early — giving useful gradients — and hard by the end.\n\nThe practical reason is scale: training a codebook of 8192 entries stably at this size proved easier with the relaxation than with straight-through plus commitment terms, and codebook collapse is a more serious risk the larger the vocabulary. The paper also details the mixed-precision and gradient-checkpointing work needed to fit the model, which is a reminder that this was as much an engineering result as a modelling one."
+      },
+      {
+        "h": "What the formulation bought and what it cost",
+        "b": "The gain is generality. Because everything is tokens, compositional prompts — an armchair in the shape of an avocado — work without any part of the system being designed for composition, and zero-shot image-to-image tasks fall out of prompting with a partial image.\n\nThe costs are the autoregressive ones. Sampling is 1024 sequential forward passes per image; the raster ordering over image tokens is arbitrary in the same way PixelCNN's was; and the tokeniser is a hard ceiling — detail it cannot represent is unavailable to the Transformer however large.\n\nDALL-E 2 abandons the formulation entirely, using CLIP embeddings with a diffusion decoder, which is a clear statement about which of the two routes to text-conditioned generation the field found more promising. The token-sequence idea nonetheless persisted, and returned in the multimodal language models that treat images as tokens in a shared context."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Zero-Shot Text-to-Image Generation",
+        "y": 2021
+      },
+      {
+        "t": "Neural Discrete Representation Learning",
+        "y": 2017
+      }
+    ]
+  },
+  "pixelcnn>dalle": {
+    "lead": "PixelCNN established that an image can be modelled exactly as an ordered sequence of discrete symbols with a factorised likelihood. DALL-E keeps that framing and changes two things: the symbols are codebook indices rather than pixels, and the model over them is a Transformer rather than a masked convolution.",
+    "blocks": [
+      {
+        "h": "The factorisation, unchanged",
+        "b": "Both models write $p(x) = \\prod_i p(x_i \\mid x_{<i})$ over a raster-ordered 2-D grid, with each conditional a softmax over a discrete vocabulary and the whole thing trained by maximum likelihood. There is no bound, no adversary and no latent variable in the second stage.\n\nWhat DALL-E adds to the sequence is text at the front. Because the factorisation is over a single ordered sequence, prepending caption tokens is not a modification of the model — the image tokens simply have more context to condition on, and the objective is the same next-token cross-entropy throughout."
+      },
+      {
+        "h": "Why the convolution had to go",
+        "b": "PixelCNN's masked convolutions have a bounded receptive field, and extending it means depth. That is workable when the dependencies are local, which on pixels they largely are; it is a poor fit when the first 256 positions of the sequence are text and every image token must be able to attend to all of them.\n\nSelf-attention has no such limitation — every position sees every earlier position at unit depth — so a Transformer handles the text-to-image dependency natively. The masked convolution's blind-spot problem, which gated PixelCNN had to engineer around with separate vertical and horizontal stacks, also disappears, since a causal attention mask is exactly expressible.\n\nThe cost is quadratic attention over 1280 tokens, which DALL-E manages with sparse attention patterns in most layers — row, column and convolutional masks — rather than dense attention throughout."
+      },
+      {
+        "h": "The sequential wall, still there",
+        "b": "What the substitution does not change is that generation is one token at a time. DALL-E samples 1024 image tokens sequentially, and no architectural choice within the autoregressive family removes that — it is the factorisation, not the network.\n\nThe raster ordering is likewise inherited, and remains as unmotivated for a code grid as it was for pixels, though its consequences are milder over a shorter sequence.\n\nSo this arrow marks a change of substrate and not of formulation. The formulation itself was set aside for image generation within two years, as diffusion offered comparable quality without the sequential cost — but it returned in force for multimodal language models, where treating images as tokens in a shared context is precisely the property that makes one model handle both."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Zero-Shot Text-to-Image Generation",
+        "y": 2021
+      },
+      {
+        "t": "Pixel Recurrent Neural Networks",
+        "y": 2016
+      },
+      {
+        "t": "Conditional Image Generation with PixelCNN Decoders",
+        "y": 2016
+      }
+    ]
+  },
+  "gan>dcgan": {
+    "lead": "The GAN paper gave an objective and a proof, and demonstrated it on small greyscale images. Applied to natural images the training collapsed more often than it converged. DCGAN contributes no theory at all — it is the set of architectural conventions, found empirically, that made the objective trainable in practice.",
+    "blocks": [
+      {
+        "h": "The list",
+        "b": "Replace pooling with strided convolutions in the discriminator and fractionally-strided convolutions in the generator, so both learn their own resampling. Remove fully connected hidden layers. Use batch normalisation in both networks, except on the generator's output and the discriminator's input, where it destabilised training. ReLU in the generator with $\\tanh$ at the output; LeakyReLU throughout the discriminator.\n\nNone of it is derived, and the paper says as much — this is the configuration that survived an extensive search. What justifies it is transfer: the same rules trained on bedrooms, faces and ImageNet classes without collapse, which had not previously been dependable."
+      },
+      {
+        "h": "One rule with a reason",
+        "b": "The leaky discriminator has a legible motivation. The generator's only learning signal is the gradient flowing back through the discriminator, so any region where the discriminator's gradient is exactly zero is a region where the generator learns nothing.\n\nA plain ReLU is flat below the origin, which is precisely where a confidently-rejected sample lands. LeakyReLU keeps a small slope there, so the generator still receives a direction to move when it is losing badly — which is most of early training. It is the same complaint that produced leaky units in classification, sharpened because here the gradient is not one signal among many but the whole supervision."
+      },
+      {
+        "h": "Conventions without a diagnosis",
+        "b": "DCGAN made GANs usable and left the underlying instability entirely intact. The objective is unchanged, so the Jensen-Shannon divergence still saturates wherever the two distributions have disjoint support, and mode collapse still happens — the architecture makes both less frequent, not impossible.\n\nBecause the rules are empirical they also give no guidance outside the regime they were found in, and scaling to higher resolution ran into fresh failures that following the list did not fix. The *why* had to wait for WGAN's analysis, which located the problem in the divergence rather than in the architecture, and the high-resolution failure for PGGAN's curriculum.\n\nThe paper's other legacy is incidental and large: the demonstration that the latent space is semantically structured — smooth interpolation, and vector arithmetic on faces — which established that adversarial training was learning a representation and not merely fitting a distribution."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Unsupervised Representation Learning with Deep Convolutional Generative Adversarial Networks",
+        "y": 2016
+      },
+      {
+        "t": "Generative Adversarial Networks",
+        "y": 2014
+      }
+    ]
+  },
+  "dcgan>wgan": {
+    "lead": "DCGAN made adversarial training work often enough to use and could not say why it failed when it failed. WGAN supplies the diagnosis: the divergence the standard objective minimises is constant whenever the model and data distributions have disjoint support, so the generator's gradient vanishes exactly when the discriminator is doing well.",
+    "blocks": [
+      {
+        "h": "The failure, in one example",
+        "b": "Take two distributions on parallel lines a distance $\\theta$ apart. Their Jensen-Shannon divergence is $\\log 2$ for every $\\theta \\neq 0$ and $0$ at $\\theta = 0$ — a step function with zero derivative wherever it is defined. There is no gradient indicating which way to move.\n\nThis is the generic case, not a pathology. A generator maps low-dimensional noise through a smooth network, so its support is a low-dimensional manifold; natural images lie on one too; two such manifolds in a high-dimensional space do not overlap.\n\nThat explains the practitioner's dilemma DCGAN worked around without naming. The theory says train the discriminator to optimality; experience says a good discriminator kills the generator. Both are correct, and the conflict is in the divergence."
+      },
+      {
+        "h": "A distance that stays informative",
+        "b": "The Wasserstein or earth-mover distance measures how much mass must be moved and how far, so it is finite and varies smoothly even when supports are disjoint — on the parallel-lines example it is $|\\theta|$.\n\nIts Kantorovich-Rubinstein dual gives a usable loss:\n\n$$W(\\mathbb{P}_r, \\mathbb{P}_g) = \\sup_{\\|f\\|_L \\leq 1} \\; \\mathbb{E}_{x \\sim \\mathbb{P}_r}\\big[f(x)\\big] - \\mathbb{E}_{x \\sim \\mathbb{P}_g}\\big[f(x)\\big]$$\n\nThe network playing $f$ is a **critic**, not a classifier: no sigmoid, no log, and an unbounded output whose difference between real and fake is the estimate. The practical inversion follows — the critic should be trained to optimality, several steps per generator step, because a better critic gives a better gradient rather than a vanishing one."
+      },
+      {
+        "h": "A number that means something",
+        "b": "The result the paper leads with is diagnostic. In a standard GAN the two losses describe the state of a game and correlate with nothing; a falling generator loss may only mean a weakening discriminator, so training is monitored by looking at samples.\n\nThe critic's estimate is an approximation to a distance between distributions. It falls as the model improves, can be plotted, compared across runs and used for early stopping. For a family whose central practical problem was not knowing whether training was working, that is worth as much as the stability.\n\nWhat the paper leaves badly solved is the Lipschitz constraint, enforced by clamping every weight into a box — which the authors themselves call a terrible approach. WGAN-GP replaces it with a penalty on the gradient norm, and that is the form that stuck."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Wasserstein GAN",
+        "y": 2017
+      },
+      {
+        "t": "Towards Principled Methods for Training Generative Adversarial Networks",
+        "y": 2017
+      }
+    ]
+  },
+  "wgan>wgangp": {
+    "lead": "WGAN's objective requires the critic to be 1-Lipschitz, and its method of enforcing that — clamping every weight into a small box — bounds the constant by destroying the critic's capacity. WGAN-GP enforces the same condition where it is actually defined, on the gradient, and the Wasserstein objective becomes usable at depth.",
+    "blocks": [
+      {
+        "h": "What clipping does",
+        "b": "The paper's diagnostics make the case. With weights clamped to $[-c, c]$ the weight distribution piles up at the two boundary values, so the critic uses a small fraction of the function class it has parameters for, and the functions it can express become nearly trivial — critics that fail to capture higher moments of even toy distributions.\n\nGradients through depth also misbehave: clipping interacts multiplicatively with the number of layers, so depending on $c$ they vanish or explode. Choosing $c$ trades a critic too weak to be informative against one too slow to train, with no setting avoiding both. This is why WGAN in its original form did not scale past modest architectures."
+      },
+      {
+        "h": "Penalising the gradient norm",
+        "b": "A differentiable function is 1-Lipschitz exactly when $\\|\\nabla f\\| \\leq 1$ everywhere, so constrain that directly:\n\n$$L = \\mathbb{E}_{\\tilde{x} \\sim \\mathbb{P}_g}\\big[D(\\tilde{x})\\big] - \\mathbb{E}_{x \\sim \\mathbb{P}_r}\\big[D(x)\\big] + \\lambda \\, \\mathbb{E}_{\\hat{x}}\\Big[\\big(\\|\\nabla_{\\hat{x}} D(\\hat{x})\\|_2 - 1\\big)^2\\Big]$$\n\nwith $\\lambda = 10$. The penalty is two-sided, pushing the norm towards exactly 1 rather than merely below it, because the optimal critic under the dual has unit gradient norm almost everywhere along the transport paths.\n\nThe points $\\hat{x}$ are sampled on straight lines between real and generated samples — the region between the two distributions is where the critic's slope determines the generator's gradient, and enforcing the constraint over the whole input space is neither tractable nor needed."
+      },
+      {
+        "h": "Two consequences",
+        "b": "Batch normalisation has to be removed from the critic. The penalty constrains the gradient of the output with respect to **one** input, and batch normalisation makes an example's output depend on its batch, so the quantity being penalised is not the one the theory refers to. Layer normalisation is used instead. This is a clear case of a standard technique dropped because it violated an assumption rather than because it performed poorly.\n\nThe cost is compute: a gradient of a gradient means a double backward pass per critic step. Spectral normalisation later achieved a similar bound far more cheaply by constraining each layer's spectral norm directly, and BigGAN uses that rather than the penalty.\n\nWhat the penalty bought was robustness at depth — the same hyperparameters training deep residual generators and a 101-layer critic — which is what made the high-resolution GAN work of the following years possible. PGGAN builds directly on this objective."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Improved Training of Wasserstein GANs",
+        "y": 2017
+      },
+      {
+        "t": "Wasserstein GAN",
+        "y": 2017
+      },
+      {
+        "t": "Spectral Normalization for Generative Adversarial Networks",
+        "y": 2018
+      }
+    ]
+  },
+  "wgangp>pggan": {
+    "lead": "With WGAN-GP the objective was sound and deep architectures trained reliably, and high-resolution generation still failed. The reason is not the loss: at $1024^2$ the discriminator separates real from fake immediately, so there is no useful gradient, and memory forces batches too small to be stable. PGGAN's answer is a curriculum.",
+    "blocks": [
+      {
+        "h": "Why resolution is its own problem",
+        "b": "The difficulty compounds. A high-resolution fake differs from a real image in a great many easily-detected ways, so the discriminator's task is trivially easy early on and its output saturates — the generator receives a confident rejection carrying no information about what to fix.\n\nMemory then makes it worse. At $1024^2$ the activations force small minibatches, and small batches make both the gradient estimate and any batch statistics noisy, in a training procedure that was already delicate.\n\nNeither is addressed by a better divergence. WGAN-GP keeps the gradient informative when the distributions are disjoint, which is necessary and not sufficient — the discriminator being able to separate them trivially is a different failure."
+      },
+      {
+        "h": "Growing, with a fade",
+        "b": "Training starts with both networks at $4 \\times 4$. When that converges, a block is added to each — an upsampling stage in the generator, a downsampling one in the discriminator — and training continues at $8 \\times 8$, up to $1024 \\times 1024$.\n\nNew layers are **faded in**: a weight $\\alpha$ moves from 0 to 1 over many iterations, interpolating between the upsampled output of the existing network and the new block's output, so the trained layers are never shocked by a sudden structural change.\n\nThe curriculum does two things. Global structure is settled at a resolution where the problem is tractable before fine detail is demanded, so the discriminator always faces a task it cannot trivially win. And most iterations happen at low resolution, where they are cheap, which the paper reports as a substantial overall speedup."
+      },
+      {
+        "h": "The stabilisers, and what the schedule cost",
+        "b": "Three additions travel with it. **Minibatch standard deviation** appends the batch-wise feature deviation as an extra map near the end of the discriminator, so a generator producing identical outputs is directly detectable — one of the few explicit anti-collapse mechanisms in the family. **Equalised learning rate** scales weights at runtime so every layer trains at the same effective rate under Adam. **Pixelwise feature normalisation** keeps the generator's activation magnitudes bounded without batch dependence.\n\nNothing about the adversarial game changes; this is a training procedure layered on the WGAN-GP objective, and its phase lengths and fade durations are hyperparameters with no principle behind them.\n\nThe schedule also leaves a specific artefact. Each resolution is briefly trained to produce a finished image on its own, which teaches it to place high-frequency detail at fixed pixel positions — the texture-sticking that StyleGAN2 diagnosed and removed by abandoning growing for a skip-connected architecture trained at full resolution throughout."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Progressive Growing of GANs for Improved Quality, Stability, and Variation",
+        "y": 2018
+      },
+      {
+        "t": "Improved Training of Wasserstein GANs",
+        "y": 2017
+      }
+    ]
+  },
+  "pggan>stylegan": {
+    "lead": "PGGAN could produce a convincing face and offered no way to ask for a particular one. StyleGAN keeps its progressive training and rebuilds the generator so the latent enters at every layer as a style — and because layers operate at different resolutions, what each style controls separates by scale on its own.",
+    "blocks": [
+      {
+        "h": "The latent leaves the input",
+        "b": "In PGGAN the latent is the generator's first input and everything downstream is determined by it, which gives no handle on any individual aspect of the output.\n\nStyleGAN starts the synthesis network from a learned constant $4 \\times 4 \\times 512$ tensor. The latent $z$ instead passes through an eight-layer mapping network to an intermediate space $\\mathcal{W}$, and $w$ is injected at every layer.\n\nThe mapping network exists because $z$ is drawn from a fixed Gaussian and the generator must warp that sphere onto whatever shape the data occupies; where feature combinations are absent from the training set the warping becomes highly curved, which is what makes interpolation in $z$ produce implausible intermediates. $\\mathcal{W}$ is not required to follow any fixed distribution and can therefore be disentangled — the paper introduces perceptual path length and linear separability to measure exactly that, and reports $\\mathcal{W}$ far ahead of $\\mathcal{Z}$."
+      },
+      {
+        "h": "AdaIN, and separation by scale",
+        "b": "Each layer projects $w$ into a scale and bias applied through adaptive instance normalisation:\n\n$$\\mathrm{AdaIN}(x_i, y) = y_{s,i} \\, \\frac{x_i - \\mu(x_i)}{\\sigma(x_i)} + y_{b,i}$$\n\nNormalising each feature map before applying the style erases the previous one, so a layer's style governs that layer and does not accumulate down the stack.\n\nBecause the layers sit at different resolutions, the styles specialise without being told to: coarse layers control pose and face shape, middle layers hair and expression, fine layers colour and micro-texture. **Style mixing** — different $w$ vectors to different layer ranges — demonstrates the split and is used in training as a regulariser against adjacent layers correlating.\n\nPer-pixel noise added at every layer supplies stochastic detail such as the exact placement of hairs, which frees the latent from encoding variation nobody wants control over."
+      },
+      {
+        "h": "What was kept, and what it left",
+        "b": "Progressive growing is inherited unchanged, as is the discriminator and most of the training setup — this is a generator redesign, not a new training method, and the paper is explicit that the discriminator and loss are untouched.\n\nTwo defects follow. The droplet artefact, traced in the successor to AdaIN itself: normalising away a feature map's statistics destroys information the generator wants, and it learns to smuggle that past by creating a dominating localised spike. And texture sticking, inherited with the growing schedule.\n\nBoth are removed in StyleGAN2 — weight demodulation for the first, a skip-connected full-resolution architecture for the second. What is not removed is the family's shape: one model per domain, no likelihood, and no inference path, so projecting a real image into $\\mathcal{W}$ remains a separate optimisation."
+      }
+    ],
+    "refs": [
+      {
+        "t": "A Style-Based Generator Architecture for Generative Adversarial Networks",
+        "y": 2019
+      },
+      {
+        "t": "Progressive Growing of GANs for Improved Quality, Stability, and Variation",
+        "y": 2018
+      }
+    ]
+  },
+  "stylegan>stylegan2": {
+    "lead": "StyleGAN produced the best faces available with two signature defects: droplet artefacts visible in its feature maps, and detail that stuck to pixel coordinates instead of moving with the subject. Its successors trace each to a specific mechanism — AdaIN and progressive growing — and remove both.",
+    "blocks": [
+      {
+        "h": "The blob, and weight demodulation",
+        "b": "AdaIN normalises each feature map's actual mean and variance, which destroys information carried in those statistics. The generator's workaround is to create a strong localised spike that dominates the statistic and therefore survives it — the droplet.\n\nStyleGAN2 removes the operation from the activations and folds it into the weights. Modulation scales the convolution weights by the style, $w'_{ijk} = s_i \\cdot w_{ijk}$, and demodulation rescales by the expected output deviation:\n\n$$w''_{ijk} = \\frac{w'_{ijk}}{\\sqrt{\\sum_{i,k} {w'_{ijk}}^2 + \\epsilon}}$$\n\nThis normalises on the **assumption** of unit-variance inputs rather than on measured statistics, so it is deterministic in the weights alone and there is nothing for the generator to game. The artefacts disappear completely, and the operation is cheaper because it touches weights rather than activations."
+      },
+      {
+        "h": "No curriculum, and a better-conditioned map",
+        "b": "Progressive growing is dropped. Training each resolution briefly as a complete output teaches it to place high-frequency detail at fixed positions, which is the source of the sticking. StyleGAN2 trains at full resolution throughout, using skip connections in the generator and residual connections in the discriminator to keep the stack trainable — and reports better results with no curriculum at all.\n\n**Path length regularisation** is added: a fixed-size step in $\\mathcal{W}$ should produce a fixed-magnitude image change regardless of direction. It improves sample quality and, usefully, makes projecting a real image back into $\\mathcal{W}$ far more reliable — which is what the editing and inversion tooling around StyleGAN depends on. It and the $R_1$ penalty are applied **lazily**, once every several minibatches, at no measured cost."
+      },
+      {
+        "h": "StyleGAN3, and where the line stops",
+        "b": "The remaining defect is that translating the latent does not cleanly translate the image. The diagnosis is signal-processing: nonlinearities generate frequencies above the feature grid's Nyquist limit, which alias and become locked to the pixel lattice rather than to content. StyleGAN3 treats every feature map as a sampled continuous signal and makes each operation alias-free — low-pass filters around nonlinearities, careful resampling, Fourier features at the input — producing a generator equivariant to translation and rotation, markedly better for video and very slightly worse on FID.\n\nWhat none of this addresses is the family's scope. One model per domain, no likelihood, no text conditioning, and thousands of GPU-hours per run. Text-conditioned diffusion arrived with no fidelity advantage on faces and total generality across domains, and that is what ended the line's dominance — not any defect these papers left unfixed."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Analyzing and Improving the Image Quality of StyleGAN",
+        "y": 2020
+      },
+      {
+        "t": "Alias-Free Generative Adversarial Networks",
+        "y": 2021
+      }
+    ]
+  },
+  "pggan>biggan": {
+    "lead": "PGGAN reached high resolution with a curriculum, on a single narrow domain. BigGAN asks a different question — what happens at the scale image classifiers are trained at, on all thousand ImageNet classes — and finds most of the gain sitting in plain batch size and width, along with a failure mode that scale introduces.",
+    "blocks": [
+      {
+        "h": "Scale, measured",
+        "b": "The paper's opening result is that raising the batch size to 2048 improves the Inception score substantially, and widening every layer by half again adds more. Both are reported as direct gains from more compute per step with no change to the objective.\n\nThe explanation offered is coverage: a larger batch touches more modes per update, so the gradient better estimates the true one and diversity improves. The paper is equally clear about the consequence — large-batch models reach a good state faster and then destabilise, so they attain their best score before collapsing rather than converging to it.\n\nProgressive growing is not used. BigGAN trains at full resolution throughout with a residual architecture, which is the same conclusion StyleGAN2 reached independently about the curriculum being avoidable."
+      },
+      {
+        "h": "Conditioning, and a dial at sampling time",
+        "b": "The class label is threaded through the generator rather than concatenated once: class-conditional batch normalisation supplies each layer's gain and bias from a **shared** class embedding, and the noise vector is split into chunks fed to different resolutions. The discriminator uses projection conditioning, and both networks use spectral normalisation — cheaper than WGAN-GP's double backward pass, and the practical choice at this size.\n\nThe **truncation trick** is the most-copied idea. Train with $z \\sim \\mathcal{N}(0, I)$ but sample with values beyond a threshold resampled, so samples concentrate near the mode. This turns the fidelity-diversity trade into a dial turned **after** training: one model yields a whole curve, with Inception score and FID moving in opposite directions along it. Orthogonal regularisation on the generator's weights is applied to make it behave under heavy truncation.\n\nThe same manoeuvre reappears as classifier-free guidance in diffusion."
+      },
+      {
+        "h": "Collapse, analysed and unfixed",
+        "b": "BigGAN's training collapses reliably and late. The paper's analysis is unusually thorough: it tracks the top singular values of both networks' weights, finds the generator's growing without bound, and shows collapse coinciding with sharp behaviour in the discriminator's spectra.\n\nSeveral interventions were tried — constraining the generator's spectra, various penalties — and each delayed collapse at a cost in quality; none prevented it. The conclusion offered is that stability is a property of the interaction between the two networks, not of either alone. The practical method is early stopping.\n\nThat is where the adversarial line's honesty is sharpest. After five years of stabilisation work, the strongest GAN available still had to be stopped before it destroyed itself, and mode dropping on ImageNet remained detectable. Diffusion's stationary regression objective has no such dynamics, and that — more than fidelity — is what moved the field."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Large Scale GAN Training for High Fidelity Natural Image Synthesis",
+        "y": 2019
+      },
+      {
+        "t": "Progressive Growing of GANs for Improved Quality, Stability, and Variation",
+        "y": 2018
+      }
+    ]
+  },
+  "gan>cgan": {
+    "lead": "A GAN samples from the data distribution and offers no say over what it produces, which for anything beyond a demonstration is disqualifying. The conditional GAN adds an input to both networks — the generator makes a sample given $y$, the discriminator judges the **pair** — and that one change is what makes the family useful.",
+    "blocks": [
+      {
+        "h": "Conditioning both networks",
+        "b": "The objective gains one argument throughout:\n\n$$\\min_G \\max_D \\; \\mathbb{E}_{x, y}\\big[\\log D(x \\mid y)\\big] + \\mathbb{E}_{z, y}\\big[\\log\\big(1 - D(G(z \\mid y) \\mid y)\\big)\\big]$$\n\nThat the discriminator sees $y$ is the essential part. If only the generator did, the discriminator could not distinguish a realistic image paired with the wrong label from a correctly paired one, so nothing would penalise ignoring the condition. Judging the pair is what makes $y$ binding.\n\nThe original paper concatenates a one-hot label to both networks' inputs and demonstrates on MNIST and on image tagging — a short note whose importance is entirely in what the formulation permitted afterwards."
+      },
+      {
+        "h": "The condition remains a suggestion",
+        "b": "Nothing forces the generator to use $y$ beyond the discriminator's ability to notice its absence. Where the conditional relationship is subtle or $y$ is high-dimensional, the discriminator is weak on exactly that axis, and the generator drifts towards producing plausible outputs unrelated to the input.\n\nThis is the failure visible in every text-to-image system that renders a beautiful image ignoring half the prompt. The remedies all strengthen the conditional signal rather than the sample quality: projection discriminators taking an inner product with the class embedding instead of concatenating it, auxiliary classifier losses, and in diffusion classifier-free guidance, which extrapolates away from the unconditional prediction to force the condition to bite."
+      },
+      {
+        "h": "Where the condition should enter",
+        "b": "Concatenation at the input is the weakest choice, because the signal dilutes as it passes through the network. The lasting lesson is that conditioning belongs in the normalisation: conditional batch normalisation gives each layer a per-class gain and bias, which is how BigGAN conditions, and StyleGAN's AdaIN is the same mechanism applied to an unlabelled style vector.\n\nThe finding generalised past the adversarial family entirely. Latent diffusion conditions through cross-attention at every resolution of its U-Net, and DiT's ablation over in-context tokens, cross-attention and adaptive layer normalisation finds the last clearly best. Every text-conditioned generator in this lane descends from this arrow, and none of them concatenates.\n\npix2pix is where the formulation becomes a general recipe: a conditional discriminator replaces the hand-designed loss, and one architecture then handles every image-to-image task."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Conditional Generative Adversarial Nets",
+        "y": 2014
+      },
+      {
+        "t": "Generative Adversarial Networks",
+        "y": 2014
+      },
+      {
+        "t": "cGANs with Projection Discriminator",
+        "y": 2018
+      }
+    ]
+  },
+  "cgan>pix2pix": {
+    "lead": "The conditional GAN said a generator could be told what to make and demonstrated it on labels. pix2pix makes it a general recipe for image-to-image problems: the condition is an image, the discriminator learns what \"correct output for this input\" looks like, and the hand-designed loss each task previously needed disappears.",
+    "blocks": [
+      {
+        "h": "Replacing the per-task loss",
+        "b": "Before this, each translation problem came with its own objective encoding what mattered — edge-preservation terms, colour histograms, perceptual losses tuned per dataset. The reason is that a plain regression loss produces the conditional mean, and where the mapping is one-to-many the mean of the plausible outputs is not plausible: it is blurred.\n\nA conditional discriminator learns the criterion instead. It is trained to reject anything that does not look like a real pair, and the average of several plausible outputs is easy to reject. So the adversarial term supplies precisely what a per-pixel loss cannot — a learned notion of admissibility, fitted to whatever task it is given.\n\nBoth are kept:\n\n$$G^\\star = \\arg\\min_G \\max_D \\; \\mathcal{L}_{\\text{cGAN}}(G, D) + \\lambda \\, \\mathcal{L}_{L_1}(G)$$\n\nwith $\\lambda = 100$. $L_1$ holds the output near ground truth at low frequencies; the discriminator handles the high frequencies where blur would appear. $L_1$ rather than $L_2$ because it blurs less."
+      },
+      {
+        "h": "PatchGAN, and the U-Net",
+        "b": "Since $L_1$ already enforces low-frequency correctness, the discriminator only needs to police local realism. **PatchGAN** classifies each $N \\times N$ patch and averages, which makes it small, fast, applicable to any image size, and — the ablation finds $70 \\times 70$ best — no worse than a full-image discriminator.\n\nThe generator is a U-Net rather than an encoder-decoder, because in these tasks input and output share structure: an edge in the sketch is an edge in the photograph. Skip connections pass that structure directly across rather than forcing it through a bottleneck to be reconstructed. It is the segmentation architecture reused for its shape, the same borrowing that later put U-Net inside DDPM."
+      },
+      {
+        "h": "The noise input is ignored",
+        "b": "A conditional GAN ought to map $(z, x)$ to a distribution over outputs. pix2pix reports that the generator learns to ignore $z$ entirely, so the mapping is effectively deterministic; dropout at train and test time supplies a little variation and not much.\n\nThe cause is the strong $L_1$ term, which rewards matching the one ground-truth output and makes any use of $z$ a liability. So the model gives one output per input, which is right for tasks with a single answer and wrong for genuinely ambiguous ones — BicycleGAN was written to recover the diversity by enforcing an invertible relation between latent and output.\n\nThe binding constraint is the data: training needs pixel-aligned pairs, which for many interesting translations do not exist. That is what CycleGAN removes."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Image-to-Image Translation with Conditional Adversarial Networks",
+        "y": 2017
+      },
+      {
+        "t": "Conditional Generative Adversarial Nets",
+        "y": 2014
+      }
+    ]
+  },
+  "pix2pix>cyclegan": {
+    "lead": "pix2pix needs the same scene captured in both domains, pixel for pixel, and for most interesting translations that dataset cannot exist. CycleGAN drops the pairing and replaces it with a structural assumption: translate to the other domain and back, and you must arrive where you started.",
+    "blocks": [
+      {
+        "h": "Why the adversarial term alone is not enough",
+        "b": "With two unpaired collections one can still train $G : X \\to Y$ so its outputs fool a discriminator on $Y$. That constrains the **distribution** of outputs and says nothing about the correspondence — any permutation of the target domain satisfies it equally, so a particular horse may become a zebra with nothing to do with it.\n\nThe problem is under-determined and no adversarial loss can determine it. CycleGAN adds the assumption that the translation is invertible and trains a second generator $F : Y \\to X$ to enforce it:\n\n$$\\mathcal{L}_{\\text{cyc}}(G, F) = \\mathbb{E}_{x}\\big[\\|F(G(x)) - x\\|_1\\big] + \\mathbb{E}_{y}\\big[\\|G(F(y)) - y\\|_1\\big]$$\n\nA translation that discards the input's content cannot be inverted, so the cycle term penalises exactly the failure the adversarial loss permits. Four networks train together — two generators, two discriminators."
+      },
+      {
+        "h": "What is kept from pix2pix",
+        "b": "The discriminators are PatchGANs and the generators are convolutional with residual blocks — the same components, doubled. The adversarial term switches to a least-squares form, which the paper finds more stable and which gives better-behaved gradients than the log-likelihood version.\n\nDiscriminators are updated against a buffer of previously generated images rather than only the current batch, damping the oscillation between networks. An **identity loss** is added for tasks where colour should be preserved — feeding a target-domain image to the generator mapping into that domain should return it unchanged — without which the paper observes hue shifts in photograph-to-painting translation."
+      },
+      {
+        "h": "The constraint is weaker than it looks",
+        "b": "Later analysis showed CycleGAN generators hiding information about the input in imperceptible high-frequency patterns, so the reverse generator recovers the original without the forward translation having genuinely preserved content — a steganographic solution satisfying the loss while defeating its purpose.\n\nThe assumption is also often false. Invertibility asserts a bijection, so translations that must add or remove information — a summer scene to a snow-covered one — cannot be expressed. In practice the method is strong on texture and colour and weak on geometry: horses become zebras, dogs do not become cats.\n\nThe cycle idea nonetheless generalised widely — back-translation in unsupervised machine translation is the same logic — and the line was closed out not by a better constraint but by text-conditioned diffusion, which performs these translations from a description without needing a second collection at all."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Unpaired Image-to-Image Translation using Cycle-Consistent Adversarial Networks",
+        "y": 2017
+      },
+      {
+        "t": "Image-to-Image Translation with Conditional Adversarial Networks",
+        "y": 2017
+      },
+      {
+        "t": "CycleGAN, a Master of Steganography",
+        "y": 2017
+      }
+    ]
+  },
+  "vae>nice": {
+    "lead": "The VAE optimises a bound because the exact likelihood is intractable, and the gap between the bound and the truth is unmeasurable. NICE asks what class of models makes the likelihood exact, and answers: invertible transformations whose Jacobian determinant is cheap. The coupling layer is the construction that delivers one.",
+    "blocks": [
+      {
+        "h": "Exact, by construction",
+        "b": "If $z = f(x)$ is invertible, the change-of-variables formula gives the density with no approximation:\n\n$$\\log p_X(x) = \\log p_Z(f(x)) + \\log\\left|\\det \\frac{\\partial f}{\\partial x}\\right|$$\n\nNo bound, no approximate posterior, no adversary, and no gap of unknown size. The encoder and decoder are the same network run in opposite directions, so inference is exact rather than amortised and approximate.\n\nThe obstacle is the determinant: $O(D^3)$ for a general Jacobian, which for images is unusable. The whole design problem is finding invertible maps whose determinant is trivial."
+      },
+      {
+        "h": "The coupling layer",
+        "b": "Split the input and transform one half using the other:\n\n$$y_{1:d} = x_{1:d}, \\qquad y_{d+1:D} = x_{d+1:D} + m(x_{1:d})$$\n\nThe Jacobian is lower triangular with unit diagonal, so its determinant is exactly 1 — the map is volume-preserving. The inverse needs no inversion of $m$: recover the first half directly, evaluate $m$, subtract. So $m$ may be an arbitrarily complex network, and both directions cost one forward pass.\n\nThe untouched half is the price, paid by alternating which half is which across layers; three or four layers suffice for every dimension to influence every other. A final diagonal scaling layer, with log-determinant $\\sum_i \\log|s_i|$, is added so the model can allocate volume rather than merely rearrange it."
+      },
+      {
+        "h": "What the exactness costs",
+        "b": "The bargain is genuinely different from the VAE's: exact likelihood, exact inference in one pass, and one-pass sampling, all from one network. No other family in this lane offers all three.\n\nThe constraints are severe. Invertibility forces the latent to have exactly the data's dimension, so there is no compression anywhere — a VAE's whole point is a bottleneck, and a flow cannot have one. Every layer must be invertible, which excludes most of the architectural vocabulary available elsewhere, so expressiveness is bought only with depth.\n\nSample quality reflected that throughout: flows remained behind GANs and later diffusion, while giving the cleanest likelihoods and the only exact encoder. The line's subsequent work is a sustained attempt to relax the determinant constraint — affine coupling, then learned channel mixing, then continuous time, where the determinant becomes a trace."
+      }
+    ],
+    "refs": [
+      {
+        "t": "NICE: Non-linear Independent Components Estimation",
+        "y": 2015
+      },
+      {
+        "t": "Auto-Encoding Variational Bayes",
+        "y": 2014
+      },
+      {
+        "t": "Variational Inference with Normalizing Flows",
+        "y": 2015
+      }
+    ]
+  },
+  "nice>realnvp": {
+    "lead": "NICE's coupling layers can only shift, never scale, so every transformation preserves volume and the model cannot concentrate density anywhere. RealNVP's affine coupling adds a learned scale alongside the shift while keeping the Jacobian triangular, and pairs it with a multi-scale architecture that makes flows workable on images.",
+    "blocks": [
+      {
+        "h": "Adding the scale",
+        "b": "The transformed half gains a multiplicative term:\n\n$$y_{1:d} = x_{1:d}, \\qquad y_{d+1:D} = x_{d+1:D} \\odot \\exp\\big(s(x_{1:d})\\big) + t(x_{1:d})$$\n\nThe Jacobian is still triangular, so the log-determinant is $\\sum_j s_j(x_{1:d})$ — a sum the layer has already computed. Inversion remains explicit and requires inverting neither $s$ nor $t$, so both stay unconstrained networks.\n\nWhat the scale buys is local volume change: the model can expand and contract, and therefore place high density on the data manifold and low density elsewhere. NICE could only translate mass around; its single global scaling layer was a partial substitute for exactly this."
+      },
+      {
+        "h": "Masking and multi-scale",
+        "b": "For images the split is a mask rather than a slice, and two patterns alternate. A **checkerboard** mask conditions on alternating pixels and captures local structure; a **channel-wise** mask, applied after a squeeze operation that folds $4\\times4$ spatial blocks into channels, captures structure across channels. Alternating the two, and alternating which side is transformed, gives every dimension influence over every other in a modest number of layers.\n\nThe architecture is also a hierarchy. After a few couplings at one scale, half the dimensions are **factored out** — sent directly to the latent and not processed further — and the rest continue. This cuts cost substantially and distributes the latent across scales, so some dimensions carry fine detail and others global structure, which the paper demonstrates by resampling one level while holding the others fixed."
+      },
+      {
+        "h": "The first workable flow, and its ceiling",
+        "b": "RealNVP produced recognisable samples on CelebA, LSUN and ImageNet at $32^2$ and $64^2$, with bits-per-dimension competitive against autoregressive models while sampling in a single pass rather than pixel by pixel. That combination — exact likelihood and parallel sampling — is the flow family's distinctive offer, and this is where it first worked.\n\nThe samples were nonetheless clearly inferior to GANs of the period, for reasons the constraint imposes rather than tuning: a likelihood objective spreads mass to cover the data, and an invertible architecture spends capacity on being invertible. Dimensionality is the harder limit, since the latent must match the data exactly and there is no compression.\n\nThe fixed alternating masks are also arbitrary — nothing says a checkerboard is the right partition — which is precisely what Glow replaces with a learned invertible $1\\times1$ convolution."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Density estimation using Real NVP",
+        "y": 2017
+      },
+      {
+        "t": "NICE: Non-linear Independent Components Estimation",
+        "y": 2015
+      }
+    ]
+  },
+  "realnvp>glow": {
+    "lead": "RealNVP alternates hand-chosen masks to decide which dimensions mix, which is arbitrary and limits how information moves between channels. Glow observes that a permutation is a special case of an invertible linear map and simply learns the general one — a $1 \\times 1$ convolution whose determinant is still cheap.",
+    "blocks": [
+      {
+        "h": "The learned permutation",
+        "b": "Between coupling layers RealNVP reverses or shuffles channels so different dimensions are transformed each time. Glow replaces the fixed shuffle with a learned $c \\times c$ matrix $W$ applied at every spatial position. For an $h \\times w$ feature map,\n\n$$\\log\\left|\\det \\frac{\\partial\\, \\mathrm{conv}(h; W)}{\\partial h}\\right| = h \\cdot w \\cdot \\log|\\det W|$$\n\nOne $c \\times c$ determinant, negligible beside the convolutions around it. Parameterising $W$ by its LU decomposition reduces that to a product of diagonal entries, $O(c)$, and guarantees invertibility by construction rather than by hope.\n\nThe gain is that channel mixing becomes learnable instead of prescribed, so the model decides which dimensions should interact rather than following a checkerboard."
+      },
+      {
+        "h": "Actnorm, because batch norm is not invertible",
+        "b": "Batch normalisation cannot be used here: it makes an example's output depend on its batch, which breaks the invertibility the change-of-variables formula requires, and it is noisy at the small batch sizes large flows need.\n\n**Actnorm** is a per-channel scale and bias, initialised from the first minibatch so its output has zero mean and unit variance, then trained as ordinary parameters. It is data-dependent initialisation rather than normalisation — invertible, batch-independent, and with a trivial log-determinant.\n\nThe Glow block is then three steps repeated — actnorm, invertible $1\\times1$ convolution, affine coupling — inside RealNVP's multi-scale hierarchy with squeezing and factoring out."
+      },
+      {
+        "h": "Exact encoding, at a price",
+        "b": "Because the model is exactly invertible, any real image encodes to its latent in one pass with no optimisation — unlike GAN inversion. Glow exploits this for manipulation: encode images with and without an attribute, take the difference of means, and adding that vector applies the attribute. Smiling, age and hair colour are edited this way on $256 \\times 256$ faces, and interpolation between two real images is a straight line decoded back.\n\nThe samples were the best the flow line produced and still below contemporary GANs, from a model of hundreds of millions of parameters and a large multi-GPU budget. The reason is the standing constraint: latent dimension equals data dimension, no compression anywhere, every layer invertible, so depth is the only route to expressiveness and depth is expensive in an invertible network.\n\nThat is what pushed the line to stop insisting on discrete invertible layers — a continuous-time transformation replaces the determinant with a trace, and the architectural constraint disappears with it."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Glow: Generative Flow with Invertible 1x1 Convolutions",
+        "y": 2018
+      },
+      {
+        "t": "Density estimation using Real NVP",
+        "y": 2017
+      }
+    ]
+  },
+  "realnvp>maf": {
+    "lead": "A coupling layer conditions one half of its input on the other, which is the smallest split that gives a triangular Jacobian. Autoregressive flows take the largest: condition every dimension on all the ones before it. The Jacobian is still triangular, the model is strictly more expressive, and the cost lands entirely on one direction.",
+    "blocks": [
+      {
+        "h": "One split against a full chain",
+        "b": "RealNVP's coupling transforms $x_{d+1:D}$ using $x_{1:d}$ and leaves the first half untouched, so each layer moves half the dimensions and the interaction structure is whatever the mask prescribes.\n\nAn autoregressive flow writes every dimension as a location-scale transform conditioned on all its predecessors:\n\n$$x_i = u_i \\exp(\\alpha_i) + \\mu_i, \\qquad \\mu_i = f_\\mu(x_{1:i-1}), \\; \\alpha_i = f_\\alpha(x_{1:i-1})$$\n\nThe Jacobian is triangular for the same reason — each output depends only on earlier inputs — so the log-determinant is $-\\sum_i \\alpha_i$. RealNVP is the special case where the conditioner is constant for the first $d$ dimensions and depends on all of them for the rest. The paper states this correspondence explicitly: coupling flows are autoregressive flows with a degenerate conditioner."
+      },
+      {
+        "h": "The asymmetry the chain introduces",
+        "b": "Coupling layers are parallel in both directions, which is their whole appeal. Autoregressive flows are parallel in one.\n\n**MAF** parameterises data to noise. Density evaluation is one pass, because every conditioner depends on $x$, which is given; sampling needs $D$ sequential passes. **IAF** parameterises noise to data, conditioning on $u_{1:i-1}$: sampling is one pass, evaluating an external point's density is sequential.\n\nSo the two are the same layer read in opposite directions with exactly reversed costs, and the choice follows the use. IAF suits a VAE posterior, which must be sampled cheaply; MAF suits density estimation on data already held. Masked networks in the MADE style compute all conditioners in one pass during training, so the sequential cost falls only on the inference direction that needs it."
+      },
+      {
+        "h": "Expressiveness against parallelism",
+        "b": "The trade is clean. Full autoregressive conditioning is more expressive per layer than a single split, so MAF needs fewer layers for comparable density estimates and reported strong bits-per-dimension results on tabular data and images.\n\nWhat it gives up is the property that made coupling flows practical for generation. A flow whose sampling is $D$ sequential passes is, for images, no better than an autoregressive model — the reason to build a flow at all was one-pass sampling.\n\nThe field's resolution is to train one direction and distil into the other. Parallel WaveNet trains an autoregressive teacher and distils it into an IAF student via probability density distillation, so each network is used only in the direction it is fast in. That construction is the clearest practical consequence of this fork, and it is what made WaveNet deployable."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Masked Autoregressive Flow for Density Estimation",
+        "y": 2017
+      },
+      {
+        "t": "Improved Variational Inference with Inverse Autoregressive Flow",
+        "y": 2016
+      },
+      {
+        "t": "Density estimation using Real NVP",
+        "y": 2017
+      }
+    ]
+  },
+  "glow>nde": {
+    "lead": "Every discrete flow is an exercise in making a determinant cheap, and every one pays for it with a constrained architecture. Neural ODEs make the transformation continuous, and in continuous time the log-determinant becomes a **trace** — a linear quantity with no structural requirement on the Jacobian at all.",
+    "blocks": [
+      {
+        "h": "Determinant to trace",
+        "b": "A discrete invertible layer requires $\\log|\\det \\partial f / \\partial x|$, which is only cheap for triangular, diagonal or otherwise engineered Jacobians. That single requirement produced coupling layers, masking patterns, the $1\\times1$ convolution and actnorm — the entire architectural vocabulary of NICE, RealNVP and Glow.\n\nIn continuous time the density evolves along the trajectory:\n\n$$\\frac{\\partial \\log p(\\mathbf{z}(t))}{\\partial t} = -\\mathrm{tr}\\left(\\frac{\\partial f}{\\partial \\mathbf{z}(t)}\\right)$$\n\nA trace is linear, so it imposes nothing on the structure of $f$. Any vector field will do, and the coupling layers can be dropped entirely."
+      },
+      {
+        "h": "Invertibility for free",
+        "b": "The second gain is that invertibility no longer has to be built in. An ODE with a Lipschitz vector field has a unique solution forwards and backwards, so the map from $\\mathbf{z}(t_0)$ to $\\mathbf{z}(t_1)$ is a bijection whatever $f$ is — obtained by integrating in the other direction rather than by an explicitly constructed inverse.\n\nDepth also stops being a discrete count. One set of weights defines the field, the solver decides how many evaluations the requested tolerance needs, and accuracy becomes a runtime parameter rather than an architectural one. The adjoint method keeps memory constant in the number of steps by reconstructing the trajectory backwards instead of storing it."
+      },
+      {
+        "h": "The constraint moves rather than vanishing",
+        "b": "Computing the exact trace still costs one backward pass per dimension, so a $D$-dimensional state needs $D$ passes — for images, worse than the determinant it replaced. FFJORD removes this with Hutchinson's stochastic estimator, at which point the flow is genuinely free-form.\n\nThe solver becomes the cost model, and it is unpredictable: as training makes the learned dynamics stiffer, the number of function evaluations grows, so later epochs are slower than earlier ones with no change to the model. A first-order ODE also cannot cross its own trajectories, which restricts the homeomorphisms representable — the augmented variants add dimensions to work around it.\n\nThe more durable change is in framing. Once generation is transport along an ODE from noise to data, the question becomes what path to follow, and flow matching and rectified flow are direct answers to that."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Neural Ordinary Differential Equations",
+        "y": 2018
+      },
+      {
+        "t": "Glow: Generative Flow with Invertible 1x1 Convolutions",
+        "y": 2018
+      }
+    ]
+  },
+  "maf>nde": {
+    "lead": "Autoregressive flows make the Jacobian triangular by imposing an ordering on the variables, and pay for it with a sequential pass in one direction. Neural ODEs reach a tractable Jacobian by a different route — continuous time, where the determinant becomes a trace — and the ordering, along with the asymmetry it caused, disappears.",
+    "blocks": [
+      {
+        "h": "Two ways to make the Jacobian cheap",
+        "b": "MAF's triangularity comes from the chain rule over an ordering: dimension $i$ depends only on $1, \\ldots, i-1$, so everything above the diagonal is zero and the determinant is a product of diagonal entries.\n\nThe continuous-time construction needs no such structure. Because the density evolves by $\\partial_t \\log p = -\\mathrm{tr}(\\partial f / \\partial \\mathbf{z})$, the quantity required is linear in the Jacobian rather than multiplicative, and linearity does not care about zero patterns. Both are answers to \"how do I avoid an $O(D^3)$ determinant\"; one constrains the model's dependency structure, the other changes the mathematics so no constraint is needed."
+      },
+      {
+        "h": "The asymmetry goes with it",
+        "b": "MAF and IAF are the same layer with reversed costs — one direction parallel, the other $D$ sequential passes — because their conditioners depend on quantities available in only one direction.\n\nAn ODE has no such distinction. Both directions are solver integrations of the same vector field, with the same cost, so a single trained model gives both exact density evaluation and sampling at equal price. That removes the train-one-distil-into-the-other manoeuvre that Parallel WaveNet needed, and it removes the arbitrary variable ordering: a continuous flow transforms all dimensions simultaneously and never has to declare which comes first.\n\nFor images that matters, since MAF's raster ordering asserts dependencies the data does not have — the same complaint that dogs PixelCNN."
+      },
+      {
+        "h": "What is traded",
+        "b": "The exact trace costs $D$ backward passes, which is worse than MAF's single parallel pass for density evaluation until Hutchinson's estimator reduces it to one. And the adaptive solver makes the per-example cost unknown in advance and growing over training, where an autoregressive flow's cost is fixed and predictable.\n\nAs density estimators the discrete autoregressive flows remained strong, particularly on tabular data where $D$ is small and the ordering is less arbitrary. The continuous line's advantage shows on high-dimensional data, where the architectural freedom matters and where the eventual descendants — flow matching, rectified flow — trade exact likelihood for a straight, cheaply-integrated path."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Neural Ordinary Differential Equations",
+        "y": 2018
+      },
+      {
+        "t": "Masked Autoregressive Flow for Density Estimation",
+        "y": 2017
+      }
+    ]
+  },
+  "nde>ffjord": {
+    "lead": "Continuous flows replaced the log-determinant with a trace, which removes the need for a structured Jacobian in principle. Computing that trace exactly still costs one backward pass per dimension, so the constraint had merely moved. FFJORD estimates it stochastically in a single pass, and the flow becomes genuinely unconstrained.",
+    "blocks": [
+      {
+        "h": "Hutchinson's estimator",
+        "b": "For any square matrix $A$ and any random vector $\\epsilon$ with zero mean and identity covariance,\n\n$$\\mathrm{tr}(A) = \\mathbb{E}_{p(\\epsilon)}\\big[\\epsilon^{\\top} A \\, \\epsilon\\big]$$\n\nApplied to the Jacobian, $\\epsilon^{\\top}(\\partial f / \\partial \\mathbf{z})$ is a vector-Jacobian product — precisely what reverse-mode automatic differentiation computes in one backward pass. So an unbiased trace estimate costs one pass instead of $D$.\n\nThe estimate is noisy, but it enters an expectation already being approximated by sampling over data and over time, and one $\\epsilon$ per solver step suffices in practice. Holding $\\epsilon$ fixed along a trajectory keeps the estimated dynamics self-consistent."
+      },
+      {
+        "h": "What the freedom removes",
+        "b": "With the trace cheap, nothing constrains $f$. No coupling layer, no masking pattern, no triangular Jacobian, no fixed permutation between layers, no split into transformed and untransformed halves.\n\nThat is the entire design budget of the discrete flows returned. NICE gave up scaling to keep the determinant trivial; RealNVP left half its input untouched per layer; Glow needed a learned $1\\times1$ convolution because its coupling could not mix channels. FFJORD needs none of it — the vector field can be an ordinary convolutional network — and reported the best flow densities of its moment with one continuous transformation replacing a deep stack of restricted ones."
+      },
+      {
+        "h": "The solver becomes the bill",
+        "b": "Cost is now entirely the adaptive solver's, and it is unpredictable in a specific way: as training makes the learned dynamics stiffer, function evaluations per pass rise, so the same model gets slower through a run and the count is not known in advance for a given input.\n\nRegularising for straighter trajectories helps — later work penalises the kinetic energy or the Jacobian norm of the field to keep the ODE easy to solve — and that observation is the direct ancestor of what followed. If the difficulty is that the learned path curves, prescribe a straight path in advance and regress the field onto it. No simulation during training, few solver steps at sampling time. Flow matching and rectified flow are that idea, and they make FFJORD's adaptive-solver cost the thing to be designed away."
+      }
+    ],
+    "refs": [
+      {
+        "t": "FFJORD: Free-form Continuous Dynamics for Scalable Reversible Generative Models",
+        "y": 2019
+      },
+      {
+        "t": "Neural Ordinary Differential Equations",
+        "y": 2018
+      }
+    ]
+  },
+  "ffjord>flowmatch": {
+    "lead": "FFJORD removed every architectural constraint on a continuous flow and left one cost standing: every gradient step requires solving an ODE, and the solver gets slower as training proceeds. Flow matching removes the simulation entirely by regressing the vector field onto a target available in closed form.",
+    "blocks": [
+      {
+        "h": "Simulation in the training loop",
+        "b": "A continuous normalising flow is trained by maximum likelihood, which requires integrating both the state and the accumulated log-density from $t_0$ to $t_1$ for every example in every batch. The adaptive solver chooses its own step count, and that count grows as the learned dynamics stiffen.\n\nSo training cost is neither fixed nor knowable in advance, and it rises over a run. This is the practical reason continuous flows never scaled to the image sizes GANs and diffusion were working at, despite having no architectural limitation left."
+      },
+      {
+        "h": "Conditioning makes the target explicit",
+        "b": "The natural objective — regress $v_\\theta$ onto the field $u_t$ generating a chosen probability path $p_t$ — is useless because neither $p_t$ nor $u_t$ has a closed form; both are marginals over the dataset.\n\nThe paper's result is that conditioning on a single data point fixes it. Define the path per example, $p_t(x \\mid x_1)$, which is a simple Gaussian one can write down, and regress onto its field:\n\n$$\\mathcal{L}_{\\mathrm{CFM}}(\\theta) = \\mathbb{E}_{t,\\, q(x_1),\\, p_t(x \\mid x_1)} \\big\\| v_\\theta(t, x) - u_t(x \\mid x_1) \\big\\|^2$$\n\nThe two objectives have **identical gradients** in $\\theta$, so optimising the tractable one optimises the intractable one exactly. Everything needed is available in closed form: sample a data point, a time, and a point on that example's path, then evaluate the target velocity. No ODE is solved, no trace is estimated, and the whole thing is a regression with the same practical profile as diffusion's noise prediction."
+      },
+      {
+        "h": "The path becomes a design choice",
+        "b": "With the framework in place, which probability path to use is up for selection. The Gaussian path implied by a variance-preserving diffusion recovers score-based training as a special case, so flow matching contains diffusion rather than competing with it.\n\nChoosing the **optimal transport** path instead — conditional interpolation along a straight line with constant velocity — gives something better behaved. Diffusion's path curves and its velocity varies with $t$; the linear one does not, and the paper reports faster training, better generalisation, and markedly fewer solver steps at sampling because the trajectories are nearly straight.\n\nWhat remains open is the pairing. Each data point is matched with independently drawn noise, so the induced coupling is arbitrary and the marginal field still averages over crossing paths — which is why the trajectories are straighter than diffusion's without being straight. Rectified flow's reflow procedure attacks exactly that, at the cost of extra training rounds."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Flow Matching for Generative Modeling",
+        "y": 2023
+      },
+      {
+        "t": "FFJORD: Free-form Continuous Dynamics for Scalable Reversible Generative Models",
+        "y": 2019
+      }
+    ]
+  },
+  "vae>ddpm": {
+    "lead": "A VAE maps data to a latent and back in one step, and everything difficult about it — posterior collapse, blur, the gap in the bound — follows from asking one encoder and one decoder to bridge that distance. Diffusion breaks the same journey into a thousand small steps, each of which is easy, and the encoder disappears entirely.",
+    "blocks": [
+      {
+        "h": "The same bound, decomposed",
+        "b": "A diffusion model is formally a hierarchical VAE whose inference network is fixed rather than learned. The forward noising process plays the role of $q(z \\mid x)$, and it has no parameters at all: it adds Gaussian noise on a schedule.\n\nThe training objective is a variational bound of the same kind, but because both the forward and reverse conditionals are Gaussian, every term is a KL divergence between Gaussians with a closed form. There is no approximate posterior to learn, so there is no posterior to collapse, and no encoder whose expressiveness limits the bound's tightness.\n\nThe latent also has the same dimension as the data at every step, so there is no bottleneck — a diffusion model does not compress, which is why latent diffusion later pairs it with a VAE that does."
+      },
+      {
+        "h": "Why many small steps are easier",
+        "b": "The VAE's decoder must map a compact Gaussian latent to a full image in one shot, which is a hard conditional distribution and the reason a unimodal output density produces blur.\n\nEach reverse diffusion step only has to remove a small amount of noise from an image that is already mostly formed. That conditional is close to Gaussian — which is why the closed-form parameterisation is legitimate — and the network never faces the whole distance at once. The information is delivered gradually, and a mistake at one step is partially correctable at the next.\n\nThe closed-form marginal $q(x_t \\mid x_0) = \\mathcal{N}(\\sqrt{\\bar\\alpha_t}\\, x_0, (1-\\bar\\alpha_t) I)$ means training can jump straight to a random step rather than simulating the chain, so the many-step structure costs nothing at training time."
+      },
+      {
+        "h": "The bill moves to sampling",
+        "b": "What the VAE bought with its single step was a single forward pass to generate. Diffusion's decomposition moves the entire cost there: $T$ sequential network evaluations, $T = 1000$ in DDPM.\n\nSo the two are the same variational idea with the difficulty relocated. The VAE concentrates it in a hard one-step decoder and gets fast, soft samples; diffusion spreads it over many easy steps and gets sharp, slow ones.\n\nThe field then spent years reducing the step count — DDIM's non-Markovian sampler, better ODE solvers, distillation, consistency models, straight-path flows — and, in latent diffusion, put the VAE back underneath to make each step cheaper. The two models end up composed rather than opposed."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Denoising Diffusion Probabilistic Models",
+        "y": 2020
+      },
+      {
+        "t": "Auto-Encoding Variational Bayes",
+        "y": 2014
+      },
+      {
+        "t": "Deep Unsupervised Learning using Nonequilibrium Thermodynamics",
+        "y": 2015
+      }
+    ]
+  },
+  "ncsn>ddpm": {
+    "lead": "NCSN had the algorithm — one network conditioned on a noise level, trained by denoising, sampled by walking from most noisy to least — and a sampler with several hand-set knobs and no clean objective. DDPM arrives at the same procedure from a variational derivation and reduces the training loss to a single squared error.",
+    "blocks": [
+      {
+        "h": "The same network, a different derivation",
+        "b": "NCSN estimates $\\nabla_x \\log p_\\sigma(x)$ for a geometric sequence of noise levels, using denoising score matching. DDPM predicts the noise $\\epsilon$ added at a timestep of a fixed Markov chain, using a variational bound.\n\nUp to a scaling factor these are the same quantity: for a Gaussian perturbation, the score of the noised density and the noise added to the sample differ by $-1/\\sigma$. Both papers therefore train one network conditioned on a level, both sample by descending through levels, and the resulting algorithms are near-identical despite starting from score matching and Langevin dynamics on one side and a hierarchical latent-variable bound on the other."
+      },
+      {
+        "h": "The simplification",
+        "b": "The variational bound decomposes into KL terms between Gaussians, each closed-form. Ho et al. then reparameterise the reverse mean in terms of the noise and **drop the weighting the bound prescribes**, leaving\n\n$$\\mathcal{L}_{\\text{simple}} = \\mathbb{E}_{t, x_0, \\epsilon}\\Big[\\big\\| \\epsilon - \\epsilon_\\theta\\big(\\sqrt{\\bar\\alpha_t}\\, x_0 + \\sqrt{1-\\bar\\alpha_t}\\, \\epsilon,\\; t\\big) \\big\\|^2\\Big]$$\n\nOne squared error, uniformly weighted over timesteps. The paper is explicit that this is not the bound — it down-weights the small-$t$ terms — and that it produces better samples anyway.\n\nNCSN's loss required a per-level weighting chosen so that all noise scales contribute comparably, and getting it wrong degrades either fine detail or global structure. Here the weighting question is settled by a choice that turns out to be both simpler and better."
+      },
+      {
+        "h": "The sampler, and what was tidied",
+        "b": "Annealed Langevin dynamics needs a step size and a number of steps per level, and the paper following NCSN is largely about choosing them. DDPM's reverse process is a Markov chain whose variances are set by the same fixed schedule as the forward one, so there is nothing to tune — sampling is $T$ applications of a formula.\n\nThe reverse variances are fixed to schedule constants rather than learned, which the paper finds as good as learning them and removes a source of instability. The noise schedule is linear in $\\beta_t$ rather than geometric in $\\sigma$, which the score-SDE framework later identified as the variance-preserving choice against NCSN's variance-exploding one.\n\nWhat neither fixes is the step count. A thousand sequential evaluations per image is the standing cost, and everything downstream in this lane is a response to it."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Denoising Diffusion Probabilistic Models",
+        "y": 2020
+      },
+      {
+        "t": "Generative Modeling by Estimating Gradients of the Data Distribution",
+        "y": 2019
+      },
+      {
+        "t": "Improved Techniques for Training Score-Based Generative Models",
+        "y": 2020
+      }
+    ]
+  },
+  "ncsn>scoresde": {
+    "lead": "NCSN perturbs data with a geometric sequence of noise scales and samples by annealed Langevin dynamics. Score SDE shows that the sequence is a discretisation of a continuous stochastic process — the variance-exploding SDE — and that taking the continuous view supplies both better samplers and an exact likelihood.",
+    "blocks": [
+      {
+        "h": "The noise levels are a discretisation",
+        "b": "NCSN's scales $\\sigma_1 > \\cdots > \\sigma_L$ are chosen as a geometric sequence, with $L$ and the ratio picked by hand. In the continuous limit this is\n\n$$d\\mathbf{x} = \\sqrt{\\frac{d[\\sigma^2(t)]}{dt}}\\; d\\mathbf{w}$$\n\nwith no drift term. The variance grows without bound as $t \\to 1$, which is why the paper calls it **variance exploding** — the perturbed distribution at the final time is essentially a very wide Gaussian, matching NCSN's practice of starting Langevin sampling from large noise.\n\nOnce the schedule is a function rather than a list, it becomes something to design rather than tune, and the number of levels stops being a hyperparameter."
+      },
+      {
+        "h": "Reverse-time, and predictor-corrector",
+        "b": "Anderson's reverse-time formula gives the generative process for any such SDE:\n\n$$d\\mathbf{x} = \\big[f(\\mathbf{x}, t) - g(t)^2 \\nabla_{\\mathbf{x}} \\log p_t(\\mathbf{x})\\big] dt + g(t)\\, d\\bar{\\mathbf{w}}$$\n\nThe only unknown is the score, which is exactly what NCSN's network estimates. So annealed Langevin dynamics is revealed as one numerical scheme for this reverse SDE among many, and sampler design becomes a question with a large existing literature behind it.\n\n**Predictor-corrector** sampling follows directly: alternate a step of a standard SDE solver, which uses the drift, with a few Langevin corrector steps, which use only the score. The predictor advances time and the corrector repairs the numerical error it introduced before it accumulates — and the corrector is precisely NCSN's sampler, now used as a refinement rather than as the whole method."
+      },
+      {
+        "h": "Likelihood, which NCSN never had",
+        "b": "The framework's deterministic counterpart, the probability flow ODE, shares the SDE's marginals at every time and has no noise term. That makes any score-based model a continuous normalising flow, so exact likelihoods are computable by the instantaneous change-of-variables formula.\n\nFor NCSN this is a genuine addition. Score matching deliberately avoids the normalising constant, which is what makes it tractable and also what left the model unable to report a density. Score SDE recovers it without changing the training objective, and reports competitive bits-per-dimension for a family that had offered none.\n\nWhat it does not fix is the step count: accurate integration of the reverse SDE still needs many evaluations, and predictor-corrector improves quality per step rather than removing the requirement."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Score-Based Generative Modeling through Stochastic Differential Equations",
+        "y": 2021
+      },
+      {
+        "t": "Generative Modeling by Estimating Gradients of the Data Distribution",
+        "y": 2019
+      },
+      {
+        "t": "Reverse-time diffusion equation models",
+        "y": 1982
+      }
+    ]
+  },
+  "ddpm>scoresde": {
+    "lead": "DDPM's forward process is a Markov chain of Gaussian steps indexed by a discrete schedule. Score SDE shows it is a discretisation of the variance-preserving stochastic differential equation, which places it and NCSN as two members of one continuous family and hands both a deterministic counterpart.",
+    "blocks": [
+      {
+        "h": "The chain in the limit",
+        "b": "DDPM's step is $x_t = \\sqrt{1-\\beta_t}\\, x_{t-1} + \\sqrt{\\beta_t}\\, \\epsilon$, which shrinks the signal as it adds noise so the total variance stays bounded. Taking the number of steps to infinity gives\n\n$$d\\mathbf{x} = -\\tfrac{1}{2}\\beta(t)\\, \\mathbf{x}\\, dt + \\sqrt{\\beta(t)}\\; d\\mathbf{w}$$\n\nThe drift term is what distinguishes it from NCSN's: it pulls the state towards the origin at the same rate noise is injected, so the marginal converges to a standard Gaussian rather than a very wide one. Hence **variance preserving**.\n\nWith the two named as neighbouring choices in one family, the paper is able to propose a third — sub-VP — that improves likelihoods, which is the sort of move the discrete formulations made hard to see."
+      },
+      {
+        "h": "$\\epsilon$-prediction is score estimation",
+        "b": "DDPM trains $\\epsilon_\\theta$ to predict the noise added at step $t$. Because the perturbation is Gaussian with known variance, the score of the noised marginal is\n\n$$\\nabla_{x} \\log p_t(x) = -\\frac{\\epsilon_\\theta(x, t)}{\\sqrt{1 - \\bar\\alpha_t}}$$\n\nso the two derivations produce the same network up to a scale factor. This is the formal statement of a coincidence the field had noticed empirically: DDPM and NCSN, derived from a variational bound and from score matching respectively, arrive at the same algorithm because they are estimating the same object.\n\nAfter this paper the distinction between \"diffusion models\" and \"score-based models\" stops being meaningful, and the literature uses the terms interchangeably."
+      },
+      {
+        "h": "The ODE, and what it opened",
+        "b": "The more consequential result is the probability flow ODE, which shares the SDE's marginals with no noise term:\n\n$$d\\mathbf{x} = \\Big[f(\\mathbf{x}, t) - \\tfrac{1}{2} g(t)^2 \\nabla_{\\mathbf{x}} \\log p_t(\\mathbf{x})\\Big] dt$$\n\nThree things follow for a trained DDPM. Exact likelihoods become computable. Every image gets a uniquely determined latent, so encoding, interpolation and editing are well-defined. And black-box ODE solvers apply, which is where the fast samplers come from — DDIM's deterministic sampler turns out to be a first-order discretisation of this ODE, and DPM-Solver and its relatives are higher-order ones.\n\nOnce generation is an ODE from noise to data, the question of which path to take is explicit, which is where flow matching and rectified flow begin."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Score-Based Generative Modeling through Stochastic Differential Equations",
+        "y": 2021
+      },
+      {
+        "t": "Denoising Diffusion Probabilistic Models",
+        "y": 2020
+      }
+    ]
+  },
+  "scoresde>ddim": {
+    "lead": "Score SDE showed that a trained diffusion model has a deterministic counterpart with the same marginals — the probability flow ODE. DDIM is what that looks like as a practical sampler: a non-Markovian process sharing DDPM's marginals, integrable in tens of steps instead of a thousand, with no retraining.",
+    "blocks": [
+      {
+        "h": "The objective does not pin down the process",
+        "b": "DDPM's simplified loss depends only on the marginals $q(x_t \\mid x_0)$. Every term refers to a single timestep; nothing in it constrains how consecutive steps relate.\n\nDDIM exploits that freedom, constructing a family of forward processes indexed by $\\sigma$ that share those marginals but are not Markov chains — each step conditions on $x_0$ as well as the previous state. Any trained DDPM is therefore already a valid model for every member, and the choice is made at sampling time.\n\nSetting $\\sigma = 0$ makes the reverse process fully deterministic, and that member is a discretisation of the probability flow ODE. The two papers are describing the same object: DDIM found the deterministic sampler by construction, Score SDE explained what it is."
+      },
+      {
+        "h": "Skipping timesteps",
+        "b": "Because the process is defined by marginals, any subsequence $\\tau_1 < \\cdots < \\tau_S$ of the original $T$ steps defines a valid shorter process. The update predicts $x_0$ from the current state and re-noises it to the next level:\n\n$$x_{\\tau_{i-1}} = \\sqrt{\\bar\\alpha_{\\tau_{i-1}}}\\; \\left(\\frac{x_{\\tau_i} - \\sqrt{1-\\bar\\alpha_{\\tau_i}}\\; \\epsilon_\\theta(x_{\\tau_i})}{\\sqrt{\\bar\\alpha_{\\tau_i}}}\\right) + \\sqrt{1-\\bar\\alpha_{\\tau_{i-1}}}\\; \\epsilon_\\theta(x_{\\tau_i})$$\n\nTwenty to fifty steps give samples close to the thousand-step chain — one to two orders of magnitude, from a change of sampler alone on an unchanged model."
+      },
+      {
+        "h": "A latent that behaves, and the standing trade",
+        "b": "Determinism gives diffusion something DDPM lacked: the same noise vector always yields the same image, so interpolation between latents produces smooth semantic transitions, and the sampler run backwards approximately encodes a real image. Every diffusion editing and inversion method depends on this.\n\nThe trade is manual. Fewer steps means larger integration error, showing as lost fine detail and degraded FID, and where the floor sits varies by model and dataset — nothing in DDIM says where to stop.\n\nUnderstanding the sampler as an ODE discretisation is what opened the next round: DPM-Solver and its relatives use higher-order schemes exploiting the semi-linear structure and reach comparable quality in ten steps or fewer. Below that the reduction comes from changing the model rather than the solver — distillation, consistency models, and the straight-path flows."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Denoising Diffusion Implicit Models",
+        "y": 2021
+      },
+      {
+        "t": "Score-Based Generative Modeling through Stochastic Differential Equations",
+        "y": 2021
+      },
+      {
+        "t": "DPM-Solver: A Fast ODE Solver for Diffusion Probabilistic Model Sampling",
+        "y": 2022
+      }
+    ]
+  },
+  "ddim>ldm": {
+    "lead": "DDIM cut the number of sampling steps by an order of magnitude and each remaining step still ran a full-resolution U-Net over pixels. Latent diffusion attacks the other factor: compress the image first, run the diffusion in that space, and every step becomes cheaper by the square of the compression.",
+    "blocks": [
+      {
+        "h": "Two independent factors",
+        "b": "Sampling cost is the number of steps times the cost per step. DDIM reduced the first from a thousand to a few tens; nothing about it touches the second.\n\nLatent diffusion trains an autoencoder that compresses by a factor $f$ per side — 4 or 8 in the released models — so a $512 \\times 512$ image becomes a $64 \\times 64$ latent and each denoising step costs roughly $f^2$ times less. The two reductions multiply, and together they are what brought text-to-image generation onto consumer hardware.\n\nThe paper frames the split as separating **perceptual** from **semantic** compression. The autoencoder discards detail the eye does not attend to; the diffusion model then works in a space where nearly every dimension carries meaning, which is a far better use of its capacity than spending it on imperceptible high-frequency structure."
+      },
+      {
+        "h": "What the autoencoder needs to be",
+        "b": "A plain reconstruction loss gives blurry decodings at useful compression rates, so the first stage is trained with a perceptual loss and a patch-based adversarial term. The discriminator is what keeps the decoder sharp — the GAN line's contribution, used as a component rather than as the generator.\n\nRegularisation of the latent is deliberately light: either a small KL penalty or a vector-quantisation layer, enough to keep the space well-scaled without imposing the strong prior that would cost reconstruction quality. The point is a good space to diffuse in, not a good generative model in itself.\n\nChoosing $f$ is a real trade. Too little and the saving is small; too much and the autoencoder becomes the quality ceiling, since no amount of diffusion recovers what it discarded."
+      },
+      {
+        "h": "Cross-attention, and what the ceiling costs",
+        "b": "The second contribution is general conditioning. A modality-specific encoder maps the condition to a sequence, and the U-Net's features attend to it at every resolution rather than having it concatenated once. Because the interface is a sequence of embeddings, any modality with an encoder plugs in — and in Stable Diffusion the text encoder is CLIP's, frozen.\n\nThe autoencoder's ceiling is the standing cost, and it is visible in the familiar failure cases: small text, fine regular textures, precise faces. These are reconstruction failures — encoding and decoding a real image shows them without any diffusion involved.\n\nThe two stages are also trained separately, so nothing optimises the latent for being easy to model. And the U-Net backbone carries its own hand-tuned structure with no scaling law, which is what DiT replaced."
+      }
+    ],
+    "refs": [
+      {
+        "t": "High-Resolution Image Synthesis with Latent Diffusion Models",
+        "y": 2022
+      },
+      {
+        "t": "Denoising Diffusion Implicit Models",
+        "y": 2021
+      }
+    ]
+  },
+  "vae>ldm": {
+    "lead": "Latent diffusion's first stage is a VAE, and the choice is deliberate rather than incidental. The diffusion model needs a space that is compressed, smooth enough to interpolate through, and scaled so that a fixed noise schedule means the same thing everywhere — which is a description of what a variational autoencoder produces.",
+    "blocks": [
+      {
+        "h": "Why not a plain autoencoder",
+        "b": "An ordinary autoencoder would compress perfectly well and leave a latent space of arbitrary shape and scale, with codes scattered wherever reconstruction happened to put them. A diffusion process defined on such a space is ill-posed: the noise schedule assumes a roughly known variance, and a latent whose scale varies by orders of magnitude across dimensions would be destroyed unevenly.\n\nSo the first stage is regularised — either a small KL penalty towards a standard normal, or a vector-quantisation layer. The KL weight is deliberately **light**, far below what a generative VAE would use. A strong prior would cost reconstruction quality, and reconstruction quality is the ceiling on everything downstream. The regulariser exists to keep the space well-behaved, not to make the autoencoder a generative model in its own right."
+      },
+      {
+        "h": "The adversarial term",
+        "b": "A VAE trained on likelihood alone gives blurry decodings, which at $f = 8$ compression is disqualifying. Latent diffusion's autoencoder therefore adds a perceptual loss and a patch-based adversarial term to the reconstruction objective.\n\nThat is the GAN line entering as a component rather than as a generator: the discriminator's job is to keep the decoder sharp, and it does the one thing the adversarial objective is unambiguously good at. The result is a first stage that is a VAE by structure and a GAN by training signal, which is why the released models decode crisply at compression rates a plain VAE could not sustain."
+      },
+      {
+        "h": "The division of labour",
+        "b": "The arrangement assigns each model what it does well. The VAE handles **perceptual** compression, discarding high-frequency detail the eye does not attend to — a task where its blur tendency is harmless because the discarded detail is imperceptible anyway. The diffusion model handles **semantic** structure in a space where nearly every dimension carries meaning.\n\nThe VAE's own failure modes are thereby neutralised: posterior collapse cannot occur with a light KL weight and no strong decoder prior, and blur is confined to detail below the perceptual threshold.\n\nWhat remains is the ceiling. Whatever the encoder discarded is unavailable to the diffusion model however large it grows, which is why small text, fine regular textures and precise faces are the standing failure cases — reconstruction failures visible without any diffusion at all. And the two stages are trained separately, so nothing shapes the latent to be easy to diffuse in."
+      }
+    ],
+    "refs": [
+      {
+        "t": "High-Resolution Image Synthesis with Latent Diffusion Models",
+        "y": 2022
+      },
+      {
+        "t": "Auto-Encoding Variational Bayes",
+        "y": 2014
+      },
+      {
+        "t": "Taming Transformers for High-Resolution Image Synthesis",
+        "y": 2021
+      }
+    ]
+  },
+  "ldm>dit": {
+    "lead": "Latent diffusion made each denoising step cheap and kept DDPM's U-Net, a hand-tuned architecture with no relationship between its size and its output quality. DiT replaces it with a plain transformer over latent patches, and the replacement brings a scaling law the convolutional backbone never had.",
+    "blocks": [
+      {
+        "h": "The latent is what makes it affordable",
+        "b": "A transformer over patches is only viable because latent diffusion put the process in a compressed space first. Attention is quadratic in token count, and patchifying a $512 \\times 512$ pixel image at any useful granularity gives a sequence no attention stack could afford.\n\nOn a $64 \\times 64$ latent the token count is manageable, and DiT inherits the two-stage structure whole — same VAE, same compression factor, same conditioning problem. What changes is only the denoiser. This is why the arrow runs from latent diffusion rather than from DDPM: the architectural substitution depends on the compression having already happened."
+      },
+      {
+        "h": "Quality tracks FLOPs",
+        "b": "The U-Net's depth, width, channel multipliers per stage and choice of which resolutions get attention are all hand-set, and there is no principle relating them to sample quality — scaling it up is guesswork.\n\nDiT's measurement is that FID tracks total **FLOPs** rather than parameters, and that patch size and model size are two interchangeable routes to that currency. Halving the patch size quadruples the tokens and the compute at unchanged parameter count, and a smaller model at fine patches beats a larger one at coarse patches.\n\nThat converts architecture design into a budget decision, which is the property language modelling had and image generation lacked. Conditioning is handled by adaptive layer normalisation with a zero-initialised residual gate — each block starts as the identity and grows its contribution — which the ablation finds both the best-performing and the cheapest of the options tried."
+      },
+      {
+        "h": "Why the substitution stuck",
+        "b": "DiT set the state of the art on class-conditional ImageNet, and more consequentially settled the backbone question. Stable Diffusion 3 is a transformer, the large video models are transformers, and Sora's spacetime patches are this construction extended over time.\n\nThe reason is not only quality. A transformer inherits the entire engineering stack built for language models — sharding, kernel fusion, sequence parallelism, known scaling behaviour — none of which transfers to a bespoke convolutional network with attention at selected resolutions.\n\nThe costs are the transformer's: quadratic attention makes fine patches expensive, convergence is slower than a U-Net's at equal compute, and the autoencoder's ceiling is inherited unchanged."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Scalable Diffusion Models with Transformers",
+        "y": 2023
+      },
+      {
+        "t": "High-Resolution Image Synthesis with Latent Diffusion Models",
+        "y": 2022
+      }
+    ]
+  },
+  "dit>sd3": {
+    "lead": "DiT established the transformer as the diffusion backbone and conditioned it on a class label — a single vector. Text conditioning is a sequence, and forcing it and the image tokens through shared weights makes each modality's statistics interfere with the other's. SD3's MMDiT gives them separate parameters and joins them only in attention.",
+    "blocks": [
+      {
+        "h": "Two modalities, two parameter sets",
+        "b": "MMDiT keeps DiT's structure and doubles the per-layer weights: text and image tokens each get their own projections, their own normalisation parameters and their own feed-forward block. The attention operation then runs over the **concatenated** sequence, so the two interact fully.\n\nThe division is principled. Text and image token embeddings have different statistics and different useful transformations, and there is no reason a feed-forward block tuned for one should suit the other — but the relationship between them is exactly what attention is for. So mixing happens where it should and per-modality processing stays separate.\n\nThe paper's ablation shows this beating both a shared-weight transformer and cross-attention conditioning of the kind latent diffusion used."
+      },
+      {
+        "h": "What conditioning through attention gives up and gains",
+        "b": "In latent diffusion the text sequence is read by cross-attention: image features query it, and the text representation is never updated. In MMDiT both directions run, so the text tokens are also modified by what the image is becoming.\n\nThe cost is sequence length — attention is over text plus image tokens rather than image tokens alone — and the gain shows in the failure modes that improve. Prompts specifying multiple subjects with distinct attributes, where a red cube and a blue sphere become two objects of confused colour, are a binding failure that a one-directional read handles poorly.\n\nThree text encoders are used together, two CLIP models and T5-XXL, with the T5 branch optional at inference. That the large language-model encoder supplies the detailed text understanding is the same finding Imagen reported."
+      },
+      {
+        "h": "What it does not change",
+        "b": "The two-stage structure and its autoencoder ceiling are inherited from latent diffusion through DiT, unchanged. So are the transformer's quadratic attention and its dependence on the latent being small.\n\nThe dependence on very large text encoders is a new cost: T5-XXL is a substantial fraction of the deployed system's memory, and making it optional is a memory-versus-prompt-adherence dial rather than a solution.\n\nAnd the model is large enough that the released weights, rather than the recipe, are what most people can use — the paper documents an industrial system as much as it proposes a method."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Scaling Rectified Flow Transformers for High-Resolution Image Synthesis",
+        "y": 2024
+      },
+      {
+        "t": "Scalable Diffusion Models with Transformers",
+        "y": 2023
+      }
+    ]
+  },
+  "flowmatch>sd3": {
+    "lead": "Flow matching showed that diffusion's noising path is one choice among many and that a straight interpolation trains faster and needs fewer sampling steps. SD3 is where that stops being a comparison on benchmarks and becomes the training objective of a deployed text-to-image system.",
+    "blocks": [
+      {
+        "h": "The objective, adopted",
+        "b": "Training regresses a velocity field onto straight interpolations between noise and data rather than predicting noise under a diffusion schedule. Because the conditional path is a straight line with constant velocity, the target is available in closed form and the loss is a plain regression — the same practical profile as $\\epsilon$-prediction, with a better-conditioned trajectory.\n\nThe paper's contribution is not the objective but the comparison. It evaluates a range of diffusion and flow formulations under matched conditions — same data, same architecture, same budget — and reports the rectified-flow variants ahead. That is the evidence the field needed to move, since the individual method papers each compared against their own baselines."
+      },
+      {
+        "h": "Two schedule corrections",
+        "b": "Adopting the objective at scale required two adjustments that the original formulation left open.\n\n**Timestep sampling.** Uniform sampling of $t$ spends equal effort everywhere, and the middle of the trajectory is where the prediction problem is hardest — near $t=0$ the answer is nearly the data, near $t=1$ nearly the noise. SD3 samples $t$ from a logit-normal distribution, concentrating training in the middle, and reports a clear gain.\n\n**Resolution shift.** A larger image carries more redundancy, so a given noise level destroys proportionally less information about it. Keeping the difficulty matched as resolution rises requires shifting the schedule towards higher noise, and without this a model trained at one resolution transfers poorly to another."
+      },
+      {
+        "h": "Fewer steps, not one",
+        "b": "Straight paths integrate accurately with fewer solver steps, which is the practical payoff and the reason the objective was worth switching to.\n\nIt does not deliver single-step generation. The conditional construction pairs each data point with independently drawn noise, so the marginal field still averages over crossing paths and the learned trajectories are straighter than diffusion's without being straight. Reaching one step requires the reflow rounds or distillation that rectified flow's own paper describes, each costing a full synthetic dataset and a retraining pass.\n\nSo SD3 sits at the practical point on that curve: an objective that is cheaper to sample than diffusion, trained once, with the one-step models left as a separate distillation problem."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Scaling Rectified Flow Transformers for High-Resolution Image Synthesis",
+        "y": 2024
+      },
+      {
+        "t": "Flow Matching for Generative Modeling",
+        "y": 2023
+      },
+      {
+        "t": "Flow Straight and Fast: Learning to Generate and Transfer Data with Rectified Flow",
+        "y": 2023
+      }
+    ]
+  },
+  "vae>worldmodels": {
+    "lead": "A reinforcement learning agent that sees raw pixels has to learn perception and control from the same reward signal, which is a very thin channel for the former. World Models separates them: a VAE compresses each frame to a small latent, learned entirely without reward, and everything downstream operates on that.",
+    "blocks": [
+      {
+        "h": "Three components, trained apart",
+        "b": "The architecture is deliberately modular. **V** is a VAE that encodes a frame to a latent $z$ of a few tens of dimensions, trained by reconstruction on rollouts from a random policy. **M** is a recurrent network with a mixture-density output that predicts $z_{t+1}$ from $z_t$, the action and its own hidden state. **C** is a tiny controller — in the paper a single linear layer — mapping $[z_t, h_t]$ to an action.\n\nThe point of the split is where the parameters sit. V and M hold nearly all of them and are trained by self-supervision, with no reward involved. C holds a few hundred and is the only part optimised against the task, which is what makes evolution strategies a viable optimiser for it."
+      },
+      {
+        "h": "Why a VAE rather than an autoencoder",
+        "b": "The latent is not merely a compression; it is the state the controller and the predictor both consume, so it needs to be smooth and well-scaled. Nearby latents must decode to similar frames, or the dynamics model is trying to predict in a space where small errors are catastrophic.\n\nThe stochastic encoder and the KL term deliver that. They also give M something to predict *into* — a distribution over latents rather than a point — which is why M's output is a mixture density with a temperature parameter rather than a single vector. Uncertainty about the next observation is represented rather than averaged away."
+      },
+      {
+        "h": "Training inside the dream",
+        "b": "The paper's striking result is that the controller can be trained entirely on rollouts generated by M, without touching the environment, and then transferred back. The learned model is a simulator, and the agent learns in it.\n\nThe failure mode is instructive: a controller trained in an imperfect dream finds and exploits its inaccuracies, producing behaviour that scores well in the model and fails in the world. The paper's mitigation is to raise the temperature of M's predictions, making the dream noisier and its exploitable flaws less reliable — a bluntly effective answer to model exploitation.\n\nThe wider point this arrow records is the generative model as a component of an agent rather than as an end in itself. The VAE is doing representation learning, and the same role — a learned latent to plan in — runs forward through the model-based RL line to Dreamer and its successors."
+      }
+    ],
+    "refs": [
+      {
+        "t": "World Models",
+        "y": 2018
+      },
+      {
+        "t": "Auto-Encoding Variational Bayes",
+        "y": 2014
+      }
+    ]
+  },
+  "ddpm>dalle2": {
+    "lead": "DALL-E generated images as sequences of discrete tokens. DALL-E 2 abandons that and uses diffusion as the renderer instead, conditioned on a CLIP image embedding — so the text-to-image problem splits into predicting what the image should mean and then drawing something that means it.",
+    "blocks": [
+      {
+        "h": "The two-stage split",
+        "b": "CLIP provides a shared space in which an image and its caption land near each other. DALL-E 2 uses that as an interface. A **prior** maps a text embedding to a plausible **image** embedding, and a **decoder** — a diffusion model — generates an image conditioned on that embedding.\n\nThe division separates two different problems. Deciding what should be in the picture is semantic and low-dimensional; rendering it is high-dimensional and perceptual. The prior is itself a diffusion model over embeddings in the released form, having been found better than the autoregressive alternative.\n\nBecause the conditioning is an image embedding rather than text, the decoder also inherits a useful property: the same architecture generates variations of a real image by encoding it with CLIP and decoding, with no text involved."
+      },
+      {
+        "h": "Why diffusion for the decoder",
+        "b": "A CLIP image embedding is a summary, so many images correspond to one. The decoder's job is therefore explicitly one-to-many, and it needs a model class that represents a distribution rather than a point.\n\nDiffusion supplies exactly that, and it is where DDPM's contribution enters: a stationary regression objective, no adversary, and sample quality that by 2022 exceeded GANs. Classifier-free guidance provides the fidelity dial, and the system uses cascaded diffusion — a base model followed by two upsampling diffusion models — to reach high resolution, since a single model at full resolution was not affordable.\n\nThe paper reports that the CLIP-embedding conditioning gives good diversity for a given prompt while keeping semantic fidelity, which is the trade a token-autoregressive model handled less gracefully."
+      },
+      {
+        "h": "What the interface costs",
+        "b": "Everything the decoder knows about the prompt arrives through a single CLIP embedding, and that vector is a summary. Fine detail in a prompt — spatial relations, counts, attribute binding between multiple objects — is exactly what a global embedding compresses away, and the paper documents these as failure cases: the model produces the right objects with the wrong relationships.\n\nThat weakness is what Imagen's contemporaneous result addresses from the other side, by conditioning on a large frozen T5 encoder's full token sequence rather than on a pooled embedding, and finding that text-encoder scale matters more than image-generator scale. SD3's MMDiT continues in that direction.\n\nWhat this arrow marks regardless is the moment the generative line's renderer stopped being autoregressive: after this, text-to-image systems are diffusion models with a conditioning interface, and the token-sequence formulation returns only in multimodal language models."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Hierarchical Text-Conditional Image Generation with CLIP Latents",
+        "y": 2022
+      },
+      {
+        "t": "Denoising Diffusion Probabilistic Models",
+        "y": 2020
+      },
+      {
+        "t": "Photorealistic Text-to-Image Diffusion Models with Deep Language Understanding",
+        "y": 2022
+      }
+    ]
+  },
+  "dit>sora": {
+    "lead": "DiT showed that a diffusion model over patch tokens scales predictably with compute, on images. Sora extends the patching into time — tokens are carved from a compressed video latent across space and duration — and inherits both the scaling behaviour and the indifference to input shape that patches provide.",
+    "blocks": [
+      {
+        "h": "Spacetime patches",
+        "b": "DiT patchifies a 2-D latent into a sequence and runs a transformer over it. Sora applies the same operation to a video latent that has been compressed spatially **and** temporally, so each token summarises a small region over a short interval.\n\nNothing about the transformer changes. It is still a sequence of tokens denoised by a diffusion objective with the conditioning entering through normalisation, and the third dimension is absorbed by the patching rather than by the architecture. That is the property being borrowed: DiT's design has no commitment to two dimensions anywhere in it."
+      },
+      {
+        "h": "Scaling, and variable inputs",
+        "b": "DiT's measurement was that sample quality tracks training compute rather than parameter count, which is what made the transformer worth adopting over the U-Net. Sora's reported behaviour is the same relationship for video, and the visible consequence — coherence and object permanence improving with scale rather than with architectural work — is the argument the system is built on.\n\nThe second inheritance is shape-independence. A sequence of patches imposes no fixed resolution, duration or aspect ratio; a longer or larger video is simply more tokens. So training can use videos at their native shape, and the reported effect is not merely convenience: models trained on square crops learn that subjects are centred and cut off, and framing improves when they are not."
+      },
+      {
+        "h": "What scale does not supply",
+        "b": "The emergent behaviours — rough object permanence, consistent occlusion, some simulation of interaction — are not built in and are not reliable. Physical plausibility is learned as a statistical regularity of video rather than as a constraint, so objects deform, merge or violate causality in ways that are locally smooth and globally wrong.\n\nLong-range consistency is bounded by how far attention can span, and attention is quadratic in token count, which for video is large even after latent compression. Generation is far from real time and the model exists at a scale few can reproduce.\n\nThe two-stage structure's ceiling is also inherited: whatever the video autoencoder discarded is unavailable to the transformer, however large."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Video generation models as world simulators",
+        "y": 2024
+      },
+      {
+        "t": "Scalable Diffusion Models with Transformers",
+        "y": 2023
+      }
+    ]
+  },
+  "ldm>sora": {
+    "lead": "Video multiplies an image's token count by its duration, which puts pixel-space generation out of reach at any useful length. Sora applies latent diffusion's answer with the compression extended through time: encode the video first, generate in that space, and decode at the end.",
+    "blocks": [
+      {
+        "h": "Compression in three dimensions",
+        "b": "Latent diffusion compresses an image by a factor per side and runs the diffusion process on the result, so each step costs a fraction of what a pixel-space step would. For video the same argument applies twice over, since the raw token count scales with area **and** frame count.\n\nSora's video encoder reduces both — spatially, as in latent diffusion, and temporally, so consecutive frames are not each represented in full. Patches are then extracted from that compressed volume, and generation happens entirely inside it. A decoder maps the result back to pixels.\n\nWithout this the transformer's quadratic attention would be unaffordable at any realistic duration; the compression is what makes the token count something a sequence model can hold."
+      },
+      {
+        "h": "Temporal redundancy is the thing being exploited",
+        "b": "The reason the trade works is that video is far more redundant than the sum of its frames. Consecutive frames share most of their content, so a representation that encodes each independently is spending nearly all its capacity on repetition.\n\nThat is the same argument latent diffusion makes about spatial high-frequency detail — the encoder discards what the model does not need to reason about — applied to the temporal axis, where the redundancy is much larger. It is also why a video autoencoder can compress harder than an image one without a proportionate loss."
+      },
+      {
+        "h": "The ceiling, extended",
+        "b": "Every limitation of the two-stage structure carries over and some are worse. Detail the encoder discards is unavailable to the generator, and for video that now includes temporal detail — fast motion and brief events can be compressed away in a manner with no still-image equivalent.\n\nThe two stages are trained separately, so nothing shapes the latent to be easy to generate in. And decoding remains a cost paid on the full output: the compression makes generation affordable and does not make rendering a long high-resolution video cheap.\n\nWhat this arrow records is that the recipe which made text-to-image practical — compress, generate in the latent, decode — is the same one that made video practical, with the compression factor raised rather than the method changed."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Video generation models as world simulators",
+        "y": 2024
+      },
+      {
+        "t": "High-Resolution Image Synthesis with Latent Diffusion Models",
+        "y": 2022
+      }
+    ]
+  },
+  "gan>gail": {
+    "lead": "Imitation learning had two established routes: copy the expert's actions directly, which compounds errors, or recover a reward function and then optimise it, which is expensive. GAIL takes the adversarial objective instead — a discriminator distinguishes the learner's behaviour from the expert's, and the policy is the generator.",
+    "blocks": [
+      {
+        "h": "The correspondence",
+        "b": "A policy interacting with an environment induces a distribution over state-action pairs — its occupancy measure. Imitation can be stated as matching the expert's occupancy measure, which is a distribution-matching problem of exactly the kind a GAN solves.\n\nSo the discriminator $D$ is trained to separate expert pairs from learner pairs, and the policy is trained to fool it:\n\n$$\\min_\\pi \\max_D \\; \\mathbb{E}_{\\pi}\\big[\\log D(s, a)\\big] + \\mathbb{E}_{\\pi_E}\\big[\\log(1 - D(s, a))\\big] - \\lambda H(\\pi)$$\n\nwith an entropy term. The paper's theoretical contribution is showing this is equivalent to a particular regularised inverse-reinforcement-learning problem — the discriminator is implicitly recovering a reward, and the two-stage IRL-then-RL pipeline collapses into one adversarial optimisation."
+      },
+      {
+        "h": "What the environment changes",
+        "b": "The transplant is not mechanical, because the generator is a policy and its output is produced by interacting with an environment rather than by a differentiable map from noise.\n\nGradients cannot flow from the discriminator back through the environment, so the policy cannot be updated the way a GAN generator is. Instead $-\\log D(s,a)$ is used as a **reward**, and the policy is optimised by a standard policy-gradient method — TRPO in the paper. The discriminator supplies a learned, non-stationary reward signal, and reinforcement learning does the credit assignment.\n\nThat is the substantive difference from image GANs: the adversarial game supplies the objective, and a separate optimiser handles the sequential structure the environment imposes."
+      },
+      {
+        "h": "The failure modes travel too",
+        "b": "GAIL is far more sample-efficient than behavioural cloning in terms of expert demonstrations, and it avoids the compounding-error problem that plain cloning suffers, since the policy is evaluated on states it actually visits.\n\nIt inherits the adversarial family's instability wholesale. Training oscillates, the discriminator can become too strong and stop providing a useful reward, and mode collapse appears as a policy that reproduces one expert behaviour and ignores the rest. It is also environment-sample-hungry — few demonstrations, but many interactions — because every policy update requires fresh rollouts.\n\nThe line continued into AIRL, which recovers a transferable reward rather than an entangled one, and into the discriminator-as-reward pattern that reappears in preference-based fine-tuning of language models."
+      }
+    ],
+    "refs": [
+      {
+        "t": "Generative Adversarial Imitation Learning",
+        "y": 2016
+      },
+      {
+        "t": "Generative Adversarial Networks",
+        "y": 2014
+      },
+      {
+        "t": "Learning Robust Rewards with Adversarial Inverse Reinforcement Learning",
+        "y": 2018
+      }
+    ]
+  }
+}
