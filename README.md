@@ -74,10 +74,21 @@ that engine's output; the port must reproduce it exactly: every node coordinate,
 port and face assignment, every route point, every corner radius, every SVG path string,
 the routing-strategy mix, and the audit report.
 
-The generated file is committed, so the test runs anywhere. Regenerating it needs a
-local `legacy/`, and **regenerating it to make a failing test pass defeats the entire
-point** — a failure means the port drifted. Regenerate only if the legacy app itself
-changed.
+Both sides of that comparison are pinned. The input is `test/golden/graph.json`, frozen
+alongside the output, so the test has exactly one way to fail — the port drifted. It
+used to build from the live data instead, which meant adding a model broke a test that
+has nothing to say about models; the graph could not grow, and the only tool to hand
+destroyed the check. Both files are committed and rewritten together by `npm run golden`,
+which needs a local `legacy/` and is legitimate **only if the legacy app itself changed**.
+
+The frozen input carries only the fields the engine consumes. That this is enough is
+demonstrated rather than claimed: regenerating from the reduced records reproduces
+`layout.json` byte for byte.
+
+**Data changes are checked separately**, by invariants that read the live `public/data`:
+no overlapping nodes, no edges routed through one, no edge naming a node that does not
+exist, and caps on tight channels and fallbacks. That is where a new model or lineage
+has to prove itself.
 
 **2. Rendered-DOM parity (`tools/parity-check.mjs`).** Loads both apps in a browser and
 compares the drawn SVG element by element. Last run: **1855 / 1855 drawables identical**.
@@ -112,13 +123,10 @@ Every node carries `p` / `i` / `l` and every edge carries its `limit → fix` la
 fetched only when a panel opens: **189 model entries and 248 lineage entries**, with
 the equation stated wherever the contribution is carried by one.
 
-The one gap left is structural rather than editorial. `rectflow` is the only node
-with no lineage edge, and wiring it would change the edge count that the golden
-master asserts at 248 — so adding any node or edge currently fails `npm test`, and
-regenerating the golden master to pass it is the one thing this repository forbids.
-Growing the graph means first deciding what the golden master is for: a frozen
-record that the port matches the original engine, or a live check on current data.
-It cannot be both.
+Adding to it is a data change and nothing more. The golden master is compared against
+a frozen input rather than the live files, so a new model or lineage is checked by the
+live invariants — no overlaps, no edges through a node, no dangling endpoints, caps on
+tight channels and fallbacks — and leaves the port-parity comparison untouched.
 
 ## Phones and tablets
 

@@ -1,18 +1,23 @@
-// Golden-master test for the port.
+// Two different questions, deliberately kept apart.
 //
-// test/golden/layout.json is produced by running the ORIGINAL engine — the source
-// text lifted straight out of legacy/Deep Learning Genealogy.dc.html — under Node
-// (see tools/gen-golden.mjs). The port has to reproduce it exactly: same node
-// positions, same ports, same route points, same corner radii, same path strings.
+// The GOLDEN MASTER asks whether the ported engine still reproduces the original
+// one. It is compared against test/golden/layout.json, which was produced by the
+// ORIGINAL engine — the source text lifted straight out of legacy/Deep Learning
+// Genealogy.dc.html and run under Node (see tools/gen-golden.mjs) — from the frozen
+// records in test/golden/graph.json. Both sides of that comparison are pinned, so
+// it can fail for exactly one reason: the port drifted. Regenerating either file to
+// make it pass would defeat the entire point.
 //
-// If this fails, the port drifted. Regenerating the golden master to make it pass
-// would defeat the entire point.
+// The LAYOUT INVARIANTS ask whether the graph as it stands today still lays out
+// cleanly. They read the live public/data, assert what must never happen, and cap
+// what the legacy layout already shipped. Adding a model or a lineage is supposed
+// to be checked here — and is supposed to leave the golden master untouched.
 
 import { describe, expect, it } from 'vitest'
-import { buildLayout, loadGolden, snapshot } from './snapshot'
+import { buildGoldenLayout, buildLayout, loadGolden, loadGraphData, snapshot } from './snapshot'
 
 const golden = loadGolden()
-const built = snapshot(buildLayout())
+const built = snapshot(buildGoldenLayout())
 
 describe('ported layout engine vs legacy golden master', () => {
   it('builds the same number of nodes and edges', () => {
@@ -60,20 +65,42 @@ describe('ported layout engine vs legacy golden master', () => {
   })
 })
 
-describe('layout invariants', () => {
+describe('the live graph lays out cleanly', () => {
+  const live = buildLayout()
+  const { nodes, edges } = loadGraphData()
+
+  // An edge whose endpoint id does not exist is skipped rather than crashing the
+  // build, which is right at runtime and hides a typo in the data.
+  it('resolves every edge endpoint', () => {
+    const ids = new Set(nodes.map((n) => n.id))
+    const dangling = edges
+      .filter((e) => !ids.has(e.f) || !ids.has(e.t))
+      .map((e) => `${e.f}→${e.t}`)
+    expect(dangling, 'edges naming a node that does not exist').toEqual([])
+    expect(live.edges.length).toBe(edges.length)
+  })
+
+  it('gives every node a lane and a track that exist', () => {
+    const misplaced = live.nodes
+      .filter((n) => n.lane === undefined || n.lane.tracks[n.track] === undefined)
+      .map((n) => n.id)
+    expect(misplaced, 'nodes whose lane or track is not in spec.ts').toEqual([])
+  })
+
   it('never overlaps two node bodies', () => {
-    expect(built.audit.nodeOverlap).toEqual([])
+    expect(live.audit.nodeOverlap).toEqual([])
   })
 
   it('never routes an edge through a node body', () => {
-    expect(built.audit.edgeThroughNode).toEqual([])
+    expect(live.audit.edgeThroughNode).toEqual([])
   })
 
-  // The legacy layout is not perfectly clean; these are the baseline numbers it
-  // ships with. They are asserted so a future data or spec change cannot quietly
-  // make the sheet worse.
+  // The legacy layout was not perfectly clean and these are the numbers it shipped
+  // with. They are caps rather than equalities, so the sheet may get tidier and may
+  // not get messier.
   it('holds the baseline for tight channels and fallbacks', () => {
-    expect(built.audit.tightChannels).toBeLessThanOrEqual(1)
-    expect(built.audit.fallbacks).toBeLessThanOrEqual(3)
+    expect(live.audit.tightChannels).toBeLessThanOrEqual(1)
+    expect(live.audit.worstTightExtent).toBeLessThanOrEqual(42)
+    expect(live.audit.fallbacks).toBeLessThanOrEqual(3)
   })
 })

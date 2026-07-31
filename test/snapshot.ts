@@ -16,9 +16,40 @@ export function loadGraphData(dataRoot = join(ROOT, 'public', 'data')) {
   return { nodes, edges }
 }
 
+/** Build from the live graph — what the browser will draw. */
 export function buildLayout(): Genealogy {
   const { nodes, edges } = loadGraphData()
   return new LayoutEngine(nodes, edges).build({ log: false })
+}
+
+/**
+ * The layout engine consumes only these fields; the rest of NodeSpec and EdgeSpec
+ * is display data. See the `_about` note in test/golden/graph.json.
+ */
+type NodeLayoutSpec = Pick<NodeSpec, 'id' | 'y' | 'lane' | 'tr' | 's'>
+type EdgeLayoutSpec = Pick<EdgeSpec, 'f' | 't' | 'k' | 'hi'>
+
+/**
+ * The frozen input the golden master was generated from. Pinned so that the
+ * comparison against layout.json means one thing — the port still reproduces the
+ * legacy engine — and cannot be disturbed by adding a model or a lineage.
+ */
+export function loadGoldenGraph() {
+  const raw = JSON.parse(readFileSync(join(ROOT, 'test', 'golden', 'graph.json'), 'utf8'))
+  return {
+    nodes: raw.nodes as NodeLayoutSpec[],
+    edges: raw.edges as EdgeLayoutSpec[],
+  }
+}
+
+export function buildGoldenLayout(): Genealogy {
+  const { nodes, edges } = loadGoldenGraph()
+  // Deliberately handing the engine records without their display fields: it
+  // provably does not read them, which is what the golden comparison establishes.
+  return new LayoutEngine(
+    nodes as unknown as NodeSpec[],
+    edges as unknown as EdgeSpec[],
+  ).build({ log: false })
 }
 
 /**

@@ -70,14 +70,29 @@ export function loadGraphData(dataRoot = join(ROOT, 'public', 'data')) {
 }
 
 /**
+ * Reduce records to the fields the layout engine consumes: placement needs a node's
+ * year, lane, track and size tier, routing needs an edge's endpoints, kind and spine
+ * flag. Everything else is display data. This is what test/golden/graph.json holds,
+ * and feeding the same reduction to the legacy engine is what keeps the frozen input
+ * and the golden output consistent by construction.
+ */
+export function layoutFields({ nodes, edges }) {
+  return {
+    nodes: nodes.map((n) => ({ id: n.id, y: n.y, lane: n.lane, tr: n.tr, s: n.s })),
+    edges: edges.map((e) => ({
+      f: e.f, t: e.t, k: e.k, ...(e.hi !== undefined ? { hi: e.hi } : {}),
+    })),
+  }
+}
+
+/**
  * Build with the legacy engine and reduce the result to the geometry that must not
  * drift. Ports and faces are included so a mismatch points at the phase that broke,
  * not just at the final path string.
  */
-export function buildLegacyLayout() {
+export function buildLegacyLayout(data = layoutFields(loadGraphData())) {
   const { LayoutEngine, ROUTING } = loadLegacyEngine()
-  const { nodes, edges } = loadGraphData()
-  const graph = new LayoutEngine(nodes, edges, ROUTING).build()
+  const graph = new LayoutEngine(data.nodes, data.edges, ROUTING).build()
   return snapshot(graph)
 }
 
