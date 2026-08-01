@@ -1,100 +1,155 @@
 // The way in.
 //
 // 189 boxes and no suggestion of where to begin is a hard first minute, and
-// the essays are the reason to be here — so the entry point offers journeys
-// rather than a search box. Each one is a chain the graph already contains,
-// read in the order the writing was built for.
+// the essays are the reason to be here — so the entry point offers courses
+// rather than a search box. Two levels: a field, then a journey through it,
+// then the walk itself. Wide rather than tall, floating over a blurred sheet,
+// so it reads as a syllabus laid on the table and not as another panel.
 
-import type { WalkPath } from '../view/walk'
+import { useState } from 'react'
+import type { WalkCourse, WalkPath } from '../view/walk'
+
+const CAP: React.CSSProperties = {
+  fontSize: 9.5, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#8a8275',
+}
 
 export interface StartHereProps {
-  paths: WalkPath[]
-  /** how many models each journey covers, by path id */
-  lengths: Record<string, number>
-  onPick: (id: string) => void
+  courses: WalkCourse[]
+  /** lane colour per field id, so a card is recognisably its part of the sheet */
+  colours: Record<string, string>
+  onPick: (pathId: string) => void
   onClose: () => void
 }
 
-export function StartHere({ paths, lengths, onPick, onClose }: StartHereProps) {
+export function StartHere({ courses, colours, onPick, onClose }: StartHereProps) {
+  const [open, setOpen] = useState<string | null>(null)
+  const field = courses.find((c) => c.id === open) ?? null
+
   return (
     <div
-      // a scrim, so this reads as a layer over the sheet rather than part of it
       onClick={onClose}
       style={{
         position: 'absolute', inset: 0, zIndex: 20,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: 20, background: 'rgba(8,10,14,0.72)', backdropFilter: 'blur(2px)',
+        padding: 'clamp(12px, 4vw, 44px)',
+        background: 'rgba(8,10,14,0.66)', backdropFilter: 'blur(4px)',
       }}
     >
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          width: '100%', maxWidth: 560, maxHeight: '86dvh',
+          // wide, and smaller than the sheet it sits on
+          width: '100%', maxWidth: 1040, maxHeight: '84dvh',
           display: 'flex', flexDirection: 'column',
           background: 'rgba(11,14,18,0.98)',
-          border: '1px solid rgba(233,229,221,0.24)', borderRadius: 6,
-          boxShadow: '0 24px 64px rgba(0,0,0,0.6)',
+          border: '1px solid rgba(233,229,221,0.22)', borderRadius: 8,
+          boxShadow: '0 30px 80px rgba(0,0,0,0.62)',
         }}
       >
+        {/* ── header ─────────────────────────────────────────────────────── */}
         <div style={{
           display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
-          gap: 12, padding: '18px 20px 14px',
+          gap: 14, padding: '20px 24px 16px',
           borderBottom: '1px solid rgba(233,229,221,0.14)',
         }}>
-          <div>
-            <div style={{
-              fontSize: 9.5, letterSpacing: '0.2em', textTransform: 'uppercase',
-              color: '#8a8275',
-            }}>Start here</div>
-            <div style={{ fontSize: 20, color: '#f2ece1', lineHeight: 1.2, marginTop: 4 }}>
-              Follow a lineage end to end
+          <div style={{ minWidth: 0 }}>
+            <div style={CAP}>{field ? field.kicker : 'Start here'}</div>
+            <div style={{ fontSize: 22, color: '#f2ece1', lineHeight: 1.2, marginTop: 5 }}>
+              {field ? field.title : 'Choose a field, then a journey through it'}
             </div>
-            <div style={{ fontSize: 12, lineHeight: 1.55, color: '#9d9689', marginTop: 6 }}>
-              Each journey walks a chain of models in order, stopping at every
-              arrow to say what the next one fixed about the last.
+            <div style={{
+              fontSize: 12.5, lineHeight: 1.6, color: '#9d9689', marginTop: 7, maxWidth: 720,
+            }}>
+              {field ? field.blurb : (
+                'Every journey walks a chain of models in order, stopping at each '
+                + 'arrow to say what the next one fixed about the last. That is the '
+                + 'argument this whole graph is making.'
+              )}
             </div>
           </div>
-          <button
-            className="gx-close" onClick={onClose} aria-label="Close"
-            style={{ width: 27, height: 27, fontSize: 14.5, flex: 'none' }}
-          >×</button>
+          <div style={{ display: 'flex', gap: 6, flex: 'none' }}>
+            {field && (
+              <button
+                className="gx-close" onClick={() => setOpen(null)}
+                style={{ height: 28, padding: '0 11px', fontSize: 11.5 }}
+              >← All fields</button>
+            )}
+            <button
+              className="gx-close" onClick={onClose} aria-label="Close"
+              style={{ width: 28, height: 28, fontSize: 15 }}
+            >×</button>
+          </div>
         </div>
 
+        {/* ── cards ──────────────────────────────────────────────────────── */}
         <div style={{
           flex: 1, overflowY: 'auto', overscrollBehavior: 'contain',
-          padding: '6px 20px 18px',
+          padding: '18px 24px 24px',
+          display: 'grid', gap: 12,
+          // as many columns as fit; one on a phone, three on a laptop
+          gridTemplateColumns: 'repeat(auto-fill, minmax(268px, 1fr))',
+          alignContent: 'start',
         }}>
-          {paths.map((p) => (
-            <button
+          {!field && courses.map((c) => (
+            <Card
+              key={c.id}
+              accent={colours[c.id]}
+              kicker={c.kicker}
+              title={c.title}
+              blurb={c.blurb}
+              foot={`${c.courses.length} journeys`}
+              onClick={() => setOpen(c.id)}
+            />
+          ))}
+
+          {field && field.courses.map((p: WalkPath) => (
+            <Card
               key={p.id}
-              className="gx-hover"
+              accent={colours[field.id]}
+              kicker={`${p.nodes.length} models · ${p.nodes.length * 2 - 1} steps`}
+              title={p.title}
+              blurb={p.blurb}
+              foot="Begin →"
               onClick={() => onPick(p.id)}
-              style={{
-                display: 'block', width: '100%', textAlign: 'left',
-                margin: '12px 0 0', padding: '11px 13px',
-                background: 'transparent', cursor: 'pointer',
-                border: '1px solid rgba(233,229,221,0.16)',
-                borderLeft: '2px solid rgba(233,229,221,0.4)',
-                borderRadius: 4, font: 'inherit', color: 'inherit',
-              }}
-            >
-              <div style={{
-                display: 'flex', alignItems: 'baseline',
-                justifyContent: 'space-between', gap: 10,
-              }}>
-                <span style={{ fontSize: 14.5, color: '#ece6da' }}>{p.title}</span>
-                <span style={{
-                  fontSize: 10, color: '#7d7568', whiteSpace: 'nowrap',
-                  fontVariantNumeric: 'tabular-nums',
-                }}>{lengths[p.id] ?? p.nodes.length} models</span>
-              </div>
-              <div style={{ fontSize: 11.5, lineHeight: 1.55, color: '#9d9689', marginTop: 4 }}>
-                {p.blurb}
-              </div>
-            </button>
+            />
           ))}
         </div>
       </div>
     </div>
+  )
+}
+
+function Card(p: {
+  accent?: string
+  kicker: string
+  title: string
+  blurb: string
+  foot: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      className="gx-hover"
+      onClick={p.onClick}
+      style={{
+        display: 'flex', flexDirection: 'column', gap: 7,
+        textAlign: 'left', padding: '14px 15px 12px',
+        background: 'transparent', cursor: 'pointer',
+        border: '1px solid rgba(233,229,221,0.16)',
+        borderTop: `2px solid ${p.accent ?? 'rgba(233,229,221,0.4)'}`,
+        borderRadius: 5, font: 'inherit', color: 'inherit',
+        minHeight: 148,
+      }}
+    >
+      <div style={{ ...CAP, color: p.accent ?? '#8a8275' }}>{p.kicker}</div>
+      <div style={{ fontSize: 15.5, color: '#ece6da', lineHeight: 1.25 }}>{p.title}</div>
+      <div style={{
+        fontSize: 11.5, lineHeight: 1.6, color: '#9d9689', flex: 1,
+      }}>{p.blurb}</div>
+      <div style={{
+        fontSize: 10.5, letterSpacing: '0.1em', textTransform: 'uppercase',
+        color: '#7d7568',
+      }}>{p.foot}</div>
+    </button>
   )
 }

@@ -8,8 +8,8 @@ import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { ancestry, clampStep, steps } from '../src/view/walk'
-import type { WalkEdge, WalkNode, WalkPath } from '../src/view/walk'
+import { allPaths, ancestry, clampStep, steps } from '../src/view/walk'
+import type { WalkCourse, WalkEdge, WalkNode } from '../src/view/walk'
 import { loadGraphData } from './snapshot'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -101,13 +101,16 @@ describe('turning a chain into steps', () => {
 
 // ── the curated paths, against the real graph ──────────────────────────────
 const { nodes: gNodes, edges: gEdges } = loadGraphData()
-const paths: WalkPath[] = JSON.parse(
+const courses: WalkCourse[] = JSON.parse(
   readFileSync(join(ROOT, 'public', 'data', 'paths.json'), 'utf8'))
+const paths = allPaths(courses)
 const nodeIds = new Set(gNodes.map((x) => x.id))
 const edgeKeys = new Set(gEdges.map((x) => `${x.f}>${x.t}`))
 
 describe('the curated paths', () => {
-  it('has a unique id, a title and a blurb for each', () => {
+  it('has a unique id, a title and a blurb for each journey', () => {
+    // ids must be unique across every field, not only within one: a link
+    // carries #/path/<id> with no field in it
     const ids = new Set<string>()
     for (const p of paths) {
       expect(p.id, 'path id').toMatch(/^[a-z0-9]+$/)
@@ -116,7 +119,21 @@ describe('the curated paths', () => {
       expect(p.title?.trim(), p.id).toBeTruthy()
       expect(p.blurb?.trim(), p.id).toBeTruthy()
     }
-    expect(paths.length).toBeGreaterThan(3)
+    expect(paths.length).toBeGreaterThan(12)
+  })
+
+  it('groups them into fields, each with a kicker and journeys of its own', () => {
+    const ids = new Set<string>()
+    for (const c of courses) {
+      expect(c.id).toMatch(/^[a-z0-9]+$/)
+      expect(ids.has(c.id), `duplicate field id "${c.id}"`).toBe(false)
+      ids.add(c.id)
+      expect(c.title?.trim(), c.id).toBeTruthy()
+      expect(c.kicker?.trim(), c.id).toBeTruthy()
+      expect(c.blurb?.trim(), c.id).toBeTruthy()
+      expect(c.courses.length, `${c.id} has no journeys`).toBeGreaterThan(1)
+    }
+    expect(courses.length).toBeGreaterThanOrEqual(5)
   })
 
   it('names only models that exist', () => {
@@ -149,6 +166,8 @@ describe('the curated paths', () => {
   })
 
   it('is long enough to be a journey', () => {
-    for (const p of paths) expect(p.nodes.length, p.id).toBeGreaterThanOrEqual(4)
+    // three models is two arrows, which is the least that reads as a story
+    // rather than as a pair being compared
+    for (const p of paths) expect(p.nodes.length, p.id).toBeGreaterThanOrEqual(3)
   })
 })

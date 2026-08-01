@@ -96,10 +96,24 @@ export function steps(chain: string[], edges: WalkEdge[]): Step[] {
 export const clampStep = (i: number, total: number) =>
   total <= 0 ? 0 : Math.min(total - 1, Math.max(0, Math.floor(i) || 0))
 
-/** A curated journey, as authored in public/data/paths.json. */
+/** One journey: a chain of models, read in order. */
 export interface WalkPath {
   id: string
   title: string
   blurb: string
   nodes: string[]
 }
+
+/** A field of research, holding the journeys through it. */
+export interface WalkCourse {
+  id: string
+  title: string
+  /** one line above the title, naming what the field is about */
+  kicker: string
+  blurb: string
+  courses: WalkPath[]
+}
+
+/** Every journey across every field, for looking one up by id. */
+export const allPaths = (courses: WalkCourse[]): WalkPath[] =>
+  courses.flatMap((c) => c.courses)

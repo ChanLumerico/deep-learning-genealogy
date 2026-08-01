@@ -18,7 +18,8 @@ import { useCamera, ZOOM } from './view/useCamera'
 import { useUrlState } from './view/useUrlState'
 import { parseHash, toHash } from './view/url'
 import { ancestry, clampStep, steps } from './view/walk'
-import type { Step, WalkPath } from './view/walk'
+import { allPaths } from './view/walk'
+import type { Step, WalkCourse } from './view/walk'
 import { WalkBar } from './components/WalkBar'
 import { StartHere } from './components/StartHere'
 import type { UrlState } from './view/url'
@@ -47,6 +48,18 @@ const panelMax = (viewportW: number) =>
 
 /** what the camera is looking at — sets how far out zoom is allowed to go */
 const SHEET = { w: CANVAS.w, h: CANVAS.h }
+
+/** field id in paths.json → the lane whose colour it borrows on the cards */
+const FIELD_LANE: Record<string, string> = {
+  foundations: 'found', vision: 'cv', language: 'nlp',
+  generative: 'gen', control: 'rl', multimodal: 'mm',
+}
+const LANE_COLOURS: Record<string, string> = Object.fromEntries(
+  Object.entries(FIELD_LANE).map(([field, lane]) => {
+    const L = LANES.find((x) => x.id === lane)
+    return [field, L ? L.c : '#9fa9b5']
+  }),
+)
 
 export interface AppProps {
   /** hover preview card over a node */
@@ -121,10 +134,10 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
   // graph; a trace is computed from whichever model the reader asked about.
   const [walk, setWalk] = useState<
     { kind: 'path' | 'trace'; id: string; step: number } | null>(null)
-  const [paths, setPaths] = useState<WalkPath[]>([])
+  const [courses, setCourses] = useState<WalkCourse[]>([])
   const [startOpen, setStartOpen] = useState(false)
   useEffect(() => {
-    loadPaths().then((p) => setPaths(p as WalkPath[]))
+    loadPaths().then((p) => setCourses(p as WalkCourse[]))
   }, [])
   const [exporting, setExporting] = useState(false)
 
@@ -179,7 +192,7 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
     let chain: string[] = []
     let title = ''
     if (walk.kind === 'path') {
-      const p = paths.find((x) => x.id === walk.id)
+      const p = allPaths(courses).find((x) => x.id === walk.id)
       if (!p) return null
       chain = p.nodes.filter((id) => graph.byId[id])
       title = p.title
@@ -191,7 +204,7 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
     if (chain.length < 2) return null
     const list = steps(chain, edges)
     return { title, steps: list, step: clampStep(walk.step, list.length) }
-  }, [graph, walk, paths])
+  }, [graph, walk, courses])
 
   // The step being read IS the selection: the panel already knows how to
   // render a model or an arrow, so a walk only has to choose which one.
@@ -725,10 +738,10 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
           />
         )}
 
-        {startOpen && !!paths.length && (
+        {startOpen && !!courses.length && (
           <StartHere
-            paths={paths}
-            lengths={Object.fromEntries(paths.map((p) => [p.id, p.nodes.length]))}
+            courses={courses}
+            colours={LANE_COLOURS}
             onPick={(id) => { setWalk({ kind: 'path', id, step: 0 }); setStartOpen(false) }}
             onClose={() => setStartOpen(false)}
           />

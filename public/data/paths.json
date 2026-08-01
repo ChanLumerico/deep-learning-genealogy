@@ -1,50 +1,176 @@
 [
  {
-  "id": "transformer",
-  "title": "The road to the Transformer",
-  "blurb": "Sixty years from a machine that could not learn XOR to one that reads a sentence in a single parallel step. Each arrow is a limit somebody hit and what they did about it.",
-  "nodes": ["perceptron", "mlp", "elman", "lstm", "seq2seq", "bahdanau", "transformer"]
+  "id": "foundations",
+  "title": "Foundations",
+  "kicker": "Where learning came from",
+  "blurb": "Before any of it could be applied, a machine had to be able to set its own weights — and then to do it through more than one layer.",
+  "courses": [
+   {
+    "id": "credit",
+    "title": "Assigning blame to a hidden unit",
+    "blurb": "A machine that could not learn XOR, and the chain rule that made depth trainable at all.",
+    "nodes": ["perceptron", "mlp", "elman", "lstm"]
+   },
+   {
+    "id": "energy",
+    "title": "The energy-based detour",
+    "blurb": "For twenty years the way to train a deep net was to pretrain it one layer at a time. AlexNet ended that, but the ideas did not go away.",
+    "nodes": ["boltzmann", "rbm", "dbn"]
+   },
+   {
+    "id": "optim",
+    "title": "Making the optimiser cooperate",
+    "blurb": "Backpropagation gives a gradient. Everything after is about the step you take with it.",
+    "nodes": ["perceptron", "mlp", "adam"]
+   }
+  ]
  },
  {
-  "id": "depth",
-  "title": "Making networks deep enough to matter",
-  "blurb": "The convolutional architecture was settled in 1980; everything after is about getting gradients through more layers than the last attempt could manage.",
-  "nodes": ["neocog", "lenet", "alexnet", "zfnet", "vgg", "resnet"]
+  "id": "vision",
+  "title": "Computer vision",
+  "kicker": "Seeing, layer by layer",
+  "blurb": "The convolutional architecture was settled in 1980. Everything since is about getting gradients through more of it, and then about whether convolution was needed at all.",
+  "courses": [
+   {
+    "id": "depth",
+    "title": "Making networks deep enough to matter",
+    "blurb": "Each step is a reason the previous stack stopped training, and what somebody did about it.",
+    "nodes": ["neocog", "lenet", "alexnet", "zfnet", "vgg", "resnet"]
+   },
+   {
+    "id": "efficient",
+    "title": "The same accuracy on a phone",
+    "blurb": "Separable convolutions, then a search over architectures, then a rule for scaling one.",
+    "nodes": ["neocog", "lenet", "alexnet", "zfnet", "vgg", "googlenet", "xception", "mobilenet", "mbv2", "mbv3", "mbv4"]
+   },
+   {
+    "id": "detect",
+    "title": "From classifying to locating",
+    "blurb": "Region proposals, then sharing the convolutions, then removing the hand-built post-processing entirely.",
+    "nodes": ["neocog", "lenet", "alexnet", "rcnn", "fastrcnn", "fasterrcnn", "detr"]
+   },
+   {
+    "id": "segment",
+    "title": "Labelling every pixel",
+    "blurb": "Classification throws away where. Segmentation is the line of work that puts it back.",
+    "nodes": ["neocog", "lenet", "alexnet", "zfnet", "vgg", "fcn", "unet", "sam"]
+   },
+   {
+    "id": "crossover",
+    "title": "An architecture crosses domains",
+    "blurb": "Attention was built for translation. Cutting an image into patches let the same block read pictures.",
+    "nodes": ["bahdanau", "transformer", "vit", "swin"]
+   }
+  ]
  },
  {
-  "id": "crossover",
-  "title": "An architecture crosses domains",
-  "blurb": "Attention was built for translation. Cutting an image into patches let the same block read pictures — and the smallness of that change is the argument.",
-  "nodes": ["bahdanau", "transformer", "vit", "swin"]
+  "id": "language",
+  "title": "Language and sequence",
+  "kicker": "Reading a sentence",
+  "blurb": "A recurrent net reads one word at a time and forgets. Removing the recurrence is what let these models scale with the hardware.",
+  "courses": [
+   {
+    "id": "transformer",
+    "title": "The road to the Transformer",
+    "blurb": "Sixty years from a machine that could not learn XOR to one that reads a sentence in a single parallel step.",
+    "nodes": ["perceptron", "mlp", "elman", "lstm", "seq2seq", "bahdanau", "transformer"]
+   },
+   {
+    "id": "pretrain",
+    "title": "Pre-train once, use everywhere",
+    "blurb": "Transfer stopped meaning word vectors and started meaning the whole model.",
+    "nodes": ["transformer", "gpt1", "gpt2", "gpt3"]
+   },
+   {
+    "id": "alignment",
+    "title": "Teaching a model what was wanted",
+    "blurb": "Predicting the next token is not the same as being useful — and the last step does it without a reward model at all.",
+    "nodes": ["transformer", "gpt1", "gpt2", "gpt3", "instructgpt", "dpo"]
+   },
+   {
+    "id": "openweights",
+    "title": "The open-weight line",
+    "blurb": "The same recipe, trained longer on more tokens, and released so anyone could build on it.",
+    "nodes": ["transformer", "gpt1", "gpt2", "gpt3", "llama", "llama2"]
+   }
+  ]
  },
  {
-  "id": "generate",
-  "title": "Learning to generate",
-  "blurb": "Compress, then sample. From an autoencoder that only reconstructs, through adversarial training, to diffusion — three answers to the same question about where new images come from.",
-  "nodes": ["ae", "vae", "nice", "realnvp", "glow"]
- },
- {
-  "id": "diffusion",
-  "title": "How diffusion overtook GANs",
-  "blurb": "Adversarial training gave sharp images and unstable optimisation. Score matching gave a likelihood and a slow sampler. The line that won traded one for the other, then made it fast.",
-  "nodes": ["ncsn", "scoresde", "ddim", "ldm"]
+  "id": "generative",
+  "title": "Generative models",
+  "kicker": "Where new samples come from",
+  "blurb": "Three answers to one question — compress and decode, fool a critic, or reverse a noising process — and the argument between them.",
+  "courses": [
+   {
+    "id": "latent",
+    "title": "Compress, then sample",
+    "blurb": "An autoencoder only reconstructs. Making its middle a distribution is what turns it into a generator.",
+    "nodes": ["ae", "vae", "vqvae", "vqvae2"]
+   },
+   {
+    "id": "adversarial",
+    "title": "Training against a critic",
+    "blurb": "Sharp images and an optimisation that would not sit still. Six years of trying to stabilise it.",
+    "nodes": ["gan", "dcgan", "wgan", "wgangp", "pggan", "stylegan"]
+   },
+   {
+    "id": "diffusion",
+    "title": "How diffusion overtook GANs",
+    "blurb": "Score matching gave a likelihood and a slow sampler. The line that won made it fast.",
+    "nodes": ["ncsn", "scoresde", "ddim", "ldm"]
+   },
+   {
+    "id": "flow",
+    "title": "Keeping the likelihood exact",
+    "blurb": "Invertible maps with a tractable Jacobian, all the way to a continuous-time version of the same idea.",
+    "nodes": ["ae", "vae", "nice", "realnvp", "glow", "nde", "ffjord", "flowmatch"]
+   }
+  ]
  },
  {
   "id": "control",
-  "title": "From value functions to language models",
-  "blurb": "Reinforcement learning spent thirty years on games, and then its policy-gradient machinery turned out to be how you make a language model follow instructions.",
-  "nodes": ["bellman", "td", "qlearn", "dqn", "alphago", "agz", "alphazero"]
- },
- {
-  "id": "alignment",
-  "title": "Teaching a model what was wanted",
-  "blurb": "Predicting the next token is not the same as being useful. The last three steps are about the difference, and about doing it without a reward model at all.",
-  "nodes": ["transformer", "gpt1", "gpt2", "gpt3", "instructgpt", "dpo"]
+  "title": "Reinforcement learning",
+  "kicker": "Learning from consequences",
+  "blurb": "Thirty years on games, and then the same policy-gradient machinery turned out to be how a language model is taught to follow instructions.",
+  "courses": [
+   {
+    "id": "value",
+    "title": "From a table to a network",
+    "blurb": "Dynamic programming needs the whole model. Everything here is about not having it.",
+    "nodes": ["bellman", "td", "qlearn", "dqn", "alphago", "agz", "alphazero"]
+   },
+   {
+    "id": "policy",
+    "title": "Optimising the policy directly",
+    "blurb": "High-variance gradients, then a trust region, then the clipped objective that made it practical.",
+    "nodes": ["reinforce", "ac", "trpo", "ppo"]
+   },
+   {
+    "id": "imitate",
+    "title": "Learning the reward instead",
+    "blurb": "When the reward is the thing you cannot write down, infer it from someone doing the task.",
+    "nodes": ["apprentice", "maxentirl", "gail"]
+   }
+  ]
  },
  {
   "id": "multimodal",
-  "title": "Getting pictures and words into one space",
-  "blurb": "Captioning taught a network to describe an image. Contrastive pretraining taught it to put images and sentences in the same coordinates, which is what made everything since possible.",
-  "nodes": ["showtell", "showattend", "vilbert", "clip", "flamingo", "blip2", "llava"]
+  "title": "Multimodal",
+  "kicker": "Pictures and words together",
+  "blurb": "Captioning taught a network to describe an image. Contrastive pretraining put images and sentences in the same coordinates, which is what made everything since possible.",
+  "courses": [
+   {
+    "id": "caption",
+    "title": "Describing what is in the picture",
+    "blurb": "A vision encoder and a language decoder, joined first by a vector and then by attention.",
+    "nodes": ["showtell", "showattend", "vilbert", "clip"]
+   },
+   {
+    "id": "assistant",
+    "title": "One space for both",
+    "blurb": "Once images and text share coordinates, a language model can be handed an image and simply carry on.",
+    "nodes": ["showtell", "showattend", "vilbert", "clip", "flamingo", "blip2", "llava", "gpt4v"]
+   }
+  ]
  }
 ]
