@@ -187,9 +187,15 @@ export function TopBar(p: TopBarProps) {
                 could not guarantee that — their columns would each be sized
                 by their own contents. */}
             <div style={{
-              flex: p.compact ? '0 0 auto' : '1 1 auto',
+              // `flex-basis: 0` rather than `auto` is what keeps the reading
+              // and view controls on this line. In a wrapping flex container
+              // items are placed by their hypothetical size and only shrink
+              // once on a line — so a basis of "my content" pushed the last
+              // group onto a second row instead of squeezing this one.
+              flex: p.compact ? '0 0 auto' : '1 1 0',
               width: p.compact ? '100%' : undefined,
-              minWidth: 0,
+              minWidth: p.compact ? 0 : 320,
+              maxWidth: p.compact ? undefined : 1110,
               display: 'grid',
               gridTemplateColumns: p.compact ? '1fr' : 'minmax(0, 620fr) minmax(0, 460fr)',
               columnGap: 30, rowGap: 12,
