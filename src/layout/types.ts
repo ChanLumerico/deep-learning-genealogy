@@ -67,6 +67,8 @@ export interface NodeMetrics {
 
 export interface EdgeKind {
   label: string
+  /** the filter button's version — the legend carries the full label */
+  short: string
   note: string
   w: number
   dash: string

@@ -182,32 +182,31 @@ export function TopBar(p: TopBarProps) {
         {(
           <>
             {/* ② domain / edge filters + search
-                One grid for both rows, so Search sits under Domains and the
-                way in starts where Edges starts. Two independent flex rows
-                could not guarantee that — their columns would each be sized
-                by their own contents. */}
+
+                Every group here is sized by its contents and never squeezed.
+                The previous versions divided the row proportionally, which
+                meant a group could be handed less than its buttons needed and
+                would reflow internally — Alternative dropping to a second line
+                while the rest of the bar looked fine. Now the shape of a group
+                is fixed, and when the window is too narrow the whole group
+                wraps instead. `auto` columns take the wider of the two rows,
+                which is what keeps Search under Domains and Begin under Edges. */}
             <div style={{
-              // `flex-basis: 0` rather than `auto` is what keeps the reading
-              // and view controls on this line. In a wrapping flex container
-              // items are placed by their hypothetical size and only shrink
-              // once on a line — so a basis of "my content" pushed the last
-              // group onto a second row instead of squeezing this one.
-              flex: p.compact ? '0 0 auto' : '1 1 0',
+              flex: '0 0 auto',
               width: p.compact ? '100%' : undefined,
-              minWidth: p.compact ? 0 : 320,
-              maxWidth: p.compact ? undefined : 1110,
+              minWidth: 0,
               display: 'grid',
-              gridTemplateColumns: p.compact ? '1fr' : 'minmax(0, 620fr) minmax(0, 460fr)',
+              gridTemplateColumns: p.compact ? '1fr' : 'auto auto',
               columnGap: 30, rowGap: 12,
               alignItems: 'start',
             }}>
               <div className="gx-field" style={{ minWidth: 0 }}>
                 <div className="gx-cap">Domains</div>
-                <Toggles items={p.laneToggles} wrap />
+                <Toggles items={p.laneToggles} wrap={p.compact} />
               </div>
               <div className="gx-field" style={{ minWidth: 0 }}>
                 <div className="gx-cap">Edges</div>
-                <Toggles items={p.edgeToggles} wrap />
+                <Toggles items={p.edgeToggles} wrap={p.compact} />
               </div>
 
               <div className="gx-field" style={{ minWidth: 0 }}>
@@ -246,7 +245,7 @@ export function TopBar(p: TopBarProps) {
                 <div className="gx-cap" style={{ ...CAP_SPLIT, gap: 12 }}>
                   <span>Reading</span><span style={VALUE}>{p.readCount}</span>
                 </div>
-                <div className="gx-row gx-row-wrap">
+                <div className={p.compact ? 'gx-row gx-row-wrap' : 'gx-row'}>
                   {p.readFilters.map((t) => (
                     <button
                       key={t.key} className="gx-btn" onClick={t.onClick}
@@ -266,7 +265,7 @@ export function TopBar(p: TopBarProps) {
 
               <div className="gx-field">
                 <div className="gx-cap">View</div>
-                <div className="gx-row gx-row-wrap">
+                <div className={p.compact ? 'gx-row gx-row-wrap' : 'gx-row'}>
                   <button
                     className="gx-btn" onClick={p.onZoomOut} aria-label="Zoom out"
                     style={{

@@ -548,7 +548,7 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
   const edgeToggles: ToggleVM[] = EDGE_KIND_KEYS.map((kk: EdgeKindKey) => {
     const on = !kindsOff[kk]
     return {
-      key: kk, label: EDGE_KINDS[kk].label,
+      key: kk, label: EDGE_KINDS[kk].short,
       bg: on ? 'rgba(233,229,221,0.13)' : 'transparent',
       bd: on ? 'rgba(233,229,221,0.42)' : 'rgba(233,229,221,0.18)',
       fg: on ? '#f0ebe1' : '#7c7568',

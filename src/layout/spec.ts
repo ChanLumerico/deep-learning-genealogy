@@ -55,10 +55,10 @@ export const NODE_STATE = {
 // relation semantics → line pattern, weight, alpha, arrowhead, paint order.
 // colourFrom: which end lends the hue. lineage: counts as ancestry for highlighting.
 export const EDGE_KINDS: Record<EdgeKindKey, EdgeKind> = {
-  direct: { label: 'Direct successor', note: 'fixes a limit', w: 2.3, dash: 'none', op: 0.6, colourFrom: 'source', head: 'arrow', layer: 'front', lineage: true },
-  cross: { label: 'Cross-domain', note: 'idea borrowed', w: 1.7, dash: '7 5', op: 0.34, colourFrom: 'source', head: 'arrow', layer: 'back', lineage: true, hiDash: '9 5' },
-  fusion: { label: 'Fusion', note: 'lineages merge', w: 2.4, dash: 'none', op: 0.58, colourFrom: 'target', head: 'merge', layer: 'front', lineage: true },
-  alt: { label: 'Alternative', note: 'competing path', w: 1.2, dash: '3 6', op: 0.36, colourFrom: 'neutral', head: 'none', layer: 'back', lineage: false },
+  direct: { label: 'Direct successor', short: 'Direct', note: 'fixes a limit', w: 2.3, dash: 'none', op: 0.6, colourFrom: 'source', head: 'arrow', layer: 'front', lineage: true },
+  cross: { label: 'Cross-domain', short: 'Cross', note: 'idea borrowed', w: 1.7, dash: '7 5', op: 0.34, colourFrom: 'source', head: 'arrow', layer: 'back', lineage: true, hiDash: '9 5' },
+  fusion: { label: 'Fusion', short: 'Fusion', note: 'lineages merge', w: 2.4, dash: 'none', op: 0.58, colourFrom: 'target', head: 'merge', layer: 'front', lineage: true },
+  alt: { label: 'Alternative', short: 'Alt', note: 'competing path', w: 1.2, dash: '3 6', op: 0.36, colourFrom: 'neutral', head: 'none', layer: 'back', lineage: false },
 }
 
 export const ARROW_HEADS: Record<string, { d: string; mw: number }> = {
