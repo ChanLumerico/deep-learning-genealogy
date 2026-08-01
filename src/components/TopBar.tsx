@@ -192,11 +192,15 @@ export function TopBar(p: TopBarProps) {
                 wraps instead. `auto` columns take the wider of the two rows,
                 which is what keeps Search under Domains and Begin under Edges. */}
             <div style={{
-              flex: '0 0 auto',
+              // grow into whatever the line has spare, never shrink below the
+              // content: growing cannot reflow a group, only shrinking can
+              flex: p.compact ? '0 0 auto' : '1 0 auto',
               width: p.compact ? '100%' : undefined,
               minWidth: 0,
               display: 'grid',
-              gridTemplateColumns: p.compact ? '1fr' : 'auto auto',
+              // the spare goes to the first column, so Domains and Search fill
+              // out and Edges stays at the size its four buttons need
+              gridTemplateColumns: p.compact ? '1fr' : 'minmax(0, 1fr) auto',
               columnGap: 30, rowGap: 12,
               alignItems: 'start',
             }}>
@@ -238,7 +242,11 @@ export function TopBar(p: TopBarProps) {
 
             {/* ③ reading counter + view controls */}
             <div style={{
-              flex: '0 0 auto', width: p.compact ? '100%' : undefined,
+              // likewise: alone on a wrapped line it takes the whole width
+              // rather than sitting against the left with a gap beside it
+              flex: p.compact ? '0 0 auto' : '1 0 auto',
+              width: p.compact ? '100%' : undefined,
+              minWidth: 0,
               display: 'flex', flexDirection: 'column', gap: 12,
             }}>
               <div className="gx-field">
