@@ -6,7 +6,7 @@ import {
 import type { EdgeKindKey, EdgeModel, Genealogy, LaneId, NodeModel } from './layout'
 import { loadGraphData } from './data/load'
 import { PaperCsv } from './data/csv'
-import { edgeKey, loadEdgeDetail, loadNodeDetail, loadPaperIds, loadPaths } from './data/detail'
+import { edgeKey, loadEdgeDetail, loadNodeDetail, loadPaperIds, loadPaths, loadSearchIndex } from './data/detail'
 import type { Detail } from './data/detail'
 import type { ImportMode, PaperIds } from './data/csv'
 import { READ_FILTERS, ReadingLog } from './data/readingLog'
@@ -22,6 +22,10 @@ import { allPaths } from './view/walk'
 import type { Step, WalkCourse } from './view/walk'
 import { WalkBar } from './components/WalkBar'
 import { StartHere } from './components/StartHere'
+import { SearchPalette } from './components/SearchPalette'
+import type { SearchIndex } from './view/search'
+import { move } from './view/keys'
+import type { Direction } from './view/keys'
 import type { UrlState } from './view/url'
 import { GraphCanvas } from './components/GraphCanvas'
 import { TopBar } from './components/TopBar'
@@ -136,6 +140,15 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
     { kind: 'path' | 'trace'; id: string; step: number } | null>(null)
   const [courses, setCourses] = useState<WalkCourse[]>([])
   const [startOpen, setStartOpen] = useState(false)
+
+  // ── search over the essays ──────────────────────────────────────────────
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchIndex, setSearchIndex] = useState<SearchIndex | null>(null)
+  useEffect(() => {
+    if (!searchOpen || searchIndex) return
+    loadSearchIndex().then((ix) => setSearchIndex(ix as SearchIndex | null))
+  }, [searchOpen, searchIndex])
+
   useEffect(() => {
     loadPaths().then((p) => setCourses(p as WalkCourse[]))
   }, [])
@@ -286,6 +299,68 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
     setSel(id); setSelEIndex(null); setTip(null)
     centerOn(n.cx, n.cy, Math.max(k, 0.72))
   }, [graph, centerOn, k])
+
+  // ── keyboard ────────────────────────────────────────────────────────────
+  // One tab stop on the canvas and a cursor moved by the arrows, rather than
+  // 189 tab stops. `/` and ⌘K reach the search from anywhere, and Escape
+  // backs out of whatever is open, innermost first.
+  useEffect(() => {
+    const onKey = (ev: KeyboardEvent) => {
+      const t = ev.target as HTMLElement | null
+      const typing = !!t?.closest('input,textarea,select,[contenteditable]')
+
+      if (ev.key === 'Escape') {
+        if (searchOpen) setSearchOpen(false)
+        else if (startOpen) setStartOpen(false)
+        else if (walk) setWalk(null)
+        else if (listOpen) setListOpen(false)
+        else { setSel(null); setSelEIndex(null) }
+        return
+      }
+      if (typing) return
+
+      if (ev.key === '/' || ((ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === 'k')) {
+        setSearchOpen(true)
+        ev.preventDefault()
+        return
+      }
+      if (searchOpen || startOpen) return
+
+      // stepping a walk from the keyboard, since that is a linear reading
+      if (walk && (ev.key === 'ArrowRight' || ev.key === 'ArrowLeft')) {
+        stepBy(ev.key === 'ArrowRight' ? 1 : -1)
+        ev.preventDefault()
+        return
+      }
+
+      const DIRS: Record<string, Direction> = {
+        ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down',
+      }
+      const dir = DIRS[ev.key]
+      if (!dir || !graph) return
+      const next = move(
+        graph.nodes.map((n) => ({ id: n.id, lane: n.lane.id, year: n.year, x: n.x })),
+        graph.edges.map((e) => ({ from: e.from.id, to: e.to.id, kind: e.kindKey })),
+        sel, dir,
+      )
+      if (next) goNode(next)
+      ev.preventDefault()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [graph, sel, walk, searchOpen, startOpen, listOpen, goNode, stepBy])
+
+  /** open whatever a search result points at, leaving any walk behind */
+  const openResult = useCallback((kind: 'n' | 'e', id: string) => {
+    setSearchOpen(false)
+    setWalk(null)
+    setListOpen(false)
+    if (kind === 'n') { goNode(id); return }
+    const [from, to] = id.split('>')
+    const i = graph?.edges.findIndex((e) => e.from.id === from && e.to.id === to) ?? -1
+    setSel(null)
+    setSelEIndex(i >= 0 ? i : null)
+  }, [graph, goNode])
 
   // The heavy pass: one view-state record per node, then paint for every node and
   // edge. Deliberately independent of the camera, so panning and zooming never
@@ -608,13 +683,11 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
         timeMin={TIME.min} timeMax={TIME.max} timeX={timeX} onYear={setTimeX}
         laneToggles={laneToggles} edgeToggles={edgeToggles} readFilters={readFilterToggles}
         query={query} onQuery={setQuery}
-        onQuerySubmit={(v) => {
-          if (!graph) return
-          const hit = graph.search(v)
-          if (!hit) return
-          setSel(hit.id); setSelEIndex(null)
-          centerOn(hit.cx, hit.cy, Math.max(k, 0.95))
-          if (vp.drawer) setControlsOpen(false)   // get out of the way of the result
+        onQuerySubmit={() => {
+          // the field is a way into the palette, which searches the essays
+          // rather than only the names the graph knows
+          setSearchOpen(true)
+          if (vp.drawer) setControlsOpen(false)
         }}
         readCount={graph ? `${readCount} / ${graph.nodes.length}` : '—'}
         onToggleList={() => setListOpen((v) => !v)}
@@ -735,6 +808,16 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
             onToggleRead={toggleRead}
             onToggleGroup={setAllRead}
             onClose={() => setListOpen(false)}
+          />
+        )}
+
+        {searchOpen && (
+          <SearchPalette
+            index={searchIndex}
+            initialQuery={query}
+            colours={Object.fromEntries(LANES.map((L) => [L.id, L.c]))}
+            onOpen={openResult}
+            onClose={() => setSearchOpen(false)}
           />
         )}
 

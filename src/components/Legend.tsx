@@ -106,7 +106,8 @@ export function Legend({ open, right, compact = false, onToggle }: LegendProps) 
         <div style={{ fontSize: 11, lineHeight: 1.55, color: '#7d7568' }}>
           {compact
             ? 'Drag to pan · pinch to zoom · tap a node or an edge for its detail and lineage'
-            : 'Drag to pan · scroll to zoom · click a node or an edge to open its detail panel and isolate that lineage'}
+            : 'Drag to pan · scroll to zoom · click a node or an edge for its detail and lineage. '
+              + 'Or use the keyboard: ← → along time, ↑ ↓ along descent, / to search, esc to back out.'}
         </div>
       </div>
     </div>

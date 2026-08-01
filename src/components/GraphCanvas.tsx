@@ -60,7 +60,17 @@ function GraphCanvasImpl({
   return (
     <svg
       ref={svgRef} className="gx-sheet" width="100%" height="100%"
-      style={{ display: 'block' }}
+      // One tab stop for the whole sheet, with the arrows moving a cursor
+      // inside it. 189 focusable nodes would be a worse experience than none:
+      // reaching the last one would take 189 presses.
+      tabIndex={0}
+      role="application"
+      aria-label={
+        'Genealogy of deep-learning architectures. '
+        + 'Arrow keys move between models: left and right along time within a '
+        + 'lane, up and down along lines of descent. Slash opens search.'
+      }
+      style={{ display: 'block', outline: 'none' }}
     >
       <defs>
         {markers.map((m) => (
@@ -142,6 +152,8 @@ function GraphCanvasImpl({
             <g
               key={n.id} transform={`translate(${n.x},${n.y})`} opacity={paint.opacity}
               pointerEvents={paint.pointerEvents} style={{ cursor: 'pointer' }}
+              role="button"
+              aria-label={`${n.name}, ${n.year}, ${n.contribution}`}
               onClick={() => onNodeClick(n.id)}
               onMouseEnter={(ev) => onNodeEnter(n.id, ev)}
               onMouseMove={(ev) => onNodeEnter(n.id, ev)}
