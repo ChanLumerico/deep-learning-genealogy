@@ -32,11 +32,11 @@ export function Legend({ open, right, compact = false, onToggle }: LegendProps) 
         onClick={onToggle}
         style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, cursor: 'pointer' }}
       >
-        <div style={{ fontSize: 14, fontWeight: 600, color: '#efe9df', letterSpacing: '-0.005em' }}>Legend</div>
+        <div style={{ fontSize: 15.5, fontWeight: 600, color: '#efe9df', letterSpacing: '-0.005em' }}>Legend</div>
         <div className="gx-legend-toggle" style={{
           display: 'flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22,
           border: '1px solid rgba(233,229,221,0.34)', borderRadius: 4, color: '#cfc9bd',
-          fontSize: 12, lineHeight: 1,
+          fontSize: 13, lineHeight: 1,
         }}>{open ? '−' : '+'}</div>
       </div>
 
@@ -61,7 +61,7 @@ export function Legend({ open, right, compact = false, onToggle }: LegendProps) 
                     markerEnd={kind.head === 'none' ? 'none' : `url(#${EdgeStyle.markerId(k, 'found')})`}
                   />
                 </svg>
-                <div style={{ display: 'flex', flexDirection: 'column', fontSize: 10.5, lineHeight: 1.3, color: '#d7d1c5' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', fontSize: 11.5, lineHeight: 1.3, color: '#d7d1c5' }}>
                   <span>{kind.label}</span>
                   <span style={{ color: '#857d70' }}>{kind.note}</span>
                 </div>
@@ -79,12 +79,12 @@ export function Legend({ open, right, compact = false, onToggle }: LegendProps) 
                 width: t.w, height: t.h, border: `${t.bw}px solid rgba(159,169,181,${t.ba})`,
                 borderRadius: t.r, background: `rgba(159,169,181,${t.fa})`,
               }} />
-              <div style={{ fontSize: 9, letterSpacing: '0.1em', fontWeight: 500, color: '#857d70' }}>{t.label}</div>
+              <div style={{ fontSize: 10, letterSpacing: '0.1em', fontWeight: 500, color: '#857d70' }}>{t.label}</div>
             </div>
           ))}
         </div>
 
-        <div style={{ fontSize: 10, lineHeight: 1.5, color: '#857d70', marginTop: 9 }}>
+        <div style={{ fontSize: 11, lineHeight: 1.5, color: '#857d70', marginTop: 9 }}>
           Line colour marks the domain the idea comes from; fusion takes the colour of the result.
         </div>
 
@@ -92,7 +92,7 @@ export function Legend({ open, right, compact = false, onToggle }: LegendProps) 
 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px 12px' }}>
           {LANES.map((L) => (
-            <div key={L.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10.5, color: '#cfc9bd' }}>
+            <div key={L.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: '#cfc9bd' }}>
               <span style={{
                 width: 9, height: 9, border: `1px solid ${L.c}`, background: L.c + '2e', borderRadius: 2,
               }} />
@@ -103,7 +103,7 @@ export function Legend({ open, right, compact = false, onToggle }: LegendProps) 
 
         <div style={{ ...RULE, margin: '11px 0 9px' }} />
 
-        <div style={{ fontSize: 10, lineHeight: 1.55, color: '#7d7568' }}>
+        <div style={{ fontSize: 11, lineHeight: 1.55, color: '#7d7568' }}>
           {compact
             ? 'Drag to pan · pinch to zoom · tap a node or an edge for its detail and lineage'
             : 'Drag to pan · scroll to zoom · click a node or an edge to open its detail panel and isolate that lineage'}

@@ -5,7 +5,7 @@ import { BottomSheet } from './BottomSheet'
 
 /** the small uppercase label that heads every section of the panel */
 const CAP: React.CSSProperties = {
-  fontSize: 8.5, letterSpacing: '0.2em', textTransform: 'uppercase',
+  fontSize: 9.5, letterSpacing: '0.2em', textTransform: 'uppercase',
   fontWeight: 500, color: '#8a8275',
 }
 
@@ -36,20 +36,20 @@ export function DetailPanel({
       }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 5, minWidth: 0 }}>
           <div style={{
-            fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', color: panel.color,
+            fontSize: 10, letterSpacing: '0.2em', textTransform: 'uppercase', color: panel.color,
           }}>{panel.kicker}</div>
           <div style={{
             fontSize: sheet ? 22 : 30, lineHeight: 1.05, color: '#f4efe5',
             overflowWrap: 'anywhere',
           }}>{panel.title}</div>
           <div style={{
-            fontSize: 11, letterSpacing: '0.08em', color: '#948c7f',
+            fontSize: 12, letterSpacing: '0.08em', color: '#948c7f',
             fontVariantNumeric: 'tabular-nums',
           }}>{panel.meta}</div>
         </div>
         <button
           className="gx-close" onClick={onClose} aria-label="Close"
-          style={{ width: 27, height: 27, fontSize: 13, color: '#a9a294' }}
+          style={{ width: 27, height: 27, fontSize: 14.5, color: '#a9a294' }}
         >×</button>
       </div>
 
@@ -64,12 +64,12 @@ export function DetailPanel({
         padding: sheet ? '14px 18px 24px' : '16px 22px 22px',
         display: 'flex', flexDirection: 'column', gap: 16,
       }}>
-        <div style={{ fontSize: 17, lineHeight: 1.4, color: '#e6dfd2' }}>{panel.lead}</div>
+        <div style={{ fontSize: 18.5, lineHeight: 1.4, color: '#e6dfd2' }}>{panel.lead}</div>
 
         {panel.fields.map((f) => (
           <div key={f.k} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             <div style={CAP}>{f.k}</div>
-            <div style={{ fontSize: 12.5, lineHeight: 1.6, color: f.c, fontStyle: f.it }}>{f.v}</div>
+            <div style={{ fontSize: 14, lineHeight: 1.6, color: f.c, fontStyle: f.it }}>{f.v}</div>
           </div>
         ))}
 
@@ -83,7 +83,7 @@ export function DetailPanel({
         {panel.essay && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div style={{ height: 1, background: 'rgba(233,229,221,0.14)' }} />
-            <Prose body={panel.essay.lead} size={13.5} color="#ded7c9" />
+            <Prose body={panel.essay.lead} size={15} color="#ded7c9" />
             {panel.essay.blocks.map((b, i) => (
               <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {b.h && <div style={CAP}>{b.h}</div>}
@@ -94,7 +94,7 @@ export function DetailPanel({
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <div style={CAP}>Read next</div>
                 {panel.essay.refs.map((r, i) => (
-                  <div key={i} style={{ fontSize: 11.5, lineHeight: 1.5, color: '#9d9689' }}>
+                  <div key={i} style={{ fontSize: 12.5, lineHeight: 1.5, color: '#9d9689' }}>
                     {r.url
                       ? <a href={r.url} target="_blank" rel="noreferrer noopener"
                         style={{ color: '#bfb8aa', textDecoration: 'underline' }}>{r.t}</a>
@@ -123,13 +123,13 @@ export function DetailPanel({
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
-                  <div style={{ fontSize: 12.5, color: '#ece6da' }}>{it.name}</div>
+                  <div style={{ fontSize: 14, color: '#ece6da' }}>{it.name}</div>
                   <div style={{
-                    fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase',
+                    fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase',
                     color: it.c, whiteSpace: 'nowrap',
                   }}>{it.kind}</div>
                 </div>
-                <div style={{ fontSize: 11, lineHeight: 1.5, color: '#9d9689' }}>{it.note}</div>
+                <div style={{ fontSize: 12, lineHeight: 1.5, color: '#9d9689' }}>{it.note}</div>
               </div>
             ))}
           </div>

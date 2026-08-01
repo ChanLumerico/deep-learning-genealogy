@@ -98,14 +98,14 @@ export function TopBar(p: TopBarProps) {
         }}>
           <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
             <div style={{
-              fontSize: 13.5, fontWeight: 500, letterSpacing: '-0.01em', color: '#f1ece2',
+              fontSize: 15, fontWeight: 500, letterSpacing: '-0.01em', color: '#f1ece2',
               lineHeight: 1.15, whiteSpace: 'nowrap', overflow: 'hidden',
               textOverflow: 'ellipsis',
             }}>Deep Learning Model Genealogy</div>
             {/* collapsed, the year still has to be legible — it is what the
                 timeline is currently filtering to */}
             <div style={{
-              fontSize: 9, letterSpacing: '0.16em', textTransform: 'uppercase',
+              fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase',
               color: '#8d8578', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
             }}>{p.yearLabel}</div>
           </div>
@@ -146,11 +146,11 @@ export function TopBar(p: TopBarProps) {
               height: 47, minWidth: 0,
             }}>
               <div style={{
-                fontSize: 20, fontWeight: 500, letterSpacing: '-0.01em',
+                fontSize: 22, fontWeight: 500, letterSpacing: '-0.01em',
                 color: '#f1ece2', lineHeight: 1.05, whiteSpace: 'nowrap',
               }}>Deep Learning Model Genealogy</div>
               <div style={{
-                fontSize: 9.5, letterSpacing: '0.19em', textTransform: 'uppercase',
+                fontSize: 10.5, letterSpacing: '0.19em', textTransform: 'uppercase',
                 fontWeight: 400, color: '#8d8578', fontVariantNumeric: 'tabular-nums',
                 whiteSpace: 'nowrap',
               }}>A Phylogeny of Architectures · 1957 — 2025</div>
@@ -161,7 +161,7 @@ export function TopBar(p: TopBarProps) {
             <div className="gx-cap" style={CAP_SPLIT}>
               <span>Timeline</span><span style={VALUE}>{p.yearLabel}</span>
             </div>
-            <div style={{ height: 28, display: 'flex', alignItems: 'center' }}>
+            <div style={{ height: 30, display: 'flex', alignItems: 'center' }}>
               <input
                 type="range" min={p.timeMin} max={p.timeMax} step={2} value={p.timeX}
                 onChange={(e) => p.onYear(parseFloat(e.target.value))}
@@ -249,14 +249,14 @@ export function TopBar(p: TopBarProps) {
                   <button
                     className="gx-btn" onClick={p.onZoomOut} aria-label="Zoom out"
                     style={{
-                      flex: '0 0 34px', padding: 0, fontSize: 14, background: 'transparent',
+                      flex: '0 0 34px', padding: 0, fontSize: 15.5, background: 'transparent',
                       border: '1px solid rgba(233,229,221,0.34)', color: '#cfc9bd',
                     }}
                   >−</button>
                   <button
                     className="gx-btn" onClick={p.onZoomIn} aria-label="Zoom in"
                     style={{
-                      flex: '0 0 34px', padding: 0, fontSize: 14, background: 'transparent',
+                      flex: '0 0 34px', padding: 0, fontSize: 15.5, background: 'transparent',
                       border: '1px solid rgba(233,229,221,0.34)', color: '#cfc9bd',
                     }}
                   >+</button>

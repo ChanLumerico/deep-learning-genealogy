@@ -532,7 +532,7 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
         {!graph && (
           <div style={{
             position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
-            justifyContent: 'center', color: loadError ? '#d68b7a' : '#7d7568', fontSize: 13,
+            justifyContent: 'center', color: loadError ? '#d68b7a' : '#7d7568', fontSize: 14.5,
             letterSpacing: '0.06em', padding: 24, textAlign: 'center',
           }}>
             {loadError
@@ -561,9 +561,9 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
                   }}
                 >
                   <div style={{ width: 26, height: 1, background: L.c }} />
-                  <div style={{ fontSize: 15, lineHeight: 1.15, color: L.c, letterSpacing: '0.02em' }}>{L.label}</div>
+                  <div style={{ fontSize: 16.5, lineHeight: 1.15, color: L.c, letterSpacing: '0.02em' }}>{L.label}</div>
                   <div style={{
-                    fontSize: 8.5, letterSpacing: '0.18em', textTransform: 'uppercase',
+                    fontSize: 9.5, letterSpacing: '0.18em', textTransform: 'uppercase',
                     fontWeight: 500, color: '#7d7568', fontVariantNumeric: 'tabular-nums',
                   }}>{L.count}</div>
                 </div>

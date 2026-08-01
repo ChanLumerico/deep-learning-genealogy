@@ -105,7 +105,7 @@ export interface ProseProps {
   color?: string
 }
 
-export function Prose({ body, size = 12.5, color = '#cdc6b8' }: ProseProps) {
+export function Prose({ body, size = 14, color = '#cdc6b8' }: ProseProps) {
   const parsed = blocks(body)
   // nested: a formula inside bold still needs KaTeX
   const hasMath = parsed.some(
