@@ -164,20 +164,6 @@ export function TopBar(p: TopBarProps) {
             </div>
           )}
 
-          {/* The way in belongs beside the title, not among the reading
-              filters: it is the first thing someone needs and the last place
-              they would look for it. */}
-          <button
-            className="gx-btn" onClick={p.onStart}
-            title="Follow a lineage end to end"
-            style={{
-              flex: '0 0 auto', alignSelf: 'flex-start', padding: '0 13px',
-              background: 'rgba(233,229,221,0.1)',
-              border: '1px solid rgba(233,229,221,0.42)', color: '#dcd6ca',
-              letterSpacing: '0.06em',
-            }}
-          >Start here →</button>
-
           <div className="gx-field">
             <div className="gx-cap" style={CAP_SPLIT}>
               <span>Timeline</span><span style={VALUE}>{p.yearLabel}</span>
@@ -227,13 +213,30 @@ export function TopBar(p: TopBarProps) {
 
               <div className="gx-field">
                 <div className="gx-cap">Search</div>
-                <input
-                  className="gx-input" type="text" value={p.query}
-                  onChange={(e) => p.onQuery(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') p.onQuerySubmit(e.currentTarget.value) }}
-                  placeholder="Model name → Enter"
-                  aria-label="Search for a model"
-                />
+                {/* The search box asked for the whole width and needed a
+                    third of it. What it gives back goes to the way in, which
+                    belongs where someone is already looking for a way to
+                    begin rather than tucked under the title. */}
+                <div className="gx-row" style={{ minWidth: 0 }}>
+                  <input
+                    className="gx-input" type="text" value={p.query}
+                    onChange={(e) => p.onQuery(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') p.onQuerySubmit(e.currentTarget.value) }}
+                    placeholder="Model name → Enter"
+                    aria-label="Search for a model"
+                    style={{ flex: '1 1 auto', minWidth: 0, maxWidth: 260 }}
+                  />
+                  <button
+                    className="gx-btn" onClick={p.onStart}
+                    title="Follow a lineage end to end"
+                    style={{
+                      flex: '0 0 auto', padding: '0 13px',
+                      background: 'rgba(233,229,221,0.1)',
+                      border: '1px solid rgba(233,229,221,0.42)', color: '#dcd6ca',
+                      letterSpacing: '0.06em',
+                    }}
+                  >Start here →</button>
+                </div>
               </div>
             </div>
 
