@@ -1,0 +1,676 @@
+{
+ "perceptron": {
+  "t": "The Perceptron: A Probabilistic Model for Information Storage and Organization in the Brain",
+  "doi": "10.1037/h0042519"
+ },
+ "mlp": {
+  "t": "Learning representations by back-propagating errors",
+  "doi": "10.1038/323533a0"
+ },
+ "boltzmann": {
+  "t": "A Learning Algorithm for Boltzmann Machines",
+  "doi": "10.1207/s15516709cog0901_7"
+ },
+ "rbm": {
+  "t": "Training Products of Experts by Minimizing Contrastive Divergence",
+  "doi": "10.1162/089976602760128018"
+ },
+ "dbn": {
+  "t": "A fast learning algorithm for deep belief nets",
+  "doi": "10.1162/neco.2006.18.7.1527"
+ },
+ "relu": {
+  "t": "Rectified Linear Units Improve Restricted Boltzmann Machines"
+ },
+ "dropout": {
+  "t": "Improving neural networks by preventing co-adaptation of feature detectors",
+  "arxiv": "1207.0580"
+ },
+ "adam": {
+  "t": "Adam: A Method for Stochastic Optimization",
+  "arxiv": "1412.6980"
+ },
+ "bn": {
+  "t": "Batch Normalization: Accelerating Deep Network Training by Reducing Internal Covariate Shift",
+  "arxiv": "1502.03167"
+ },
+ "residual": {
+  "t": "Deep Residual Learning for Image Recognition",
+  "arxiv": "1512.03385"
+ },
+ "attnmech": {
+  "t": "Neural Machine Translation by Jointly Learning to Align and Translate",
+  "arxiv": "1409.0473"
+ },
+ "kd": {
+  "t": "Distilling the Knowledge in a Neural Network",
+  "arxiv": "1503.02531"
+ },
+ "ln": {
+  "t": "Layer Normalization",
+  "arxiv": "1607.06450"
+ },
+ "lora": {
+  "t": "LoRA: Low-Rank Adaptation of Large Language Models",
+  "arxiv": "2106.09685"
+ },
+ "neocog": {
+  "t": "Neocognitron: A Self-organizing Neural Network Model for a Mechanism of Pattern Recognition Unaffected by Shift in Position",
+  "doi": "10.1007/bf00344251"
+ },
+ "lenet": {
+  "t": "Gradient-Based Learning Applied to Document Recognition",
+  "doi": "10.1109/5.726791"
+ },
+ "alexnet": {
+  "t": "ImageNet Classification with Deep Convolutional Neural Networks",
+  "doi": "10.1145/3065386"
+ },
+ "zfnet": {
+  "t": "Visualizing and Understanding Convolutional Networks",
+  "arxiv": "1311.2901"
+ },
+ "vgg": {
+  "t": "Very Deep Convolutional Networks for Large-Scale Image Recognition",
+  "arxiv": "1409.1556"
+ },
+ "googlenet": {
+  "t": "Going Deeper with Convolutions",
+  "arxiv": "1409.4842"
+ },
+ "resnet": {
+  "t": "Deep Residual Learning for Image Recognition",
+  "arxiv": "1512.03385"
+ },
+ "wrn": {
+  "t": "Wide Residual Networks",
+  "arxiv": "1605.07146"
+ },
+ "densenet": {
+  "t": "Densely Connected Convolutional Networks",
+  "arxiv": "1608.06993"
+ },
+ "resnext": {
+  "t": "Aggregated Residual Transformations for Deep Neural Networks",
+  "arxiv": "1611.05431"
+ },
+ "senet": {
+  "t": "Squeeze-and-Excitation Networks",
+  "arxiv": "1709.01507"
+ },
+ "xception": {
+  "t": "Xception: Deep Learning with Depthwise Separable Convolutions",
+  "arxiv": "1610.02357"
+ },
+ "mobilenet": {
+  "t": "MobileNets: Efficient Convolutional Neural Networks for Mobile Vision Applications",
+  "arxiv": "1704.04861"
+ },
+ "mbv2": {
+  "t": "MobileNetV2: Inverted Residuals and Linear Bottlenecks",
+  "arxiv": "1801.04381"
+ },
+ "mbv3": {
+  "t": "Searching for MobileNetV3",
+  "arxiv": "1905.02244"
+ },
+ "nasnet": {
+  "t": "Learning Transferable Architectures for Scalable Image Recognition",
+  "arxiv": "1707.07012"
+ },
+ "mnasnet": {
+  "t": "MnasNet: Platform-Aware Neural Architecture Search for Mobile",
+  "arxiv": "1807.11626"
+ },
+ "efficientnet": {
+  "t": "EfficientNet: Rethinking Model Scaling for Convolutional Neural Networks",
+  "arxiv": "1905.11946"
+ },
+ "rcnn": {
+  "t": "Rich Feature Hierarchies for Accurate Object Detection and Semantic Segmentation",
+  "arxiv": "1311.2524"
+ },
+ "fastrcnn": {
+  "t": "Fast R-CNN",
+  "arxiv": "1504.08083"
+ },
+ "fasterrcnn": {
+  "t": "Faster R-CNN: Towards Real-Time Object Detection with Region Proposal Networks",
+  "arxiv": "1506.01497"
+ },
+ "maskrcnn": {
+  "t": "Mask R-CNN",
+  "arxiv": "1703.06870"
+ },
+ "detr": {
+  "t": "End-to-End Object Detection with Transformers",
+  "arxiv": "2005.12872"
+ },
+ "yolo": {
+  "t": "You Only Look Once: Unified, Real-Time Object Detection",
+  "arxiv": "1506.02640"
+ },
+ "ssd": {
+  "t": "SSD: Single Shot MultiBox Detector",
+  "arxiv": "1512.02325"
+ },
+ "retinanet": {
+  "t": "Focal Loss for Dense Object Detection",
+  "arxiv": "1708.02002"
+ },
+ "yolov3": {
+  "t": "YOLOv3: An Incremental Improvement",
+  "arxiv": "1804.02767"
+ },
+ "yolov4": {
+  "t": "YOLOv4: Optimal Speed and Accuracy of Object Detection",
+  "arxiv": "2004.10934"
+ },
+ "fcn": {
+  "t": "Fully Convolutional Networks for Semantic Segmentation",
+  "arxiv": "1411.4038"
+ },
+ "unet": {
+  "t": "U-Net: Convolutional Networks for Biomedical Image Segmentation",
+  "arxiv": "1505.04597"
+ },
+ "segnet": {
+  "t": "SegNet: A Deep Convolutional Encoder-Decoder Architecture for Image Segmentation",
+  "arxiv": "1511.00561"
+ },
+ "deeplab": {
+  "t": "DeepLab: Semantic Image Segmentation with Deep Convolutional Nets, Atrous Convolution, and Fully Connected CRFs",
+  "arxiv": "1606.00915"
+ },
+ "sam": {
+  "t": "Segment Anything",
+  "arxiv": "2304.02643"
+ },
+ "vit": {
+  "t": "An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale",
+  "arxiv": "2010.11929"
+ },
+ "deit": {
+  "t": "Training data-efficient image transformers & distillation through attention",
+  "arxiv": "2012.12877"
+ },
+ "swin": {
+  "t": "Swin Transformer: Hierarchical Vision Transformer using Shifted Windows",
+  "arxiv": "2103.14030"
+ },
+ "beit": {
+  "t": "BEiT: BERT Pre-Training of Image Transformers",
+  "arxiv": "2106.08254"
+ },
+ "mae": {
+  "t": "Masked Autoencoders Are Scalable Vision Learners",
+  "arxiv": "2111.06377"
+ },
+ "convnext": {
+  "t": "A ConvNet for the 2020s",
+  "arxiv": "2201.03545"
+ },
+ "inceptionv3": {
+  "t": "Rethinking the Inception Architecture for Computer Vision",
+  "arxiv": "1512.00567"
+ },
+ "inceptionv4": {
+  "t": "Inception-v4, Inception-ResNet and the Impact of Residual Connections on Learning",
+  "arxiv": "1602.07261"
+ },
+ "sknet": {
+  "t": "Selective Kernel Networks",
+  "arxiv": "1903.06586"
+ },
+ "resnest": {
+  "t": "ResNeSt: Split-Attention Networks",
+  "arxiv": "2004.08955"
+ },
+ "cspnet": {
+  "t": "CSPNet: A New Backbone that can Enhance Learning Capability of CNN",
+  "arxiv": "1911.11929"
+ },
+ "effnetv2": {
+  "t": "EfficientNetV2: Smaller Models and Faster Training",
+  "arxiv": "2104.00298"
+ },
+ "mbv4": {
+  "t": "MobileNetV4: Universal Models for the Mobile Ecosystem",
+  "arxiv": "2404.10518"
+ },
+ "yolov2": {
+  "t": "YOLO9000: Better, Faster, Stronger",
+  "arxiv": "1612.08242"
+ },
+ "effdet": {
+  "t": "EfficientDet: Scalable and Efficient Object Detection",
+  "arxiv": "1911.09070"
+ },
+ "maskformer": {
+  "t": "Per-Pixel Classification is Not All You Need for Semantic Segmentation",
+  "arxiv": "2107.06278"
+ },
+ "mask2former": {
+  "t": "Masked-attention Mask Transformer for Universal Image Segmentation",
+  "arxiv": "2112.01527"
+ },
+ "attnunet": {
+  "t": "Attention U-Net: Learning Where to Look for the Pancreas",
+  "arxiv": "1804.03999"
+ },
+ "swin2": {
+  "t": "Swin Transformer V2: Scaling Up Capacity and Resolution",
+  "arxiv": "2111.09883"
+ },
+ "cvt": {
+  "t": "CvT: Introducing Convolutions to Vision Transformers",
+  "arxiv": "2103.15808"
+ },
+ "pvt": {
+  "t": "Pyramid Vision Transformer: A Versatile Backbone for Dense Prediction without Convolutions",
+  "arxiv": "2102.12122"
+ },
+ "pvt2": {
+  "t": "PVT v2: Improved Baselines with Pyramid Vision Transformer",
+  "arxiv": "2106.13797"
+ },
+ "crossvit": {
+  "t": "CrossViT: Cross-Attention Multi-Scale Vision Transformer for Image Classification",
+  "arxiv": "2103.14899"
+ },
+ "maxvit": {
+  "t": "MaxViT: Multi-Axis Vision Transformer",
+  "arxiv": "2204.01697"
+ },
+ "coatnet": {
+  "t": "CoAtNet: Marrying Convolution and Attention for All Data Sizes",
+  "arxiv": "2106.04803"
+ },
+ "efficientformer": {
+  "t": "EfficientFormer: Vision Transformers at MobileNet Speed",
+  "arxiv": "2206.01191"
+ },
+ "convnext2": {
+  "t": "ConvNeXt V2: Co-designing and Scaling ConvNets with Masked Autoencoders",
+  "arxiv": "2301.00808"
+ },
+ "inceptionnext": {
+  "t": "InceptionNeXt: When Inception Meets ConvNeXt",
+  "arxiv": "2303.16900"
+ },
+ "elman": {
+  "t": "Finding Structure in Time",
+  "doi": "10.1207/s15516709cog1402_1"
+ },
+ "lstm": {
+  "t": "Long Short-Term Memory",
+  "doi": "10.1162/neco.1997.9.8.1735"
+ },
+ "gru": {
+  "t": "Learning Phrase Representations using RNN Encoder-Decoder for Statistical Machine Translation",
+  "arxiv": "1406.1078"
+ },
+ "seq2seq": {
+  "t": "Sequence to Sequence Learning with Neural Networks",
+  "arxiv": "1409.3215"
+ },
+ "bahdanau": {
+  "t": "Neural Machine Translation by Jointly Learning to Align and Translate",
+  "arxiv": "1409.0473"
+ },
+ "nnlm": {
+  "t": "A Neural Probabilistic Language Model"
+ },
+ "w2v": {
+  "t": "Efficient Estimation of Word Representations in Vector Space",
+  "arxiv": "1301.3781"
+ },
+ "glove": {
+  "t": "GloVe: Global Vectors for Word Representation"
+ },
+ "fasttext": {
+  "t": "Enriching Word Vectors with Subword Information",
+  "arxiv": "1607.04606"
+ },
+ "elmo": {
+  "t": "Deep contextualized word representations",
+  "arxiv": "1802.05365"
+ },
+ "transformer": {
+  "t": "Attention Is All You Need",
+  "arxiv": "1706.03762"
+ },
+ "gpt1": {
+  "t": "Improving Language Understanding by Generative Pre-Training"
+ },
+ "gpt2": {
+  "t": "Language Models are Unsupervised Multitask Learners"
+ },
+ "gpt3": {
+  "t": "Language Models are Few-Shot Learners",
+  "arxiv": "2005.14165"
+ },
+ "instructgpt": {
+  "t": "Training Language Models to Follow Instructions with Human Feedback",
+  "arxiv": "2203.02155"
+ },
+ "bert": {
+  "t": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+  "arxiv": "1810.04805"
+ },
+ "roberta": {
+  "t": "RoBERTa: A Robustly Optimized BERT Pretraining Approach",
+  "arxiv": "1907.11692"
+ },
+ "albert": {
+  "t": "ALBERT: A Lite BERT for Self-supervised Learning of Language Representations",
+  "arxiv": "1909.11942"
+ },
+ "distilbert": {
+  "t": "DistilBERT, a distilled version of BERT: smaller, faster, cheaper and lighter",
+  "arxiv": "1910.01108"
+ },
+ "electra": {
+  "t": "ELECTRA: Pre-training Text Encoders as Discriminators Rather Than Generators",
+  "arxiv": "2003.10555"
+ },
+ "deberta": {
+  "t": "DeBERTa: Decoding-enhanced BERT with Disentangled Attention",
+  "arxiv": "2006.03654"
+ },
+ "t5": {
+  "t": "Exploring the Limits of Transfer Learning with a Unified Text-to-Text Transformer",
+  "arxiv": "1910.10683"
+ },
+ "txl": {
+  "t": "Transformer-XL: Attentive Language Models Beyond a Fixed-Length Context",
+  "arxiv": "1901.02860"
+ },
+ "xlnet": {
+  "t": "XLNet: Generalized Autoregressive Pretraining for Language Understanding",
+  "arxiv": "1906.08237"
+ },
+ "longformer": {
+  "t": "Longformer: The Long-Document Transformer",
+  "arxiv": "2004.05150"
+ },
+ "performer": {
+  "t": "Rethinking Attention with Performers",
+  "arxiv": "2009.14794"
+ },
+ "flashattn": {
+  "t": "FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness",
+  "arxiv": "2205.14135"
+ },
+ "s4": {
+  "t": "Efficiently Modeling Long Sequences with Structured State Spaces",
+  "arxiv": "2111.00396"
+ },
+ "mamba": {
+  "t": "Mamba: Linear-Time Sequence Modeling with Selective State Spaces",
+  "arxiv": "2312.00752"
+ },
+ "moe": {
+  "t": "Outrageously Large Neural Networks: The Sparsely-Gated Mixture-of-Experts Layer",
+  "arxiv": "1701.06538"
+ },
+ "switch": {
+  "t": "Switch Transformers: Scaling to Trillion Parameter Models with Simple and Efficient Sparsity",
+  "arxiv": "2101.03961"
+ },
+ "mixtral": {
+  "t": "Mixtral of Experts",
+  "arxiv": "2401.04088"
+ },
+ "llama": {
+  "t": "LLaMA: Open and Efficient Foundation Language Models",
+  "arxiv": "2302.13971"
+ },
+ "alpaca": {
+  "t": "Self-Instruct: Aligning Language Models with Self-Generated Instructions",
+  "arxiv": "2212.10560"
+ },
+ "llama2": {
+  "t": "Llama 2: Open Foundation and Fine-Tuned Chat Models",
+  "arxiv": "2307.09288"
+ },
+ "dpo": {
+  "t": "Direct Preference Optimization: Your Language Model is Secretly a Reward Model",
+  "arxiv": "2305.18290"
+ },
+ "roformer": {
+  "t": "RoFormer: Enhanced Transformer with Rotary Position Embedding",
+  "arxiv": "2104.09864"
+ },
+ "ae": {
+  "t": "Reducing the Dimensionality of Data with Neural Networks"
+ },
+ "vae": {
+  "t": "Auto-Encoding Variational Bayes"
+ },
+ "vqvae": {
+  "t": "Neural Discrete Representation Learning"
+ },
+ "vqvae2": {
+  "t": "Generating Diverse High-Fidelity Images with VQ-VAE-2"
+ },
+ "gan": {
+  "t": "Generative Adversarial Networks"
+ },
+ "dcgan": {
+  "t": "Unsupervised Representation Learning with Deep Convolutional Generative Adversarial Networks"
+ },
+ "wgan": {
+  "t": "Wasserstein GAN"
+ },
+ "wgangp": {
+  "t": "Improved Training of Wasserstein GANs"
+ },
+ "pggan": {
+  "t": "Progressive Growing of GANs for Improved Quality, Stability, and Variation"
+ },
+ "stylegan": {
+  "t": "A Style-Based Generator Architecture for Generative Adversarial Networks"
+ },
+ "stylegan2": {
+  "t": "Analyzing and Improving the Image Quality of StyleGAN"
+ },
+ "biggan": {
+  "t": "Large Scale GAN Training for High Fidelity Natural Image Synthesis"
+ },
+ "cgan": {
+  "t": "Conditional Generative Adversarial Nets"
+ },
+ "pix2pix": {
+  "t": "Image-to-Image Translation with Conditional Adversarial Networks"
+ },
+ "cyclegan": {
+  "t": "Unpaired Image-to-Image Translation using Cycle-Consistent Adversarial Networks"
+ },
+ "pixelcnn": {
+  "t": "Pixel Recurrent Neural Networks"
+ },
+ "wavenet": {
+  "t": "WaveNet: A Generative Model for Raw Audio"
+ },
+ "nice": {
+  "t": "NICE: Non-linear Independent Components Estimation"
+ },
+ "realnvp": {
+  "t": "Density estimation using Real NVP"
+ },
+ "maf": {
+  "t": "Masked Autoregressive Flow for Density Estimation"
+ },
+ "glow": {
+  "t": "Glow: Generative Flow with Invertible 1x1 Convolutions"
+ },
+ "nde": {
+  "t": "Neural Ordinary Differential Equations"
+ },
+ "ffjord": {
+  "t": "FFJORD: Free-form Continuous Dynamics for Scalable Reversible Generative Models"
+ },
+ "rectflow": {
+  "t": "Flow Straight and Fast: Learning to Generate and Transfer Data with Rectified Flow"
+ },
+ "flowmatch": {
+  "t": "Flow Matching for Generative Modeling"
+ },
+ "ncsn": {
+  "t": "Generative Modeling by Estimating Gradients of the Data Distribution"
+ },
+ "ddpm": {
+  "t": "Denoising Diffusion Probabilistic Models"
+ },
+ "scoresde": {
+  "t": "Score-Based Generative Modeling through Stochastic Differential Equations"
+ },
+ "ddim": {
+  "t": "Denoising Diffusion Implicit Models"
+ },
+ "ldm": {
+  "t": "High-Resolution Image Synthesis with Latent Diffusion Models"
+ },
+ "dit": {
+  "t": "Scalable Diffusion Models with Transformers"
+ },
+ "sd3": {
+  "t": "Scaling Rectified Flow Transformers for High-Resolution Image Synthesis"
+ },
+ "bellman": {
+  "t": "Dynamic Programming"
+ },
+ "td": {
+  "t": "Learning to Predict by the Methods of Temporal Differences"
+ },
+ "qlearn": {
+  "t": "Learning from Delayed Rewards"
+ },
+ "dqn": {
+  "t": "Human-level control through deep reinforcement learning"
+ },
+ "ddqn": {
+  "t": "Deep Reinforcement Learning with Double Q-learning"
+ },
+ "dueling": {
+  "t": "Dueling Network Architectures for Deep Reinforcement Learning"
+ },
+ "per": {
+  "t": "Prioritized Experience Replay"
+ },
+ "noisy": {
+  "t": "Noisy Networks for Exploration"
+ },
+ "rainbow": {
+  "t": "Rainbow: Combining Improvements in Deep Reinforcement Learning"
+ },
+ "reinforce": {
+  "t": "Simple Statistical Gradient-Following Algorithms for Connectionist Reinforcement Learning"
+ },
+ "ac": {
+  "t": "Policy Gradient Methods for Reinforcement Learning with Function Approximation"
+ },
+ "a2c": {
+  "t": "Asynchronous Methods for Deep Reinforcement Learning"
+ },
+ "trpo": {
+  "t": "Trust Region Policy Optimization"
+ },
+ "ppo": {
+  "t": "Proximal Policy Optimization Algorithms"
+ },
+ "dpg": {
+  "t": "Deterministic Policy Gradient Algorithms"
+ },
+ "ddpg": {
+  "t": "Continuous control with deep reinforcement learning"
+ },
+ "td3": {
+  "t": "Addressing Function Approximation Error in Actor-Critic Methods"
+ },
+ "sac": {
+  "t": "Soft Actor-Critic: Off-Policy Maximum Entropy Deep Reinforcement Learning with a Stochastic Actor"
+ },
+ "alphago": {
+  "t": "Mastering the game of Go with deep neural networks and tree search"
+ },
+ "agz": {
+  "t": "Mastering the game of Go without human knowledge"
+ },
+ "alphazero": {
+  "t": "A general reinforcement learning algorithm that masters chess, shogi, and Go through self-play"
+ },
+ "muzero": {
+  "t": "Mastering Atari, Go, Chess and Shogi by Planning with a Learned Model"
+ },
+ "worldmodels": {
+  "t": "World Models"
+ },
+ "dreamer": {
+  "t": "Dream to Control: Learning Behaviors by Latent Imagination"
+ },
+ "cql": {
+  "t": "Conservative Q-Learning for Offline Reinforcement Learning"
+ },
+ "dt": {
+  "t": "Decision Transformer: Reinforcement Learning via Sequence Modeling"
+ },
+ "apprentice": {
+  "t": "Apprenticeship Learning via Inverse Reinforcement Learning"
+ },
+ "maxentirl": {
+  "t": "Maximum Entropy Inverse Reinforcement Learning"
+ },
+ "dagger": {
+  "t": "A Reduction of Imitation Learning and Structured Prediction to No-Regret Online Learning"
+ },
+ "gail": {
+  "t": "Generative Adversarial Imitation Learning"
+ },
+ "grpo": {
+  "t": "DeepSeekMath: Pushing the Limits of Mathematical Reasoning in Open Language Models"
+ },
+ "showtell": {
+  "t": "Show and Tell: A Neural Image Caption Generator"
+ },
+ "showattend": {
+  "t": "Show, Attend and Tell: Neural Image Caption Generation with Visual Attention"
+ },
+ "vilbert": {
+  "t": "ViLBERT: Pretraining Task-Agnostic Visiolinguistic Representations for Vision-and-Language Tasks"
+ },
+ "clip": {
+  "t": "Learning Transferable Visual Models From Natural Language Supervision"
+ },
+ "align": {
+  "t": "Scaling Up Visual and Vision-Language Representation Learning With Noisy Text Supervision"
+ },
+ "imagen": {
+  "t": "Photorealistic Text-to-Image Diffusion Models with Deep Language Understanding"
+ },
+ "whisper": {
+  "t": "Robust Speech Recognition via Large-Scale Weak Supervision"
+ },
+ "dalle": {
+  "t": "Zero-Shot Text-to-Image Generation"
+ },
+ "dalle2": {
+  "t": "Hierarchical Text-Conditional Image Generation with CLIP Latents"
+ },
+ "flamingo": {
+  "t": "Flamingo: a Visual Language Model for Few-Shot Learning"
+ },
+ "blip2": {
+  "t": "BLIP-2: Bootstrapping Language-Image Pre-training with Frozen Image Encoders and Large Language Models"
+ },
+ "llava": {
+  "t": "Visual Instruction Tuning"
+ },
+ "gpt4v": {
+  "t": "GPT-4 Technical Report"
+ },
+ "sora": {
+  "t": "Video generation models as world simulators"
+ }
+}

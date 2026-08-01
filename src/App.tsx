@@ -6,9 +6,9 @@ import {
 import type { EdgeKindKey, EdgeModel, Genealogy, LaneId, NodeModel } from './layout'
 import { loadGraphData } from './data/load'
 import { PaperCsv } from './data/csv'
-import { edgeKey, loadEdgeDetail, loadNodeDetail } from './data/detail'
+import { edgeKey, loadEdgeDetail, loadNodeDetail, loadPaperIds } from './data/detail'
 import type { Detail } from './data/detail'
-import type { ImportMode } from './data/csv'
+import type { ImportMode, PaperIds } from './data/csv'
 import { READ_FILTERS, ReadingLog } from './data/readingLog'
 import type { ReadFilterId, ReadMap } from './data/readingLog'
 import { exportPng } from './export/png'
@@ -76,6 +76,13 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
   const [read, setRead] = useState<ReadMap>(() => ReadingLog.load())
   const [readFilter, setReadFilter] = useState<ReadFilterId>('all')
   const [listOpen, setListOpen] = useState(false)
+  // The DOI / arXiv / title table the importer matches against. Only the
+  // reading list needs it, so it is not fetched until that panel is opened.
+  const [paperIds, setPaperIds] = useState<PaperIds>({})
+  useEffect(() => {
+    if (!listOpen || Object.keys(paperIds).length) return
+    loadPaperIds().then((t) => setPaperIds(t as PaperIds))
+  }, [listOpen, paperIds])
   const [importMode, setImportMode] = useState<ImportMode>('add')
   const [importNote, setImportNote] = useState('')
   const [importBad, setImportBad] = useState(false)
@@ -316,7 +323,7 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
       const done = items.filter((i) => i.read).length
       return { id: L.id, label: L.label, c: L.c, items, tally: done + ' / ' + items.length, done }
     })
-  }, [graph, read])
+  }, [graph, read, paperIds])
 
   // ── actions ─────────────────────────────────────────────────────────────
   const toggleRead = useCallback((id: string) => {
@@ -347,7 +354,7 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
     if (!graph) return
     const reader = new FileReader()
     reader.onload = () => {
-      const res = PaperCsv.parse(String(reader.result), PaperCsv.index(graph.nodes))
+      const res = PaperCsv.parse(String(reader.result), PaperCsv.index(graph.nodes, paperIds))
       if (!res.ok) { setImportNote(res.error); setImportBad(true); return }
       setImportBad(false)
       setImportNote(res.count + ' of ' + res.rows + ' rows matched' +
@@ -366,7 +373,7 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
     }
     reader.onerror = () => { setImportNote('Could not read that file.'); setImportBad(true) }
     reader.readAsText(file)
-  }, [graph, importMode])
+  }, [graph, importMode, paperIds])
 
   const exportCsv = useCallback(() => {
     if (!graph) return
@@ -375,7 +382,7 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
     }
     setImportBad(false)
     setImportNote('')
-    exportReadingCsv(graph.nodes, read)
+    exportReadingCsv(graph.nodes, read, paperIds)
   }, [graph, read])
 
   const clearRead = useCallback(() => {

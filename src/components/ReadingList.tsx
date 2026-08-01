@@ -108,6 +108,11 @@ export function ReadingList(p: ReadingListProps) {
           >Clear all</button>
         </div>
 
+        <div style={{ fontSize: 9.5, lineHeight: 1.5, color: '#7d7568', marginTop: 9 }}>
+          Any CSV with a DOI, an arXiv id, a paper title or a model name — a
+          Zotero or Mendeley export works unchanged.
+        </div>
+
         {p.importNote && (
           <div style={{
             fontSize: 10, lineHeight: 1.45, marginTop: 9,

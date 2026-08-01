@@ -94,4 +94,9 @@ export const CSV_ALIASES: Record<string, string> = {
   vitvisiontransformer: 'vit', maskrcnn: 'maskrcnn', fastrcnn: 'fastrcnn', fasterrcnn: 'fasterrcnn',
 }
 
-export const CSV_HEADER = ['model', 'field', 'paper', 'task', 'year']
+/**
+ * The columns Export writes. Import does not require them — it recognises
+ * `doi`, `arxiv`, `title`/`paper` and `model` wherever they appear — but a
+ * file written here carries the identifiers that make a re-import exact.
+ */
+export const CSV_HEADER = ['Model', 'Field', 'Paper', 'DOI', 'arXiv', 'Task', 'Year']

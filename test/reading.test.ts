@@ -58,7 +58,7 @@ describe('reading list export/import round-trip', () => {
 
   it('exports an empty list as a header-only file', () => {
     const csv = PaperCsv.serialize(graph.nodes, {})
-    expect(csv).toBe('Model,Field,Paper,Task,Year\n')
+    expect(csv).toBe('Model,Field,Paper,DOI,arXiv,Task,Year\n')
     const back = PaperCsv.parse(csv, index)
     expect(back.ok).toBe(true)
     if (back.ok) expect(back.count).toBe(0)

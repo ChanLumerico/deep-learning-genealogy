@@ -3,11 +3,15 @@
 // accepts, so it can move between browsers and machines.
 
 import { PaperCsv } from '../data/csv'
+import type { PaperIds } from '../data/csv'
 import type { ReadMap } from '../data/readingLog'
 import type { NodeModel } from '../layout'
 
-export function exportReadingCsv(nodes: NodeModel[], read: ReadMap): void {
-  const blob = new Blob([PaperCsv.serialize(nodes, read)], { type: 'text/csv;charset=utf-8' })
+export function exportReadingCsv(
+  nodes: NodeModel[], read: ReadMap, papers: PaperIds = {},
+): void {
+  const csv = PaperCsv.serialize(nodes, read, papers)
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
   const a = document.createElement('a')
   a.href = URL.createObjectURL(blob)
   a.download = 'deep-learning-genealogy-reading.csv'
