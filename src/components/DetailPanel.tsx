@@ -14,6 +14,10 @@ export interface DetailPanelProps {
   panel: PanelVM
   /** the shareable address of what is open, if there is one */
   link?: string
+  /** rendered above the entry while a lineage is being walked */
+  walkBar?: React.ReactNode
+  /** offered on a model: start walking back to where it came from */
+  onTrace?: () => void
   /** phone: dock to the bottom instead of taking a full-height column */
   sheet?: boolean
   /** side-panel width, reader-adjustable; ignored in sheet mode */
@@ -23,7 +27,7 @@ export interface DetailPanelProps {
 }
 
 export function DetailPanel({
-  panel, link, sheet = false, width = 372, onResize, onClose,
+  panel, link, walkBar, onTrace, sheet = false, width = 372, onResize, onClose,
 }: DetailPanelProps) {
   const [copied, setCopied] = useState(false)
   // A 372px column is wider than a phone screen, so on a phone the panel
@@ -32,6 +36,7 @@ export function DetailPanel({
   const body = (
     <>
       {!sheet && onResize && <PanelResizer width={width} onResize={onResize} />}
+      {walkBar}
       {/* the header is a drag target: pulling it moves the sheet, not the text */}
       <div data-sheet-grab={sheet ? '' : undefined} style={{
         display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
@@ -96,6 +101,17 @@ export function DetailPanel({
         {/* The long-form essay, once its file has arrived. The short fields
             above stay: they are the one-line version, and they are what the
             reader has already seen on the node itself. */}
+        {onTrace && (
+          <button
+            className="gx-close" onClick={onTrace}
+            style={{
+              alignSelf: 'flex-start', padding: '0 11px', height: 28,
+              fontSize: 11.5, letterSpacing: '0.04em',
+            }}
+            title="Read the line of descent that leads here, in order"
+          >Trace this lineage →</button>
+        )}
+
         {panel.essayLoading && !panel.essay && (
           <div style={{ ...CAP, color: '#6f6759' }}>Loading the full entry…</div>
         )}

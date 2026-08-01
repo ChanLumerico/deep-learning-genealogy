@@ -25,6 +25,40 @@ describe('writing a link', () => {
     expect(toHash(state({ sel: { kind: 'node', id: 'vit' } }))).toBe('#/node/vit')
   })
 
+  it('writes a walk, with its step', () => {
+    expect(toHash(state({ walk: { kind: 'path', id: 'transformer', step: 0 } })))
+      .toBe('#/path/transformer')
+    expect(toHash(state({ walk: { kind: 'path', id: 'transformer', step: 4 } })))
+      .toBe('#/path/transformer?step=4')
+    expect(toHash(state({ walk: { kind: 'trace', id: 'resnet', step: 2 } })))
+      .toBe('#/trace/resnet?step=2')
+  })
+
+  it('round-trips a walk', () => {
+    for (const w of [
+      { kind: 'path' as const, id: 'depth', step: 0 },
+      { kind: 'trace' as const, id: 'vit', step: 7 },
+    ]) expect(parseHash(toHash(state({ walk: w }))).walk).toEqual(w)
+  })
+
+  it('refuses a walk id that could not have come from us', () => {
+    expect(parseHash('#/path/../secrets').walk).toBe(null)
+    expect(parseHash('#/trace/').walk).toBe(null)
+  })
+
+  it('reads a missing or silly step as the beginning', () => {
+    expect(parseHash('#/path/depth').walk?.step).toBe(0)
+    expect(parseHash('#/path/depth?step=abc').walk?.step).toBe(0)
+    expect(parseHash('#/path/depth?step=-4').walk?.step).toBe(0)
+  })
+
+  it('counts moving through a walk as navigation', () => {
+    // back should retrace the reading, step by step
+    const a = state({ walk: { kind: 'path', id: 'depth', step: 1 } })
+    const b = state({ walk: { kind: 'path', id: 'depth', step: 2 } })
+    expect(isNavigation(a, b)).toBe(true)
+  })
+
   it('carries the view when it is not at its default', () => {
     expect(toHash(state({
       sel: { kind: 'node', id: 'vit' },

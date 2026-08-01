@@ -33,6 +33,8 @@ export interface TopBarProps {
   onQuerySubmit: (v: string) => void
   readCount: string
   onToggleList: () => void
+  /** open the list of curated journeys */
+  onStart: () => void
   onZoomIn: () => void
   onZoomOut: () => void
   onFit: () => void
@@ -240,6 +242,15 @@ export function TopBar(p: TopBarProps) {
                       letterSpacing: '0.06em',
                     }}
                   >Reading list</button>
+                  <button
+                    className="gx-btn" onClick={p.onStart}
+                    title="Follow a lineage end to end"
+                    style={{
+                      padding: '0 11px', background: 'rgba(233,229,221,0.1)',
+                      border: '1px solid rgba(233,229,221,0.42)', color: '#dcd6ca',
+                      letterSpacing: '0.06em',
+                    }}
+                  >Start here</button>
                 </div>
               </div>
 

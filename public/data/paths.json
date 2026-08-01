@@ -1,0 +1,50 @@
+[
+ {
+  "id": "transformer",
+  "title": "The road to the Transformer",
+  "blurb": "Sixty years from a machine that could not learn XOR to one that reads a sentence in a single parallel step. Each arrow is a limit somebody hit and what they did about it.",
+  "nodes": ["perceptron", "mlp", "elman", "lstm", "seq2seq", "bahdanau", "transformer"]
+ },
+ {
+  "id": "depth",
+  "title": "Making networks deep enough to matter",
+  "blurb": "The convolutional architecture was settled in 1980; everything after is about getting gradients through more layers than the last attempt could manage.",
+  "nodes": ["neocog", "lenet", "alexnet", "zfnet", "vgg", "resnet"]
+ },
+ {
+  "id": "crossover",
+  "title": "An architecture crosses domains",
+  "blurb": "Attention was built for translation. Cutting an image into patches let the same block read pictures — and the smallness of that change is the argument.",
+  "nodes": ["bahdanau", "transformer", "vit", "swin"]
+ },
+ {
+  "id": "generate",
+  "title": "Learning to generate",
+  "blurb": "Compress, then sample. From an autoencoder that only reconstructs, through adversarial training, to diffusion — three answers to the same question about where new images come from.",
+  "nodes": ["ae", "vae", "nice", "realnvp", "glow"]
+ },
+ {
+  "id": "diffusion",
+  "title": "How diffusion overtook GANs",
+  "blurb": "Adversarial training gave sharp images and unstable optimisation. Score matching gave a likelihood and a slow sampler. The line that won traded one for the other, then made it fast.",
+  "nodes": ["ncsn", "scoresde", "ddim", "ldm"]
+ },
+ {
+  "id": "control",
+  "title": "From value functions to language models",
+  "blurb": "Reinforcement learning spent thirty years on games, and then its policy-gradient machinery turned out to be how you make a language model follow instructions.",
+  "nodes": ["bellman", "td", "qlearn", "dqn", "alphago", "agz", "alphazero"]
+ },
+ {
+  "id": "alignment",
+  "title": "Teaching a model what was wanted",
+  "blurb": "Predicting the next token is not the same as being useful. The last three steps are about the difference, and about doing it without a reward model at all.",
+  "nodes": ["transformer", "gpt1", "gpt2", "gpt3", "instructgpt", "dpo"]
+ },
+ {
+  "id": "multimodal",
+  "title": "Getting pictures and words into one space",
+  "blurb": "Captioning taught a network to describe an image. Contrastive pretraining taught it to put images and sentences in the same coordinates, which is what made everything since possible.",
+  "nodes": ["showtell", "showattend", "vilbert", "clip", "flamingo", "blip2", "llava"]
+ }
+]

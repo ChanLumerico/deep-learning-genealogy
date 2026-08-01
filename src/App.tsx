@@ -6,7 +6,7 @@ import {
 import type { EdgeKindKey, EdgeModel, Genealogy, LaneId, NodeModel } from './layout'
 import { loadGraphData } from './data/load'
 import { PaperCsv } from './data/csv'
-import { edgeKey, loadEdgeDetail, loadNodeDetail, loadPaperIds } from './data/detail'
+import { edgeKey, loadEdgeDetail, loadNodeDetail, loadPaperIds, loadPaths } from './data/detail'
 import type { Detail } from './data/detail'
 import type { ImportMode, PaperIds } from './data/csv'
 import { READ_FILTERS, ReadingLog } from './data/readingLog'
@@ -17,6 +17,10 @@ import { useViewport } from './view/useViewport'
 import { useCamera, ZOOM } from './view/useCamera'
 import { useUrlState } from './view/useUrlState'
 import { parseHash, toHash } from './view/url'
+import { ancestry, clampStep, steps } from './view/walk'
+import type { Step, WalkPath } from './view/walk'
+import { WalkBar } from './components/WalkBar'
+import { StartHere } from './components/StartHere'
 import type { UrlState } from './view/url'
 import { GraphCanvas } from './components/GraphCanvas'
 import { TopBar } from './components/TopBar'
@@ -111,6 +115,17 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
 
   const [legendOpen, setLegendOpen] = useState(!vp.compact)
   const [controlsOpen, setControlsOpen] = useState(false)
+
+  // ── walking a lineage ───────────────────────────────────────────────────
+  // Which journey is open and how far in. Curated journeys arrive with the
+  // graph; a trace is computed from whichever model the reader asked about.
+  const [walk, setWalk] = useState<
+    { kind: 'path' | 'trace'; id: string; step: number } | null>(null)
+  const [paths, setPaths] = useState<WalkPath[]>([])
+  const [startOpen, setStartOpen] = useState(false)
+  useEffect(() => {
+    loadPaths().then((p) => setPaths(p as WalkPath[]))
+  }, [])
   const [exporting, setExporting] = useState(false)
 
   // ── load + build ────────────────────────────────────────────────────────
@@ -154,6 +169,57 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
 
   const yearMax = useMemo(() => TIME.yearAt(timeX), [timeX])
 
+  /** the chain being walked, its title, and the alternating steps over it */
+  const walking = useMemo(() => {
+    if (!graph || !walk) return null
+    const nodes = graph.nodes.map((n) => ({ id: n.id, year: n.year }))
+    const edges = graph.edges.map((e) => ({
+      from: e.from.id, to: e.to.id, kind: e.kindKey, hi: e.highlight,
+    }))
+    let chain: string[] = []
+    let title = ''
+    if (walk.kind === 'path') {
+      const p = paths.find((x) => x.id === walk.id)
+      if (!p) return null
+      chain = p.nodes.filter((id) => graph.byId[id])
+      title = p.title
+    } else {
+      chain = ancestry(nodes, edges, walk.id)
+      const end = graph.byId[walk.id]
+      title = end ? `How we got to ${end.name}` : ''
+    }
+    if (chain.length < 2) return null
+    const list = steps(chain, edges)
+    return { title, steps: list, step: clampStep(walk.step, list.length) }
+  }, [graph, walk, paths])
+
+  // The step being read IS the selection: the panel already knows how to
+  // render a model or an arrow, so a walk only has to choose which one.
+  useEffect(() => {
+    if (!walking || !graph) return
+    const cur: Step | undefined = walking.steps[walking.step]
+    if (!cur) return
+    if (cur.kind === 'node') {
+      const n = graph.byId[cur.id]
+      setSel(cur.id); setSelEIndex(null)
+      if (n) centerOn(n.cx, n.cy, Math.max(ZOOM.initial, 0.72))
+    } else {
+      const i = graph.edges.findIndex(
+        (x) => x.from.id === cur.from && x.to.id === cur.to)
+      setSel(null); setSelEIndex(i >= 0 ? i : null)
+      if (i >= 0) {
+        const x = graph.edges[i]
+        centerOn((x.from.cx + x.to.cx) / 2, (x.from.cy + x.to.cy) / 2,
+          Math.max(ZOOM.initial, 0.6))
+      }
+    }
+    setListOpen(false)
+  }, [walking, graph, centerOn])
+
+  const stepBy = useCallback((d: number) => {
+    setWalk((w) => (w ? { ...w, step: Math.max(0, w.step + d) } : w))
+  }, [])
+
   // ── the address bar ─────────────────────────────────────────────────────
   // Everything worth putting in a link, in one object. Values sitting at
   // their default are left out by toHash(), so an ordinary link is short.
@@ -162,10 +228,11 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
       : selE ? { kind: 'edge' as const, from: selE.from.id, to: selE.to.id }
       : null,
     listOpen,
+    walk: walking && walk ? { kind: walk.kind, id: walk.id, step: walking.step } : null,
     year: timeX >= TIME.max ? null : Math.round(TIME.yearAt(timeX)),
     lanesOff: Object.keys(lanesOff).filter((x) => lanesOff[x]).sort(),
     kindsOff: Object.keys(kindsOff).filter((x) => kindsOff[x]).sort(),
-  }), [sel, selE, listOpen, timeX, lanesOff, kindsOff])
+  }), [sel, selE, listOpen, walk, walking, timeX, lanesOff, kindsOff])
 
   const applyUrl = useCallback((u: UrlState) => {
     if (!graph) return
@@ -173,6 +240,9 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
     setLanesOff(Object.fromEntries(u.lanesOff.map((x) => [x, true])))
     setKindsOff(Object.fromEntries(u.kindsOff.map((x) => [x, true])))
     setListOpen(u.listOpen)
+    setWalk(u.walk)
+    // a walk sets its own selection from the step it lands on
+    if (u.walk) return
     if (u.sel?.kind === 'node') {
       const n = graph.byId[u.sel.id]
       setSel(n ? u.sel.id : null); setSelEIndex(null)
@@ -535,6 +605,7 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
         }}
         readCount={graph ? `${readCount} / ${graph.nodes.length}` : '—'}
         onToggleList={() => setListOpen((v) => !v)}
+        onStart={() => setStartOpen(true)}
         onZoomIn={() => zoomBy(ZOOM.step)}
         onZoomOut={() => zoomBy(1 / ZOOM.step)}
         onFit={() => fit(CANVAS.w, CANVAS.h, vp.compact ? 24 : 140)}
@@ -654,9 +725,32 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
           />
         )}
 
+        {startOpen && !!paths.length && (
+          <StartHere
+            paths={paths}
+            lengths={Object.fromEntries(paths.map((p) => [p.id, p.nodes.length]))}
+            onPick={(id) => { setWalk({ kind: 'path', id, step: 0 }); setStartOpen(false) }}
+            onClose={() => setStartOpen(false)}
+          />
+        )}
+
         {panel && !listOpen && (
           <DetailPanel
             panel={panel} sheet={vp.phone}
+            walkBar={walking ? (
+              <WalkBar
+                title={walking.title}
+                step={walking.step + 1}
+                total={walking.steps.length}
+                kind={walking.steps[walking.step]?.kind ?? 'node'}
+                onPrev={() => stepBy(-1)}
+                onNext={() => stepBy(1)}
+                onExit={() => setWalk(null)}
+              />
+            ) : undefined}
+            onTrace={selN && !walking
+              ? () => setWalk({ kind: 'trace', id: selN.id, step: 0 })
+              : undefined}
             link={window.location.origin + window.location.pathname + toHash(urlState)}
             width={panelWidth} onResize={resizePanel}
             onClose={clearSel}

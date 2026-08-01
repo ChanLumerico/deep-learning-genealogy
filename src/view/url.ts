@@ -24,6 +24,15 @@ export interface UrlState {
   /** what is selected, if anything */
   sel: { kind: 'node'; id: string } | { kind: 'edge'; from: string; to: string } | null
   listOpen: boolean
+  /**
+   * A lineage being walked, and how far in. `path` is a curated journey's id;
+   * `trace` is a model whose ancestry was traced on the spot. A walk is
+   * shareable at the step someone reached, which is the point of putting it
+   * here rather than in component state.
+   */
+  walk: { kind: 'path'; id: string; step: number }
+    | { kind: 'trace'; id: string; step: number }
+    | null
   /** timeline position, as a year; null means "all of it" */
   year: number | null
   /** lanes switched OFF, sorted; empty means every lane is showing */
@@ -33,7 +42,7 @@ export interface UrlState {
 }
 
 export const EMPTY: UrlState = {
-  sel: null, listOpen: false, year: null, lanesOff: [], kindsOff: [],
+  sel: null, listOpen: false, walk: null, year: null, lanesOff: [], kindsOff: [],
 }
 
 /** ids are lowercase alphanumeric slugs; anything else did not come from us */
@@ -50,7 +59,14 @@ export function parseHash(hash: string): UrlState {
 
   let sel: UrlState['sel'] = null
   let listOpen = false
-  if (parts[0] === 'node' && ID.test(parts[1] ?? '')) {
+  let walk: UrlState['walk'] = null
+  const stepOf = () => {
+    const v = Number(q.get('step'))
+    return Number.isFinite(v) && v >= 0 ? Math.floor(v) : 0
+  }
+  if ((parts[0] === 'path' || parts[0] === 'trace') && ID.test(parts[1] ?? '')) {
+    walk = { kind: parts[0], id: parts[1], step: stepOf() }
+  } else if (parts[0] === 'node' && ID.test(parts[1] ?? '')) {
     sel = { kind: 'node', id: parts[1] }
   } else if (parts[0] === 'edge' && ID.test(parts[1] ?? '') && ID.test(parts[2] ?? '')) {
     sel = { kind: 'edge', from: parts[1], to: parts[2] }
@@ -64,16 +80,21 @@ export function parseHash(hash: string): UrlState {
     ? Math.round(yearRaw)
     : null
 
-  return { sel, listOpen, year, lanesOff: list(q.get('lanes')), kindsOff: list(q.get('kinds')) }
+  return {
+    sel, listOpen, walk, year,
+    lanesOff: list(q.get('lanes')), kindsOff: list(q.get('kinds')),
+  }
 }
 
 export function toHash(s: UrlState): string {
   let path = '/'
-  if (s.listOpen) path = '/list'
+  if (s.walk) path = `/${s.walk.kind}/${s.walk.id}`
+  else if (s.listOpen) path = '/list'
   else if (s.sel?.kind === 'node') path = `/node/${s.sel.id}`
   else if (s.sel?.kind === 'edge') path = `/edge/${s.sel.from}/${s.sel.to}`
 
   const q = new URLSearchParams()
+  if (s.walk && s.walk.step > 0) q.set('step', String(s.walk.step))
   if (s.year != null) q.set('year', String(s.year))
   if (s.lanesOff.length) q.set('lanes', [...s.lanesOff].sort().join(','))
   if (s.kindsOff.length) q.set('kinds', [...s.kindsOff].sort().join(','))
