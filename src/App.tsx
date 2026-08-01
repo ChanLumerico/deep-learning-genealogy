@@ -742,6 +742,7 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
           <StartHere
             courses={courses}
             colours={LANE_COLOURS}
+            read={read}
             onPick={(id) => { setWalk({ kind: 'path', id, step: 0 }); setStartOpen(false) }}
             onClose={() => setStartOpen(false)}
           />

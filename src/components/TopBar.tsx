@@ -181,51 +181,42 @@ export function TopBar(p: TopBarProps) {
 
         {(
           <>
-            {/* ② domain / edge filters + search */}
+            {/* ② domain / edge filters + search
+                One grid for both rows, so Search sits under Domains and the
+                way in starts where Edges starts. Two independent flex rows
+                could not guarantee that — their columns would each be sized
+                by their own contents. */}
             <div style={{
               flex: p.compact ? '0 0 auto' : '1 1 auto',
               width: p.compact ? '100%' : undefined,
               minWidth: 0,
-              display: 'flex', flexDirection: 'column', gap: 12,
+              display: 'grid',
+              gridTemplateColumns: p.compact ? '1fr' : 'minmax(0, 620fr) minmax(0, 460fr)',
+              columnGap: 30, rowGap: 12,
+              alignItems: 'start',
             }}>
-              <div style={{
-                display: 'flex', gap: p.compact ? 12 : 30,
-                flexDirection: p.compact ? 'column' : 'row',
-                alignItems: 'flex-start', justifyContent: 'space-between',
-              }}>
-                <div className="gx-field" style={{
-                  flex: '1 1 auto', width: p.compact ? '100%' : undefined,
-                  maxWidth: p.compact ? undefined : 620,
-                  minWidth: 0,
-                }}>
-                  <div className="gx-cap">Domains</div>
-                  <Toggles items={p.laneToggles} wrap />
-                </div>
-                <div className="gx-field" style={{
-                  flex: '1 1 auto', width: p.compact ? '100%' : undefined,
-                  maxWidth: p.compact ? undefined : 460,
-                  minWidth: 0,
-                }}>
-                  <div className="gx-cap">Edges</div>
-                  <Toggles items={p.edgeToggles} wrap />
-                </div>
+              <div className="gx-field" style={{ minWidth: 0 }}>
+                <div className="gx-cap">Domains</div>
+                <Toggles items={p.laneToggles} wrap />
+              </div>
+              <div className="gx-field" style={{ minWidth: 0 }}>
+                <div className="gx-cap">Edges</div>
+                <Toggles items={p.edgeToggles} wrap />
               </div>
 
-              <div className="gx-field">
+              <div className="gx-field" style={{ minWidth: 0 }}>
                 <div className="gx-cap">Search</div>
-                {/* The search box asked for the whole width and needed a
-                    third of it. What it gives back goes to the way in, which
-                    belongs where someone is already looking for a way to
-                    begin rather than tucked under the title. */}
-                <div className="gx-row" style={{ minWidth: 0 }}>
-                  <input
-                    className="gx-input" type="text" value={p.query}
-                    onChange={(e) => p.onQuery(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') p.onQuerySubmit(e.currentTarget.value) }}
-                    placeholder="Model name → Enter"
-                    aria-label="Search for a model"
-                    style={{ flex: '1 1 auto', minWidth: 0, maxWidth: 260 }}
-                  />
+                <input
+                  className="gx-input" type="text" value={p.query}
+                  onChange={(e) => p.onQuery(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') p.onQuerySubmit(e.currentTarget.value) }}
+                  placeholder="Model name → Enter"
+                  aria-label="Search for a model"
+                />
+              </div>
+              <div className="gx-field" style={{ minWidth: 0 }}>
+                <div className="gx-cap">Begin</div>
+                <div className="gx-row">
                   <button
                     className="gx-btn" onClick={p.onStart}
                     title="Follow a lineage end to end"

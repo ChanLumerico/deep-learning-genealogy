@@ -117,3 +117,31 @@ export interface WalkCourse {
 /** Every journey across every field, for looking one up by id. */
 export const allPaths = (courses: WalkCourse[]): WalkPath[] =>
   courses.flatMap((c) => c.courses)
+
+export interface Progress {
+  done: number
+  total: number
+  complete: boolean
+}
+
+/**
+ * How far through a journey a reader is, measured against their reading list.
+ *
+ * Walking a course does NOT tick anything: the reading log is the visitor's
+ * own record of papers they have actually read, and marking one on their
+ * behalf because they clicked past it would quietly falsify it. Progress here
+ * is therefore a report on that log, not a second kind of state.
+ */
+export function progressOf(nodes: string[], read: Record<string, unknown>): Progress {
+  const seen = new Set(nodes)
+  const total = seen.size
+  let done = 0
+  seen.forEach((id) => { if (read[id]) done++ })
+  return { done, total, complete: total > 0 && done === total }
+}
+
+/** A field is complete when every journey through it is. */
+export function courseProgress(c: WalkCourse, read: Record<string, unknown>): Progress {
+  const done = c.courses.filter((p) => progressOf(p.nodes, read).complete).length
+  return { done, total: c.courses.length, complete: done === c.courses.length }
+}

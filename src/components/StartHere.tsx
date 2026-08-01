@@ -7,7 +7,8 @@
 // so it reads as a syllabus laid on the table and not as another panel.
 
 import { useState } from 'react'
-import type { WalkCourse, WalkPath } from '../view/walk'
+import { courseProgress, progressOf } from '../view/walk'
+import type { Progress, WalkCourse, WalkPath } from '../view/walk'
 
 const CAP: React.CSSProperties = {
   fontSize: 9.5, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#8a8275',
@@ -17,11 +18,13 @@ export interface StartHereProps {
   courses: WalkCourse[]
   /** lane colour per field id, so a card is recognisably its part of the sheet */
   colours: Record<string, string>
+  /** the visitor's reading list — what has actually been read */
+  read: Record<string, unknown>
   onPick: (pathId: string) => void
   onClose: () => void
 }
 
-export function StartHere({ courses, colours, onPick, onClose }: StartHereProps) {
+export function StartHere({ courses, colours, read, onPick, onClose }: StartHereProps) {
   const [open, setOpen] = useState<string | null>(null)
   const field = courses.find((c) => c.id === open) ?? null
 
@@ -90,29 +93,37 @@ export function StartHere({ courses, colours, onPick, onClose }: StartHereProps)
           gridTemplateColumns: 'repeat(auto-fill, minmax(268px, 1fr))',
           alignContent: 'start',
         }}>
-          {!field && courses.map((c) => (
-            <Card
-              key={c.id}
-              accent={colours[c.id]}
-              kicker={c.kicker}
-              title={c.title}
-              blurb={c.blurb}
-              foot={`${c.courses.length} journeys`}
-              onClick={() => setOpen(c.id)}
-            />
-          ))}
+          {!field && courses.map((c) => {
+            const pr = courseProgress(c, read)
+            return (
+              <Card
+                key={c.id}
+                accent={colours[c.id]}
+                kicker={c.kicker}
+                title={c.title}
+                blurb={c.blurb}
+                foot={`${pr.done} of ${pr.total} journeys finished`}
+                progress={pr}
+                onClick={() => setOpen(c.id)}
+              />
+            )
+          })}
 
-          {field && field.courses.map((p: WalkPath) => (
-            <Card
-              key={p.id}
-              accent={colours[field.id]}
-              kicker={`${p.nodes.length} models · ${p.nodes.length * 2 - 1} steps`}
-              title={p.title}
-              blurb={p.blurb}
-              foot="Begin →"
-              onClick={() => onPick(p.id)}
-            />
-          ))}
+          {field && field.courses.map((p: WalkPath) => {
+            const pr = progressOf(p.nodes, read)
+            return (
+              <Card
+                key={p.id}
+                accent={colours[field.id]}
+                kicker={`${p.nodes.length} models · ${p.nodes.length * 2 - 1} steps`}
+                title={p.title}
+                blurb={p.blurb}
+                foot={`${pr.done} / ${pr.total} read`}
+                progress={pr}
+                onClick={() => onPick(p.id)}
+              />
+            )
+          })}
         </div>
       </div>
     </div>
@@ -125,8 +136,12 @@ function Card(p: {
   title: string
   blurb: string
   foot: string
+  /** measured against the reading list; complete earns the tick */
+  progress: Progress
   onClick: () => void
 }) {
+  const accent = p.accent ?? 'rgba(233,229,221,0.4)'
+  const { done, total, complete } = p.progress
   return (
     <button
       className="gx-hover"
@@ -136,20 +151,46 @@ function Card(p: {
         textAlign: 'left', padding: '14px 15px 12px',
         background: 'transparent', cursor: 'pointer',
         border: '1px solid rgba(233,229,221,0.16)',
-        borderTop: `2px solid ${p.accent ?? 'rgba(233,229,221,0.4)'}`,
+        borderTop: `2px solid ${accent}`,
         borderRadius: 5, font: 'inherit', color: 'inherit',
-        minHeight: 148,
+        minHeight: 148, position: 'relative',
       }}
     >
-      <div style={{ ...CAP, color: p.accent ?? '#8a8275' }}>{p.kicker}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ ...CAP, color: accent, flex: 1, minWidth: 0 }}>{p.kicker}</div>
+        {complete && (
+          <span
+            title="Every model in this one is marked read"
+            style={{
+              flex: 'none', width: 17, height: 17, borderRadius: 3,
+              border: `1px solid ${accent}`, background: accent + '2e', color: accent,
+              fontSize: 11, lineHeight: '15px', textAlign: 'center',
+            }}
+          >✓</span>
+        )}
+      </div>
       <div style={{ fontSize: 15.5, color: '#ece6da', lineHeight: 1.25 }}>{p.title}</div>
       <div style={{
         fontSize: 11.5, lineHeight: 1.6, color: '#9d9689', flex: 1,
       }}>{p.blurb}</div>
-      <div style={{
-        fontSize: 10.5, letterSpacing: '0.1em', textTransform: 'uppercase',
-        color: '#7d7568',
-      }}>{p.foot}</div>
+
+      {/* a bar rather than only a count: the shape of it is legible at a glance */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+        <span style={{
+          flex: 1, height: 3, borderRadius: 2, overflow: 'hidden',
+          background: 'rgba(233,229,221,0.14)',
+        }}>
+          <span style={{
+            display: 'block', height: '100%',
+            width: `${total ? (done / total) * 100 : 0}%`,
+            background: accent, opacity: complete ? 1 : 0.66,
+          }} />
+        </span>
+        <span style={{
+          flex: 'none', fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase',
+          color: complete ? accent : '#7d7568', fontVariantNumeric: 'tabular-nums',
+        }}>{p.foot}</span>
+      </div>
     </button>
   )
 }

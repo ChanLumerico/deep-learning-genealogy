@@ -8,7 +8,9 @@ import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { allPaths, ancestry, clampStep, steps } from '../src/view/walk'
+import {
+  allPaths, ancestry, clampStep, courseProgress, progressOf, steps,
+} from '../src/view/walk'
 import type { WalkCourse, WalkEdge, WalkNode } from '../src/view/walk'
 import { loadGraphData } from './snapshot'
 
@@ -169,5 +171,41 @@ describe('the curated paths', () => {
     // three models is two arrows, which is the least that reads as a story
     // rather than as a pair being compared
     for (const p of paths) expect(p.nodes.length, p.id).toBeGreaterThanOrEqual(3)
+  })
+})
+
+describe('progress against the reading list', () => {
+  const nodes = ['a', 'b', 'c']
+
+  it('counts what the reader has actually ticked', () => {
+    expect(progressOf(nodes, {})).toEqual({ done: 0, total: 3, complete: false })
+    expect(progressOf(nodes, { a: 1, c: 1 })).toEqual({ done: 2, total: 3, complete: false })
+    expect(progressOf(nodes, { a: 1, b: 1, c: 1 })).toEqual({ done: 3, total: 3, complete: true })
+  })
+
+  it('ignores read models the journey does not visit', () => {
+    expect(progressOf(nodes, { a: 1, zzz: 1 }).done).toBe(1)
+  })
+
+  it('counts a model once even if the journey names it twice', () => {
+    expect(progressOf(['a', 'a', 'b'], { a: 1 })).toEqual({ done: 1, total: 2, complete: false })
+  })
+
+  it('never calls an empty journey complete', () => {
+    expect(progressOf([], { a: 1 })).toEqual({ done: 0, total: 0, complete: false })
+  })
+
+  it('completes a field only when every journey through it is done', () => {
+    const field = {
+      id: 'f', title: 't', kicker: 'k', blurb: 'b',
+      courses: [
+        { id: 'p1', title: 't', blurb: 'b', nodes: ['a', 'b'] },
+        { id: 'p2', title: 't', blurb: 'b', nodes: ['c'] },
+      ],
+    }
+    expect(courseProgress(field, { a: 1 })).toEqual({ done: 0, total: 2, complete: false })
+    expect(courseProgress(field, { a: 1, b: 1 })).toEqual({ done: 1, total: 2, complete: false })
+    expect(courseProgress(field, { a: 1, b: 1, c: 1 }))
+      .toEqual({ done: 2, total: 2, complete: true })
   })
 })
