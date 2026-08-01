@@ -129,12 +129,17 @@ export function TopBar(p: TopBarProps) {
         </div>
       )}
 
+      {/* The groups wrap rather than overflow: a narrow desktop window drops
+          the view controls onto a second line instead of cutting them off at
+          the right edge, which is what happened when this was a rigid row. */}
       {showControls && (
       <div style={{
         display: 'flex', alignItems: p.compact ? 'center' : 'flex-start',
         flexDirection: p.compact ? 'column' : 'row',
-        gap: p.compact ? 10 : 30,
+        flexWrap: p.compact ? 'nowrap' : 'wrap',
+        gap: p.compact ? 10 : '14px 30px',
         padding: p.phone ? '2px 13px 11px' : '12px 20px',
+        minWidth: 0,
       }}>
 
         {/* ① title (desktop / tablet only — the phone has its own strip above) */}
@@ -159,6 +164,20 @@ export function TopBar(p: TopBarProps) {
             </div>
           )}
 
+          {/* The way in belongs beside the title, not among the reading
+              filters: it is the first thing someone needs and the last place
+              they would look for it. */}
+          <button
+            className="gx-btn" onClick={p.onStart}
+            title="Follow a lineage end to end"
+            style={{
+              flex: '0 0 auto', alignSelf: 'flex-start', padding: '0 13px',
+              background: 'rgba(233,229,221,0.1)',
+              border: '1px solid rgba(233,229,221,0.42)', color: '#dcd6ca',
+              letterSpacing: '0.06em',
+            }}
+          >Start here →</button>
+
           <div className="gx-field">
             <div className="gx-cap" style={CAP_SPLIT}>
               <span>Timeline</span><span style={VALUE}>{p.yearLabel}</span>
@@ -180,7 +199,7 @@ export function TopBar(p: TopBarProps) {
             <div style={{
               flex: p.compact ? '0 0 auto' : '1 1 auto',
               width: p.compact ? '100%' : undefined,
-              minWidth: p.compact ? 0 : 'max-content',
+              minWidth: 0,
               display: 'flex', flexDirection: 'column', gap: 12,
             }}>
               <div style={{
@@ -191,18 +210,18 @@ export function TopBar(p: TopBarProps) {
                 <div className="gx-field" style={{
                   flex: '1 1 auto', width: p.compact ? '100%' : undefined,
                   maxWidth: p.compact ? undefined : 620,
-                  minWidth: p.compact ? 0 : 'max-content',
+                  minWidth: 0,
                 }}>
                   <div className="gx-cap">Domains</div>
-                  <Toggles items={p.laneToggles} wrap={p.compact} />
+                  <Toggles items={p.laneToggles} wrap />
                 </div>
                 <div className="gx-field" style={{
                   flex: '1 1 auto', width: p.compact ? '100%' : undefined,
                   maxWidth: p.compact ? undefined : 460,
-                  minWidth: p.compact ? 0 : 'max-content',
+                  minWidth: 0,
                 }}>
                   <div className="gx-cap">Edges</div>
-                  <Toggles items={p.edgeToggles} wrap={p.compact} />
+                  <Toggles items={p.edgeToggles} wrap />
                 </div>
               </div>
 
@@ -227,7 +246,7 @@ export function TopBar(p: TopBarProps) {
                 <div className="gx-cap" style={{ ...CAP_SPLIT, gap: 12 }}>
                   <span>Reading</span><span style={VALUE}>{p.readCount}</span>
                 </div>
-                <div className={p.compact ? 'gx-row gx-row-wrap' : 'gx-row'}>
+                <div className="gx-row gx-row-wrap">
                   {p.readFilters.map((t) => (
                     <button
                       key={t.key} className="gx-btn" onClick={t.onClick}
@@ -242,21 +261,12 @@ export function TopBar(p: TopBarProps) {
                       letterSpacing: '0.06em',
                     }}
                   >Reading list</button>
-                  <button
-                    className="gx-btn" onClick={p.onStart}
-                    title="Follow a lineage end to end"
-                    style={{
-                      padding: '0 11px', background: 'rgba(233,229,221,0.1)',
-                      border: '1px solid rgba(233,229,221,0.42)', color: '#dcd6ca',
-                      letterSpacing: '0.06em',
-                    }}
-                  >Start here</button>
                 </div>
               </div>
 
               <div className="gx-field">
                 <div className="gx-cap">View</div>
-                <div className={p.compact ? 'gx-row gx-row-wrap' : 'gx-row'}>
+                <div className="gx-row gx-row-wrap">
                   <button
                     className="gx-btn" onClick={p.onZoomOut} aria-label="Zoom out"
                     style={{
