@@ -40,8 +40,15 @@ jobs:
       - name: Test
         run: npm test
 
+      # The two keys are publishable and are meant to appear in the bundle;
+      # what protects a reader's rows is the row-level security in
+      # supabase/schema.sql. With the secrets absent the build still succeeds
+      # and produces the local-only site, so a fork needs no configuration.
       - name: Build
         run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
       # Guards the reason the fonts were self-hosted in the first place. If a
       # third-party URL creeps back into the bundle, fail here rather than

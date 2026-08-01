@@ -10,6 +10,12 @@ import { edgeKey, loadEdgeDetail, loadNodeDetail, loadPaperIds, loadPaths, loadS
 import type { Detail } from './data/detail'
 import type { ImportMode, PaperIds } from './data/csv'
 import { READ_FILTERS, ReadingLog } from './data/readingLog'
+import {
+  accountNeededNow, accountsAvailable, addReading, clearReading, fetchReading, removeReading,
+  signIn, signOut, watchAccount,
+} from './data/account'
+import type { Account, Provider } from './data/account'
+import { describe as describeSync, plan } from './data/sync'
 import type { ReadFilterId, ReadMap } from './data/readingLog'
 import { exportPng } from './export/png'
 import { exportReadingCsv } from './export/csv'
@@ -107,6 +113,52 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
     if (!listOpen || Object.keys(paperIds).length) return
     loadPaperIds().then((t) => setPaperIds(t as PaperIds))
   }, [listOpen, paperIds])
+  // ── account ─────────────────────────────────────────────────────────────
+  // Signing in only carries the reading list between browsers; the graph, the
+  // essays and the walks never need one. `read` stays the single source of
+  // truth in the app and every write mirrors to whichever stores exist.
+  const [account, setAccount] = useState<Account | null>(null)
+  const [authBusy, setAuthBusy] = useState(false)
+  const [authNote, setAuthNote] = useState<string | null>(null)
+  const accountRef = useRef<Account | null>(null)
+  accountRef.current = account
+
+  // Watch only once the client is genuinely wanted: on return from OAuth, when
+  // a session is already stored, or when the reader opens the list where the
+  // sign-in button lives. Otherwise supabase-js is never fetched at all.
+  const [authWanted, setAuthWanted] = useState(() => accountNeededNow())
+  useEffect(() => { if (listOpen) setAuthWanted(true) }, [listOpen])
+  useEffect(() => {
+    if (!authWanted || !accountsAvailable) return
+    return watchAccount(setAccount)
+  }, [authWanted])
+
+  // On sign-in, reconcile: union of both lists, never a subtraction. See
+  // data/sync.ts — the absence of a tick is not evidence a paper was unread.
+  const mergedFor = useRef<string | null>(null)
+  useEffect(() => {
+    if (!account || mergedFor.current === account.id) return
+    mergedFor.current = account.id
+    let live = true
+    setAuthBusy(true)
+    fetchReading()
+      .then((remote) => {
+        if (!live) return
+        const local = ReadingLog.load()
+        const p = plan(local, remote)
+        ReadingLog.save(p.merged)
+        setRead(p.merged)
+        setAuthNote(describeSync(local, remote))
+        return addReading(account.id, p.toUpload)
+      })
+      .catch((e) => {
+        console.warn('[account] could not load the stored list', e)
+        if (live) setAuthNote('Could not reach your account — this browser\'s list is unchanged.')
+      })
+      .finally(() => { if (live) setAuthBusy(false) })
+    return () => { live = false }
+  }, [account])
+
   const [importMode, setImportMode] = useState<ImportMode>('add')
   const [importNote, setImportNote] = useState('')
   const [importBad, setImportBad] = useState(false)
@@ -533,29 +585,59 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
   }, [graph, read, paperIds])
 
   // ── actions ─────────────────────────────────────────────────────────────
+  /**
+   * Mirror a change to the account, if there is one. Every writer goes through
+   * here so none can forget, and a failed write is reported rather than
+   * swallowed — localStorage already has the change, so the reader has not
+   * lost anything, but they should know the account is behind.
+   */
+  const push = useCallback((added: string[], removed: string[]) => {
+    const acc = accountRef.current
+    if (!acc) return
+    Promise.all([
+      added.length ? addReading(acc.id, added) : null,
+      removed.length ? removeReading(removed) : null,
+    ]).catch((e) => {
+      console.warn('[account] could not save', e)
+      setAuthNote('Saved in this browser — your account could not be reached.')
+    })
+  }, [])
+
   const toggleRead = useCallback((id: string) => {
     setRead((prev) => {
       const next = { ...prev }
-      if (next[id]) delete next[id]; else next[id] = 1
+      const wasRead = !!next[id]
+      if (wasRead) delete next[id]; else next[id] = 1
       ReadingLog.save(next)
+      push(wasRead ? [] : [id], wasRead ? [id] : [])
       return next
     })
-  }, [])
+  }, [push])
 
   const setAllRead = useCallback((ids: string[], value: boolean) => {
     setRead((prev) => {
       const next = { ...prev }
+      const changed = ids.filter((id) => !!next[id] !== value)
       ids.forEach((id) => { if (value) next[id] = 1; else delete next[id] })
       ReadingLog.save(next)
+      push(value ? changed : [], value ? [] : changed)
       return next
     })
-  }, [])
+  }, [push])
 
   /** Whole-list writes — the ones that do not need the previous state. */
+  /** Whole-list writes — the ones that do not need the previous state. */
   const commitRead = useCallback((next: ReadMap) => {
-    ReadingLog.save(next)
-    setRead(next)
-  }, [])
+    setRead((prev) => {
+      ReadingLog.save(next)
+      if (accountRef.current) {
+        const added = Object.keys(next).filter((id) => !prev[id])
+        const removed = Object.keys(prev).filter((id) => !next[id])
+        push(added, removed)
+      }
+      return next
+    })
+  }, [push])
 
   const importCsv = useCallback((file: File) => {
     if (!graph) return
@@ -570,17 +652,18 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
           ? ' · not in the tree: ' + res.ignored.slice(0, 4).join(', ') +
             (res.ignored.length > 4 ? ' +' + (res.ignored.length - 4) : '')
           : ''))
+      // through commitRead, so an import reaches the account like any other
+      // change rather than being a second, forgetful path
       setRead((prev) => {
-        const next: ReadMap = importMode === 'replace'
+        commitRead(importMode === 'replace'
           ? { ...res.matched }
-          : { ...prev, ...res.matched }
-        ReadingLog.save(next)
-        return next
+          : { ...prev, ...res.matched })
+        return prev
       })
     }
     reader.onerror = () => { setImportNote('Could not read that file.'); setImportBad(true) }
     reader.readAsText(file)
-  }, [graph, importMode, paperIds])
+  }, [graph, importMode, paperIds, commitRead])
 
   const exportCsv = useCallback(() => {
     if (!graph) return
@@ -594,6 +677,9 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
 
   const clearRead = useCallback(() => {
     commitRead({})
+    // one statement rather than 194 deletes, and it is the reader destroying
+    // their own data, which they must always be able to do
+    if (accountRef.current) clearReading().catch(() => {})
     setImportBad(false)
     setImportNote('Reading list cleared.')
   }, [commitRead])
@@ -803,6 +889,25 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
             onClearAll={clearRead}
             hasRead={readCount > 0}
             sheet={vp.phone}
+            account={accountsAvailable ? account : undefined}
+            authBusy={authBusy}
+            authNote={authNote}
+            onSignIn={(p: Provider) => {
+              setAuthBusy(true); setAuthNote(null)
+              signIn(p).catch(() => {
+                setAuthBusy(false)
+                setAuthNote('Could not start sign-in. Try again in a moment.')
+              })
+            }}
+            onSignOut={() => {
+              setAuthBusy(true)
+              // the list stays in this browser; signing out is not a delete
+              signOut().finally(() => {
+                mergedFor.current = null
+                setAuthBusy(false)
+                setAuthNote('Signed out. This browser keeps its own copy.')
+              })
+            }}
             width={panelWidth}
             onResize={resizePanel}
             onToggleRead={toggleRead}

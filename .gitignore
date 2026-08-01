@@ -8,3 +8,7 @@ coverage/
 *.tsbuildinfo
 legacy/
 CLAUDE.md
+
+# local secrets; .env.example is the committed template
+.env
+.env.local

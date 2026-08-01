@@ -1,6 +1,8 @@
 import type { ReadGroupVM, ToggleVM } from '../view/types'
 import { PanelResizer } from './PanelResizer'
 import { BottomSheet } from './BottomSheet'
+import { AccountBar } from './AccountBar'
+import type { Account, Provider } from '../data/account'
 
 /** Shared by every button in the header strip. */
 const ACTION: React.CSSProperties = {
@@ -25,6 +27,12 @@ export interface ReadingListProps {
   hasRead: boolean
   /** phone: dock to the bottom instead of taking a full-height column */
   sheet?: boolean
+  /** undefined when the build has no Supabase project — then no sign-in shows */
+  account?: Account | null
+  authBusy?: boolean
+  authNote?: string | null
+  onSignIn?: (p: Provider) => void
+  onSignOut?: () => void
   /** side-panel width, reader-adjustable; ignored in sheet mode */
   width?: number
   onResize?: (next: number) => void
@@ -112,6 +120,16 @@ export function ReadingList(p: ReadingListProps) {
           Any CSV with a DOI, an arXiv id, a paper title or a model name — a
           Zotero or Mendeley export works unchanged.
         </div>
+
+        {p.account !== undefined && p.onSignIn && p.onSignOut && (
+          <AccountBar
+            account={p.account}
+            busy={!!p.authBusy}
+            note={p.authNote ?? null}
+            onSignIn={p.onSignIn}
+            onSignOut={p.onSignOut}
+          />
+        )}
 
         {p.importNote && (
           <div style={{

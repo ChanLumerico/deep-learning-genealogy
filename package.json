@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "An interactive phylogeny of deep learning architectures, 1957\u20132025",
+  "description": "An interactive phylogeny of deep learning architectures, 1957–2025",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build && node tools/prerender.mjs",
@@ -15,6 +15,7 @@
     "prerender": "node tools/prerender.mjs"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.111.0",
     "katex": "^0.18.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
