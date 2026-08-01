@@ -1,5 +1,6 @@
 import type { ReadGroupVM, ToggleVM } from '../view/types'
 import { PanelResizer } from './PanelResizer'
+import { BottomSheet } from './BottomSheet'
 
 /** Shared by every button in the header strip. */
 const ACTION: React.CSSProperties = {
@@ -38,25 +39,16 @@ export interface ReadingListProps {
 export function ReadingList(p: ReadingListProps) {
   // See DetailPanel: 372px does not fit a phone, so the list becomes a bottom
   // sheet. It is taller than the detail panel because it is a list to scroll.
-  const frame: React.CSSProperties = p.sheet
-    ? {
-      position: 'absolute', left: 0, right: 0, bottom: 0, maxHeight: '78dvh',
-      borderTop: '2px solid rgba(233,229,221,0.3)',
-      borderRadius: '12px 12px 0 0', boxShadow: '0 -18px 44px rgba(0,0,0,0.55)',
-    }
-    : {
-      position: 'absolute', right: 0, top: 0, bottom: 0, width: p.width ?? 372,
-      borderLeft: '1px solid rgba(233,229,221,0.3)', boxShadow: '-18px 0 44px rgba(0,0,0,0.5)',
-    }
-  return (
-    <div style={{
-      display: 'flex', flexDirection: 'column', background: 'rgba(9,12,16,0.97)',
-      ...frame,
-    }}>
+  const body = (
+    <>
       {!p.sheet && p.onResize && (
         <PanelResizer width={p.width ?? 372} onResize={p.onResize} />
       )}
-      <div style={{ padding: '16px 18px 13px', borderBottom: '1px solid rgba(233,229,221,0.14)' }}>
+      <div data-sheet-grab={p.sheet ? '' : undefined} style={{
+        flex: 'none',
+        padding: p.sheet ? '4px 18px 13px' : '16px 18px 13px',
+        borderBottom: '1px solid rgba(233,229,221,0.14)',
+      }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             <div style={CAP}>Papers read</div>
@@ -124,9 +116,9 @@ export function ReadingList(p: ReadingListProps) {
         )}
       </div>
 
-      <div style={{
+      <div data-sheet-scroll={p.sheet ? '' : undefined} style={{
         flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch',
-        overscrollBehavior: 'contain', padding: '4px 18px 20px',
+        overscrollBehavior: 'contain', padding: '4px 18px 24px',
       }}>
         {p.groups.map((g) => (
           <div key={g.id} style={{ paddingTop: 16 }}>
@@ -176,6 +168,15 @@ export function ReadingList(p: ReadingListProps) {
           </div>
         ))}
       </div>
-    </div>
+    </>
+  )
+
+  if (p.sheet) return <BottomSheet onClose={p.onClose}>{body}</BottomSheet>
+  return (
+    <div style={{
+      position: 'absolute', right: 0, top: 0, bottom: 0, width: p.width ?? 372,
+      display: 'flex', flexDirection: 'column', background: 'rgba(9,12,16,0.97)',
+      borderLeft: '1px solid rgba(233,229,221,0.3)', boxShadow: '-18px 0 44px rgba(0,0,0,0.5)',
+    }}>{body}</div>
   )
 }

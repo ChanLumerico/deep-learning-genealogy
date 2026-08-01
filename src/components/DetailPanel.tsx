@@ -1,6 +1,7 @@
 import type { PanelVM } from '../view/types'
 import { Prose } from './Prose'
 import { PanelResizer } from './PanelResizer'
+import { BottomSheet } from './BottomSheet'
 
 /** the small uppercase label that heads every section of the panel */
 const CAP: React.CSSProperties = {
@@ -24,25 +25,14 @@ export function DetailPanel({
   // A 372px column is wider than a phone screen, so on a phone the panel
   // becomes a bottom sheet: full width, capped height, and the graph stays
   // visible and usable above it.
-  const frame: React.CSSProperties = sheet
-    ? {
-      position: 'absolute', left: 0, right: 0, bottom: 0, maxHeight: '62dvh',
-      borderTop: `2px solid ${panel.color}`,
-      borderRadius: '12px 12px 0 0', boxShadow: '0 -18px 46px rgba(0,0,0,0.55)',
-    }
-    : {
-      position: 'absolute', right: 0, top: 0, bottom: 0, width,
-      borderLeft: `1px solid ${panel.color}`, boxShadow: '-18px 0 46px rgba(0,0,0,0.5)',
-    }
-  return (
-    <div style={{
-      display: 'flex', flexDirection: 'column', background: 'rgba(9,12,16,0.97)',
-      ...frame,
-    }}>
+  const body = (
+    <>
       {!sheet && onResize && <PanelResizer width={width} onResize={onResize} />}
-      <div style={{
+      {/* the header is a drag target: pulling it moves the sheet, not the text */}
+      <div data-sheet-grab={sheet ? '' : undefined} style={{
         display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
-        gap: 12, padding: sheet ? '14px 18px 0' : '20px 22px 0',
+        gap: 12, padding: sheet ? '4px 18px 0' : '20px 22px 0',
+        flex: 'none',
       }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 5, minWidth: 0 }}>
           <div style={{
@@ -68,10 +58,10 @@ export function DetailPanel({
         margin: sheet ? '12px 18px 0' : '16px 22px 0',
       }} />
 
-      <div style={{
+      <div data-sheet-scroll={sheet ? '' : undefined} style={{
         flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch',
         overscrollBehavior: 'contain',
-        padding: sheet ? '14px 18px 20px' : '16px 22px 22px',
+        padding: sheet ? '14px 18px 24px' : '16px 22px 22px',
         display: 'flex', flexDirection: 'column', gap: 16,
       }}>
         <div style={{ fontSize: 17, lineHeight: 1.4, color: '#e6dfd2' }}>{panel.lead}</div>
@@ -145,6 +135,17 @@ export function DetailPanel({
           </div>
         ))}
       </div>
-    </div>
+    </>
+  )
+
+  if (sheet) {
+    return <BottomSheet accent={panel.color} onClose={onClose}>{body}</BottomSheet>
+  }
+  return (
+    <div style={{
+      position: 'absolute', right: 0, top: 0, bottom: 0, width,
+      display: 'flex', flexDirection: 'column', background: 'rgba(9,12,16,0.97)',
+      borderLeft: `1px solid ${panel.color}`, boxShadow: '-18px 0 46px rgba(0,0,0,0.5)',
+    }}>{body}</div>
   )
 }
