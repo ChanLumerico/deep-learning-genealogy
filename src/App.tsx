@@ -15,6 +15,9 @@ import { exportPng } from './export/png'
 import { exportReadingCsv } from './export/csv'
 import { useViewport } from './view/useViewport'
 import { useCamera, ZOOM } from './view/useCamera'
+import { useUrlState } from './view/useUrlState'
+import { parseHash, toHash } from './view/url'
+import type { UrlState } from './view/url'
 import { GraphCanvas } from './components/GraphCanvas'
 import { TopBar } from './components/TopBar'
 import { Legend } from './components/Legend'
@@ -117,6 +120,10 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
       .then(({ nodes, edges }) => {
         if (cancelled) return
         setGraph(new LayoutEngine(nodes, edges).build())
+        // A link that names something frames that instead — useUrlState will
+        // centre on it as soon as the graph exists, and overruling it here
+        // would throw the reader back to the middle of the sheet.
+        if (parseHash(window.location.hash).sel) return
         // Desktop opens on the dense middle of the sheet at a readable zoom.
         // A phone at that zoom shows about two nodes, so it opens framed on
         // the whole thing instead — orientation first, detail on demand.
@@ -146,6 +153,48 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
   }, [graph, sel, selE])
 
   const yearMax = useMemo(() => TIME.yearAt(timeX), [timeX])
+
+  // ── the address bar ─────────────────────────────────────────────────────
+  // Everything worth putting in a link, in one object. Values sitting at
+  // their default are left out by toHash(), so an ordinary link is short.
+  const urlState: UrlState = useMemo(() => ({
+    sel: sel ? { kind: 'node' as const, id: sel }
+      : selE ? { kind: 'edge' as const, from: selE.from.id, to: selE.to.id }
+      : null,
+    listOpen,
+    year: timeX >= TIME.max ? null : Math.round(TIME.yearAt(timeX)),
+    lanesOff: Object.keys(lanesOff).filter((x) => lanesOff[x]).sort(),
+    kindsOff: Object.keys(kindsOff).filter((x) => kindsOff[x]).sort(),
+  }), [sel, selE, listOpen, timeX, lanesOff, kindsOff])
+
+  const applyUrl = useCallback((u: UrlState) => {
+    if (!graph) return
+    setTimeX(u.year == null ? TIME.max : TIME.x(u.year))
+    setLanesOff(Object.fromEntries(u.lanesOff.map((x) => [x, true])))
+    setKindsOff(Object.fromEntries(u.kindsOff.map((x) => [x, true])))
+    setListOpen(u.listOpen)
+    if (u.sel?.kind === 'node') {
+      const n = graph.byId[u.sel.id]
+      setSel(n ? u.sel.id : null); setSelEIndex(null)
+      // a link has to show you the thing it names, not just select it
+      if (n) centerOn(n.cx, n.cy, Math.max(ZOOM.initial, 0.72))
+    } else if (u.sel?.kind === 'edge') {
+      // pulled out so the narrowing survives into the callback
+      const { from, to } = u.sel
+      const i = graph.edges.findIndex((e) => e.from.id === from && e.to.id === to)
+      setSel(null); setSelEIndex(i >= 0 ? i : null)
+      if (i >= 0) {
+        const e = graph.edges[i]
+        centerOn((e.from.cx + e.to.cx) / 2, (e.from.cy + e.to.cy) / 2,
+          Math.max(ZOOM.initial, 0.6))
+      }
+    } else {
+      setSel(null); setSelEIndex(null)
+    }
+  }, [graph, centerOn])
+
+  // only once the graph exists — an id cannot be resolved before then
+  useUrlState({ state: urlState, apply: applyUrl }, !!graph)
 
   const goNode = useCallback((id: string) => {
     if (!graph) return
@@ -608,6 +657,7 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
         {panel && !listOpen && (
           <DetailPanel
             panel={panel} sheet={vp.phone}
+            link={window.location.origin + window.location.pathname + toHash(urlState)}
             width={panelWidth} onResize={resizePanel}
             onClose={clearSel}
           />

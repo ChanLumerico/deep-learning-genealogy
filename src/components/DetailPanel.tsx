@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { PanelVM } from '../view/types'
 import { Prose } from './Prose'
 import { PanelResizer } from './PanelResizer'
@@ -11,6 +12,8 @@ const CAP: React.CSSProperties = {
 
 export interface DetailPanelProps {
   panel: PanelVM
+  /** the shareable address of what is open, if there is one */
+  link?: string
   /** phone: dock to the bottom instead of taking a full-height column */
   sheet?: boolean
   /** side-panel width, reader-adjustable; ignored in sheet mode */
@@ -20,8 +23,9 @@ export interface DetailPanelProps {
 }
 
 export function DetailPanel({
-  panel, sheet = false, width = 372, onResize, onClose,
+  panel, link, sheet = false, width = 372, onResize, onClose,
 }: DetailPanelProps) {
+  const [copied, setCopied] = useState(false)
   // A 372px column is wider than a phone screen, so on a phone the panel
   // becomes a bottom sheet: full width, capped height, and the graph stays
   // visible and usable above it.
@@ -47,10 +51,26 @@ export function DetailPanel({
             fontVariantNumeric: 'tabular-nums',
           }}>{panel.meta}</div>
         </div>
-        <button
-          className="gx-close" onClick={onClose} aria-label="Close"
-          style={{ width: 27, height: 27, fontSize: 14.5, color: '#a9a294' }}
-        >×</button>
+        <div style={{ display: 'flex', gap: 6, flex: 'none' }}>
+          {link && (
+            <button
+              className="gx-close"
+              title="Copy a link to this entry"
+              aria-label="Copy a link to this entry"
+              style={{ height: 27, padding: '0 9px', fontSize: 11, whiteSpace: 'nowrap' }}
+              onClick={() => {
+                navigator.clipboard?.writeText(link).then(
+                  () => { setCopied(true); setTimeout(() => setCopied(false), 1600) },
+                  () => { /* denied, or no clipboard — the URL bar still has it */ },
+                )
+              }}
+            >{copied ? 'Copied' : 'Link'}</button>
+          )}
+          <button
+            className="gx-close" onClick={onClose} aria-label="Close"
+            style={{ width: 27, height: 27, fontSize: 14.5, color: '#a9a294' }}
+          >×</button>
+        </div>
       </div>
 
       <div style={{
