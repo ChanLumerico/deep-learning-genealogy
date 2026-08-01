@@ -1870,5 +1870,42 @@
     "url": "https://arxiv.org/abs/1911.11929"
    }
   ]
+ },
+ "sam2": {
+  "lead": "SAM 2 folds image and video segmentation into one model by treating an image as a video one frame long, and gives that model a memory. Prompt an object on any frame with a click, a box or a mask and the segmentation is propagated through the clip, correctable later by another click wherever it goes wrong. On still images it is both more accurate than SAM on SAM's own zero-shot suite and about six times faster.",
+  "blocks": [
+   {
+    "h": "Per-frame masks are not a track",
+    "b": "SAM segmented anything in a still image and nothing across time. Run frame by frame it produced masks with no identity: nothing tied a region in frame 40 to the same object in frame 41, so masks flickered, swapped between lookalikes, and needed an external tracker to reconcile them. Video object segmentation had the opposite shape: it took a full mask on the first frame, propagated it, and offered no way to correct a drifting track short of starting again. Two interfaces, and neither had the click-and-refine loop that made SAM usable."
+   },
+   {
+    "h": "Memory attention, in a stream",
+    "b": "The encoder is Hiera, an MAE-pretrained hierarchical ViT supplying multiscale features to the decoder's upsampling path. Between it and the mask decoder sits **memory attention**: the current frame's embedding cross-attends to a bank holding encoded features from a bounded number of recent frames, a bounded number of prompted frames, and object pointer vectors read off each frame's mask output token. Each entry fuses the downsampled predicted mask with that frame's embedding, so stored appearance is conditioned on the segmentation. Recent entries carry a temporal position encoding, so short-term motion is representable; prompted ones deliberately do not, since prompts are sparse in training and can arrive at inference from temporal ranges the model never saw. Frames stream in one at a time and the bank is FIFO, so memory stays bounded at any clip length."
+   },
+   {
+    "h": "Occlusion becomes an output",
+    "b": "In an image the object is present by construction; in video it leaves frame, passes behind something and returns. SAM 2 predicts an explicit occlusion score beside each mask, so a frame without the object yields no mask rather than a confident mask of the wrong thing. SAM's ambiguity machinery survives — several masks per prompt, ranked by a predicted-IoU head — but only the top-ranked one propagates, since carrying branching hypotheses through a stream is unaffordable. Training mirrors that loop: short sampled sequences, a couple of prompted frames, corrective clicks where propagation has gone wrong."
+   },
+   {
+    "h": "The data engine, a second time",
+    "b": "SA-V was built as SA-1B was, the model annotating data for its own successor in three phases: SAM clicked frame by frame, then SAM 2 propagating from a mask, then full SAM 2 with click refinement. Annotation ran roughly eight times faster by the last phase, which put the scale in reach — over fifty thousand videos and some 35.5 million masks, well past the existing video benchmarks on both counts. Interface and dataset are one contribution: a promptable task lets annotation be model-assisted, and that assistance supplies the data the task needs."
+   },
+   {
+    "h": "Where the memory gives way",
+    "b": "A FIFO of recent frames is a short horizon. Through a long occlusion those entries fill with frames that do not contain the object, and the track drifts or reattaches to a lookalike; crowded scenes and large viewpoint changes fail the same way, and thin, fast-moving parts are lost. Objects are tracked independently too: the frame embedding is shared, but masklets never talk, so the model cannot use the fact that two of them cannot own the same pixel. And it still returns a region, never a name; the vocabulary was left to the concept-prompted successor."
+   }
+  ],
+  "refs": [
+   {
+    "t": "SAM 2: Segment Anything in Images and Videos",
+    "y": 2024,
+    "url": "https://arxiv.org/abs/2408.00714"
+   },
+   {
+    "t": "Hiera: A Hierarchical Vision Transformer without the Bells-and-Whistles",
+    "y": 2023,
+    "url": "https://arxiv.org/abs/2306.00989"
+   }
+  ]
  }
 }

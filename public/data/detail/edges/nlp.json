@@ -1432,5 +1432,151 @@
     "b": "XLNet beat BERT across a broad sweep of tasks on publication. Within months RoBERTa showed that most of the gap closed when BERT was trained on comparable data for comparable time with next-sentence prediction removed — XLNet had used a much larger corpus — which reframed the comparison as being about training budget at least as much as permutation.\n\nWhat survived this edge is not the objective. Two-stream attention doubles the attention bookkeeping, partial prediction discards most of each pass, and convergence was slow enough to be hard to justify. What did survive is Transformer-XL's cache and relative positions, which became standard, and XLNet's diagnosis: mask mismatch and the independence assumption are genuine defects of masked-language modelling. ELECTRA answered the first more cheaply; decoder-only scaling answered the second by dropping bidirectional pretraining altogether."
    }
   ]
+ },
+ "gpt3>cot": {
+  "lead": "In-context learning turned the prompt into a programming surface: GPT-3 continues in whatever form its demonstrations take. Chain-of-thought prompting is the observation that if the demonstrations contain the working and not only the answer, the model produces working too — and that this changes which problems it can solve, with no gradient update anywhere.",
+  "blocks": [
+   {
+    "h": "What in-context learning gave",
+    "b": "GPT-3 established that a large enough model conditions on a handful of demonstrations and continues in kind, so specifying a task became a matter of arranging the context. But the demonstrations were pairs of input and output, which fixes the answer to arrive in one shot. A transformer applies a fixed depth of computation per token, and the only serial budget it has beyond that depth is the tokens it has already emitted; a problem needing many dependent steps has nowhere to put them. The symptom was a flat scaling curve: on GSM8K, the grade-school word problems of Cobbe et al., few-shot accuracy barely moved with model size while everything else did, and the remedy on offer was fine-tuning with a trained verifier over samples — supervision, per task."
+   },
+   {
+    "h": "Changing the exemplar, nothing else",
+    "b": "Wei et al. replaced each demonstration pair with a triple: input, the reasoning that reaches the answer, then the answer. Eight hand-written exemplars, a frozen model, no fine-tuning and no new data. What is discarded is the assumption that the answer must come out of one forward pass; what has to be added to make the removal work is scale, because the chain is only as good as the model's unconditioned continuation. Below roughly 100B parameters the gains vanish and often reverse — smaller models emit fluent, locally plausible chains that are wrong, and the extra length compounds the error. Kojima et al. then showed much of the effect survives with no exemplars at all, from the bare instruction to think step by step — evidence that the ability was already latent and prompting only addressed it."
+   },
+   {
+    "h": "Compute you can buy at inference",
+    "b": "With chain-of-thought prompting a 540B model passed the fine-tuned-with-verifier result on GSM8K. The structural consequence matters more: the number of tokens spent before answering became a compute dial available at inference, on a model already trained. Everything after treats it as one: self-consistency samples many chains and takes the majority answer, and o1 eventually trains the chain rather than prompting for it. Theory followed the practice, showing that intermediate tokens strictly increase what a fixed-depth transformer can compute. The costs: a longer, slower, dearer answer for every query; a gain confined to models past a scale threshold; and a chain that is not a record of the computation. Models will write a chain supporting an answer that was actually determined by a cue the chain never mentions."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Chain-of-Thought Prompting Elicits Reasoning in Large Language Models",
+    "y": 2022,
+    "url": "https://arxiv.org/abs/2201.11903"
+   },
+   {
+    "t": "Training Verifiers to Solve Math Word Problems (GSM8K)",
+    "y": 2021,
+    "url": "https://arxiv.org/abs/2110.14168"
+   },
+   {
+    "t": "Large Language Models are Zero-Shot Reasoners",
+    "y": 2022,
+    "url": "https://arxiv.org/abs/2205.11916"
+   },
+   {
+    "t": "Language Models Don't Always Say What They Think",
+    "y": 2023,
+    "url": "https://arxiv.org/abs/2305.04388"
+   }
+  ]
+ },
+ "cot>o1": {
+  "lead": "Chain-of-thought prompting can only summon reasoning that pretraining already left in the model; on a problem the base distribution never solves, no phrasing helps. o1 takes the chain out of the prompt and makes it the object of training, shaped by large-scale reinforcement learning whose reward OpenAI did not disclose, though the field has read it as keyed to whether the final answer is right.",
+  "blocks": [
+   {
+    "h": "Elicitation and its ceiling",
+    "b": "Chain-of-thought established the two things o1 builds on: that intermediate tokens are where multi-step work can be done at all, and that their quantity is a dial worth turning. What it could not do is add anything. Prompting is conditional sampling from a distribution fixed at the end of pretraining, so if a correct chain has negligible probability under that distribution no prompt raises it, and the failure modes stay the base model's: an arithmetic slip carried forward unchecked, no revisiting of a decomposition that is not working. Two lines of work had already shown the chain was trainable material rather than a prompt format: STaR sampled chains, kept those that reached the known answer and fine-tuned on them; and Lightman et al. found a reward model scoring each step beat one scoring only the outcome."
+   },
+   {
+    "h": "Training the chain, not the answer",
+    "b": "o1 is trained with large-scale reinforcement learning to produce a long chain of thought before it answers. The format from chain-of-thought is kept; what is thrown away is the idea that the chain is a byproduct of answering, since here it is the thing optimised, credited or blamed as a whole by a reward attached to the outcome. What had to be added is the behaviour prompting never reliably produced: noticing an error mid-chain and going back, abandoning a decomposition, spending unequal effort on the hard sub-step. OpenAI reported accuracy improving along two axes, training-time RL compute and test-time thinking length; the second is new, since a pretrained model's quality is fixed once its run ends. The raw chains are withheld from the user, deliberately left unconstrained so they can be monitored without training pressure to look presentable."
+   },
+   {
+    "h": "A second scaling axis, and the bill",
+    "b": "The results reported are on exactly the problems where prompting had stalled: olympiad-qualifier mathematics, competitive programming, graduate-level science questions. That reframed the field's spending: capability stopped being bought only in the pretraining run and became something bought per query, which is why inference cost is now variable and reasoning is sold as a tier. Latency and price now rise with the thinking, unpredictably per question. The gains concentrate in domains where the answer can be checked, and o1 was not preferred over its predecessor on some open-ended writing tasks. And optimising a hidden intermediate against a terminal reward gives no reason for the trace to be a faithful account of how the answer was reached — it is now both unverified and unseen."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Learning to Reason with LLMs (o1)",
+    "y": 2024,
+    "url": "https://openai.com/index/learning-to-reason-with-llms/"
+   },
+   {
+    "t": "STaR: Bootstrapping Reasoning With Reasoning",
+    "y": 2022,
+    "url": "https://arxiv.org/abs/2203.14465"
+   },
+   {
+    "t": "Let's Verify Step by Step",
+    "y": 2023,
+    "url": "https://arxiv.org/abs/2305.20050"
+   },
+   {
+    "t": "Chain-of-Thought Prompting Elicits Reasoning in Large Language Models",
+    "y": 2022,
+    "url": "https://arxiv.org/abs/2201.11903"
+   }
+  ]
+ },
+ "instructgpt>o1": {
+  "lead": "What travels along this arrow is the machinery, not the objective. InstructGPT established reinforcement learning on a pretrained language model as a distinct post-training stage, with a learned model of human preference at the reward end. o1 keeps the stage and replaces the reward with a check on whether the answer is correct.",
+  "blocks": [
+   {
+    "h": "RL post-training as a stage",
+    "b": "The pipeline was not new — Ziegler et al., then Stiennon et al. on summarisation, had already fitted a reward model to human comparisons and optimised against it — but InstructGPT is what made it the standard finish for a general-purpose model: sampling completions from the policy, scoring them and updating by policy gradient. Every detail followed from the reward being a proxy. The score came from a network fitted to labeller comparisons, so a per-token KL penalty back to the supervised model kept the policy inside the region where those scores still tracked human judgement, and the RL was a light finishing pass rather than a serious share of the compute. The claim it demonstrated is the one o1 depends on: a 1.3B preference-tuned model was preferred to 175B GPT-3, so post-training against the right objective can buy more than an order of magnitude of pretraining. By 2024 that mattered more, as each added pretraining token returned less."
+   },
+   {
+    "h": "Changing what scores the sample",
+    "b": "o1 keeps the shape of the stage and changes the judge. OpenAI has not described what scores the sample, but the reading the field acted on is that where a competition mathematics problem or code with tests can be checked, correctness is established without a human and without a learned model, so the signal is ground truth rather than an estimate of what a labeller would like. Three properties change with it. The reward does not decay as the policy moves away from its initialisation, so the leash can be loosened and RL can become the training run instead of a polish. It does not saturate at the resolution of human comparison, so it can absorb far more compute. And it lands on a hidden intermediate that no one ranks, so credit must be assigned across a long trace from one terminal signal, rather than to the one visible response a labeller read."
+   },
+   {
+    "h": "Where the hacking moves",
+    "b": "Post-training splits in two, and both halves stay. Preference tuning remains, because correctness cannot say whether an answer is helpful, safe or decently phrased, and verifier-based RL is stacked on top wherever a checker exists; the reasoning models since do both. The cost is coverage. Checkers exist for arithmetic and unit tests, not for an essay, a diagnosis or advice, so capability grows lopsidedly, strongest exactly where scoring is easy — which is not where most of the work is. And a checker is still a proxy. Reward hacking migrates from flattering the reward model to satisfying the test: reaching the right string by an unintended route, or special-casing the input. The failure mode is relocated rather than removed, and it is harder to catch once the trace is hidden."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Training language models to follow instructions with human feedback (InstructGPT)",
+    "y": 2022,
+    "url": "https://arxiv.org/abs/2203.02155"
+   },
+   {
+    "t": "Learning to Reason with LLMs (o1)",
+    "y": 2024,
+    "url": "https://openai.com/index/learning-to-reason-with-llms/"
+   },
+   {
+    "t": "Let's Verify Step by Step",
+    "y": 2023,
+    "url": "https://arxiv.org/abs/2305.20050"
+   }
+  ]
+ },
+ "o1>r1": {
+  "lead": "o1 shipped a result and withheld the method: hidden chains, no paper, and the training described only in outline. R1's contribution is to show that the essential part reproduces from a published recipe on open weights, and that the piece which looked hardest — the deliberation itself — needs no supervised traces at all.",
+  "blocks": [
+   {
+    "h": "An existence proof, not a method",
+    "b": "o1 made public two facts the field could act on without knowing how they were obtained: that reinforcement learning over long chains yields a qualitatively different problem-solver, and that accuracy keeps rising as the chain runs longer at inference. That is enough to justify the expense of attempting it, and not enough to attempt it any particular way. The obvious readings were the expensive ones — a process reward model grading every step, or tree search over partial chains. DeepSeek report trying both and abandoning them: the step-level reward model was gamed by the policy and had to be retrained continually, and search needed a token-level action space and a value model that would not train well. What survived was the cheapest hypothesis, that rewarding only the final answer might be sufficient."
+   },
+   {
+    "h": "Pure RL on a base model",
+    "b": "R1-Zero applies GRPO to DeepSeek-V3-Base with no supervised fine-tuning first and no reasoning traces to imitate. The reward is two rules: does the extracted answer match, and is the reasoning inside the required tags. Nothing rewards length, self-checking or backtracking; those emerge anyway, with average response length climbing steadily over training as the model starts revisiting its own steps and dropping approaches mid-solution. AIME 2024 pass@1 goes from 15.6% to 71.0%. The removal costs legibility — with nothing in the reward attending to it, the chains mix languages and are hard to read — so R1 proper adds back a small cold-start fine-tune on curated long chains, a language-consistency term in the reward, and a final preference stage, buying readability at some cost in raw score."
+   },
+   {
+    "h": "Reasoning becomes reproducible",
+    "b": "The weights are released under a permissive licence and the recipe is written down, so the capability stops being one laboratory's. The accompanying distillation result sharpens the point: fine-tuning Qwen and Llama models on chains generated by R1 beat running the same reinforcement learning on those small models directly. The search is the expensive part, and once any model has done it the result transfers by imitation. That is also the cost. Visible chains are distillable chains, so publishing them shortens whatever lead they represent and pushes the incentive back towards hiding them. Rule-based rewards confine the training to domains with a checker, which leaves the same lopsidedness o1 has. And the failure modes are reported rather than concealed: language mixing, sensitivity to prompt phrasing — few-shot prompting makes it worse — and the reward hacking that made them rule out a learned reward model in the first place."
+   }
+  ],
+  "refs": [
+   {
+    "t": "DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via Reinforcement Learning",
+    "y": 2025,
+    "url": "https://arxiv.org/abs/2501.12948"
+   },
+   {
+    "t": "DeepSeekMath: Pushing the Limits of Mathematical Reasoning in Open Language Models (GRPO)",
+    "y": 2024,
+    "url": "https://arxiv.org/abs/2402.03300"
+   },
+   {
+    "t": "Learning to Reason with LLMs (o1)",
+    "y": 2024,
+    "url": "https://openai.com/index/learning-to-reason-with-llms/"
+   }
+  ]
  }
 }

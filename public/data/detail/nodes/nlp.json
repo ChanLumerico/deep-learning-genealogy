@@ -1188,5 +1188,104 @@
     "url": "https://arxiv.org/abs/2203.02155"
    }
   ]
+ },
+ "cot": {
+  "lead": "Chain-of-thought prompting changes nothing about the model. It adds worked intermediate steps to the handful of exemplars in the prompt, so the model imitates the working before committing to an answer — which on grade-school word problems took PaLM 540B from under a fifth correct to well over half. The gain appeared only in the largest models, making this the standard example of an ability that scale unlocks rather than one that training installs.",
+  "blocks": [
+   {
+    "h": "What one forward pass cannot do",
+    "b": "Few-shot prompting as GPT-3 established it puts the answer immediately after the question, so every step of a multi-step problem has to be completed inside one fixed-depth pass over a handful of answer tokens. Arithmetic word problems were where this bit hardest: on GSM8K the curve against model size was close to flat, and the largest models were not obviously better than much smaller ones at problems a child solves with a pencil.\n\nThe alternatives all required supervision — rationale-annotated training sets, or a verifier trained on sampled solutions to rerank them — collected per task. Chain-of-thought asked a cheaper question: whether the ability was already latent and had simply never been requested."
+   },
+   {
+    "h": "Eight exemplars with the working shown",
+    "b": "The method is the prompt. Each exemplar carries a question, a few sentences of ordinary reasoning, and only then the answer; the test question follows with nothing after it and the model continues in kind. No gradients, no annotation beyond the exemplars, no change to decoding.\n\nWhy it helps is mechanical rather than mystical. Generated tokens are fed back as input, so writing the working converts a problem that would need depth into one that needs length: the number of sequential operations available is no longer bounded by the layer count. It also makes failure legible. A wrong chain usually shows where the model went astray, which a bare wrong number cannot."
+   },
+   {
+    "h": "An ability only large models had",
+    "b": "The scaling behaviour is the paper's most-cited finding and its most awkward. Below roughly $10^{10}$ parameters the prompt produced fluent chains that were arithmetically wrong, often scoring worse than answering directly; the gains arrived with the largest models of the day and were largest on the hardest problems. Wei et al. called this emergence.\n\nSchaeffer et al. later argued that much of the emergence literature is an artefact of discontinuous metrics — exact match on a final answer either fires or does not — and that smoother measures show continuous improvement. Either reading leaves the practical consequence intact: the prompt does not create the capability, so a model that cannot execute the steps will not learn to by being asked politely."
+   },
+   {
+    "h": "Elicited, not installed",
+    "b": "Variants followed within months. Kojima et al. recovered much of the gain with no exemplars at all, by appending an instruction to think step by step; self-consistency sampled many chains and took the majority answer, buying close to eighteen points on GSM8K for forty times the sampling compute. Both are still prompting.\n\nTwo problems went untouched. The written chain need not be the computation that produced the answer — Turpin et al. showed models swayed by biasing features their explanations never mention, so a plausible trace is not evidence of a faithful one. And elicitation has a ceiling set by the base model. Raising it meant putting the chain into the weights: STaR bootstrapped rationales from the model's own correct answers, and o1 and R1 trained them with reinforcement learning against graded outcomes."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Chain-of-Thought Prompting Elicits Reasoning in Large Language Models",
+    "y": 2022,
+    "url": "https://arxiv.org/abs/2201.11903"
+   },
+   {
+    "t": "Large Language Models are Zero-Shot Reasoners",
+    "y": 2022,
+    "url": "https://arxiv.org/abs/2205.11916"
+   }
+  ]
+ },
+ "o1": {
+  "lead": "o1 moved the chain of thought out of the prompt and into the weights: reinforcement learning on problems with checkable answers taught the model to deliberate at length, privately, before replying. Accuracy then rose with the amount of reinforcement learning done during training and, separately, with how long the model was allowed to think per question — the first widely visible demonstration that inference compute is a scaling axis of its own.",
+  "blocks": [
+   {
+    "h": "Where the returns had gone",
+    "b": "By 2024 each further order of magnitude of pretraining was buying less on reasoning benchmarks than the one before it, and the supply of high-quality text is not unbounded. Meanwhile a separate line of work kept showing that spending more compute per question paid: sampling many candidate solutions and reranking them with a trained verifier, grading a solution step by step with a process reward model rather than only at the end, and searching over drafts.\n\nEvery one of those is a scaffold bolted around a fixed model, tuned per deployment. The wager behind o1 was that the scaffold could be folded into the model itself, so that the deliberation is generated rather than orchestrated."
+   },
+   {
+    "h": "Training the deliberation",
+    "b": "OpenAI described the shape of the method and withheld the method: large-scale reinforcement learning in which the chain of thought is the object being optimised rather than the answer alone. What the reward is computed from was never stated — outcome correctness is the usual assumption, though OpenAI's own earlier work made the case for grading each step. What the published evaluations show is behaviour — the model decomposes a problem, notices its own mistake and backs out of it, abandons an approach that stalls and tries another — and that these strengthen as training compute grows rather than being written in by hand.\n\nBecause the behaviour now lives in the weights it needs no exemplars and survives on problems unlike anything a prompt could carry. The absence of published detail is not incidental here: it is the gap the open replications of 2025 were written against."
+   },
+   {
+    "h": "What it bought, and where",
+    "b": "The gains concentrated sharply in domains with checkable answers. On the 2024 AIME papers GPT-4o solved roughly one problem in eight, while o1 solved around three-quarters at a single attempt and more when several samples were aggregated. It placed near the top decile of rated Codeforces competitors and, on the GPQA diamond set of graduate-level science questions, exceeded the score of human experts holding doctorates in the field.\n\nOn tasks with no right answer the picture was flat: raters preferred o1 on reasoning-heavy prompts and not on personal writing or editing. That asymmetry is the method showing through. An automatic grader is what makes a reward signal, and where no cheap grader exists there is nothing to reinforce."
+   },
+   {
+    "h": "Hidden tokens, and a running meter",
+    "b": "The raw chain is not shown. The stated reason is that a chain kept out of view need not be trained for policy compliance, and an unpoliced chain is a more honest thing to monitor for deception; users see a summary instead. The cost falls on them: reasoning tokens are billed and consume the context window while remaining unauditable, so neither the derivation nor the invoice can be checked.\n\nPrice and latency also became variable per question, and the model spends conspicuously on trivial ones. Two lines of work followed directly. One tries to control the thinking budget explicitly rather than leaving it to the policy; the other reconstructs the training recipe in the open, which is where DeepSeek-R1 arrives."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Let's Verify Step by Step",
+    "y": 2023,
+    "url": "https://arxiv.org/abs/2305.20050"
+   },
+   {
+    "t": "OpenAI o1 System Card",
+    "y": 2024,
+    "url": "https://arxiv.org/abs/2412.16720"
+   }
+  ]
+ },
+ "r1": {
+  "lead": "DeepSeek-R1 published what o1 had only demonstrated. Its precursor R1-Zero was trained by reinforcement learning directly on a base model with no supervised reasoning traces whatsoever, rewarded only by an automatic check of the final answer and a check that the working sat inside the right tags. The weights and the recipe were released under an MIT licence, and the failure modes were reported alongside the results.",
+  "blocks": [
+   {
+    "h": "The gap a demonstration leaves",
+    "b": "o1 established that reinforcement learning on chains of thought works and said almost nothing about how it was done. Replication attempts spread across tree search over reasoning steps, process reward models grading each intermediate line, and distillation from an existing reasoning model.\n\nDeepSeek's paper is unusually explicit about trying two of these and abandoning them. Process rewards proved hard to define automatically at the step level, expensive to keep retraining, and — the decisive objection — vulnerable to reward hacking once a policy optimised against them at scale. Tree search foundered on the branching factor of token-level generation, where the moves are not a small discrete set. What remained was the crudest signal available, applied to the whole answer."
+   },
+   {
+    "h": "Rule-based rewards, critic-free updates",
+    "b": "Two rewards, both computed by a program. An accuracy reward checks the final answer: a boxed result against the key for mathematics, a compiler and test suite for code. A format reward requires the reasoning to appear between `<think>` tags. No learned reward model appears in the reasoning stage at all, precisely because a learned grader is what gets gamed.\n\nThe optimiser is GRPO, which drops the value network. For each prompt it samples a group of $G$ answers, scores them, and uses the group as its own baseline:\n\n$$A_i=\\frac{r_i-\\mathrm{mean}(r_1,\\dots,r_G)}{\\mathrm{std}(r_1,\\dots,r_G)}$$\n\nwhere $r_i$ is the reward of the $i$-th sample and $A_i$ its advantage in a clipped PPO-style update with a KL penalty back to the reference policy. Dropping the critic removes a second model-sized set of weights from memory."
+   },
+   {
+    "h": "What emerged, and how it read",
+    "b": "Left to optimise, R1-Zero grew its answers from hundreds of tokens to thousands over training, though nothing in the reward asked for length. Re-checking a step and backtracking appeared unprompted, and the paper records an inflection where the model interrupts a derivation to reconsider it. On the 2024 AIME problems R1-Zero reached around 71 per cent at a single attempt, and the high eighties with majority voting over samples.\n\nThe chains were also close to unusable: badly formatted, and mixing English and Chinese inside a single derivation. Pure outcome reinforcement optimises the answer and treats the reasoning as instrumental, so nothing prefers a legible chain to an illegible one that works."
+   },
+   {
+    "h": "What R1 added, and what it costs",
+    "b": "R1 fixes that in four stages, starting again from the base model rather than from R1-Zero's weights: a small cold-start supervised set of long, well-formed chains, some of it harvested from R1-Zero itself; reasoning RL with an added language-consistency reward; rejection sampling to build roughly 800k supervised examples covering reasoning and general tasks; and a final RL pass for helpfulness. The consistency reward was reported to cost a little accuracy — a trade recorded rather than buried.\n\nDistilling those samples into Qwen and Llama models from 1.5B to 70B beat running the same RL directly on a small model: the capability is easier to transfer than to induce. What remains open: rewards exist only where an answer can be checked, leaving open-ended work untouched; long chains cost tokens; and few-shot prompting degrades this model rather than helping it."
+   }
+  ],
+  "refs": [
+   {
+    "t": "DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via Reinforcement Learning",
+    "y": 2025,
+    "url": "https://arxiv.org/abs/2501.12948"
+   },
+   {
+    "t": "DeepSeekMath: Pushing the Limits of Mathematical Reasoning in Open Language Models",
+    "y": 2024,
+    "url": "https://arxiv.org/abs/2402.03300"
+   }
+  ]
  }
 }
