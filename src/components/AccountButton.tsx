@@ -12,11 +12,19 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { Account } from '../data/account'
 
 /**
- * What the top bar keeps clear for this. Exported so there is one number
- * rather than a literal here and a guess there — the reserve is wider when
- * signed in because the chip then carries a name.
+ * What the top bar keeps clear for this, and the cap on the chip itself.
+ *
+ * Measured, not guessed. The bar's three groups need 1336px side by side, so
+ * the corner has 136px to spend at 1512 wide and 64px at 1440 — which is why
+ * the signed-in chip is capped at 116 rather than sized to the longest name:
+ * one pixel more and a 1512 window gains a whole row of toolbar. Below about
+ * 1500 it gains one anyway, and below 1366 the bar was already two rows.
+ * The full name and the email are in the menu, where there is room for them.
  */
-export const ACCOUNT_WIDTH = { out: 92, in: 176 }
+export const ACCOUNT_WIDTH = { out: 72, in: 116 }
+
+/** the state, said out loud — the caption is how this bar labels everything */
+const SIGNED_IN_TINT = '#8f9c86'
 
 export interface AccountButtonProps {
   /** null when signed out */
@@ -79,8 +87,22 @@ export function AccountButton(p: AccountButtonProps) {
     }
   }, [menu])
 
+  const who = p.account?.name ?? p.account?.email ?? null
+
+  // Captioned and stacked, because that is the shape of every other group in
+  // this bar — Domains, Edges, Reading, View. Without the caption this was the
+  // one control aligned to nothing, which is exactly what it looked like.
+  const framed = (control: React.ReactNode) => (p.compact ? control : (
+    <div className="gx-field" style={{ alignItems: 'flex-end' }}>
+      <div className="gx-cap" style={{ color: p.account ? SIGNED_IN_TINT : undefined }}>
+        {p.account ? 'Signed in' : 'Account'}
+      </div>
+      {control}
+    </div>
+  ))
+
   if (!p.account) {
-    return (
+    return framed(
       <button
         data-account
         className="gx-btn gx-tap"
@@ -92,38 +114,49 @@ export function AccountButton(p: AccountButtonProps) {
           border: '1px solid rgba(233,229,221,0.42)', color: '#dcd6ca',
           letterSpacing: '0.06em', opacity: p.busy ? 0.5 : 1,
         }}
-      >Sign in</button>
+      >Sign in</button>,
     )
   }
 
-  const who = p.account.name ?? p.account.email ?? 'Signed in'
-
   return (
     <>
+      {framed(
       <button
         data-account
         ref={btn}
         onClick={() => setMenu((v) => !v)}
         aria-expanded={menu}
-        aria-label={`Signed in as ${who}`}
+        aria-label={`Signed in as ${who ?? 'your account'}`}
+        title={p.compact ? `Signed in as ${who ?? 'your account'}` : undefined}
         style={{
           display: 'inline-flex', alignItems: 'center', gap: 8, flex: '0 0 auto',
           maxWidth: p.compact ? undefined : ACCOUNT_WIDTH.in,
-          height: 30, padding: p.compact ? 2 : '0 9px 0 5px',
+          height: 30, padding: p.compact ? 2 : '0 8px 0 4px',
           borderRadius: p.compact ? '50%' : 15,
-          border: '1px solid rgba(233,229,221,0.34)',
-          background: menu ? 'rgba(233,229,221,0.14)' : 'rgba(233,229,221,0.06)',
-          color: '#dcd6ca', font: 'inherit', cursor: 'pointer',
+          // tinted rather than neutral: signed in is a state, and the bar has
+          // no other way to show one
+          border: `1px solid ${p.account ? 'rgba(143,156,134,0.5)' : 'rgba(233,229,221,0.34)'}`,
+          background: menu ? 'rgba(143,156,134,0.2)' : 'rgba(143,156,134,0.1)',
+          color: '#e6e0d4', font: 'inherit', cursor: 'pointer',
         }}
       >
         <Avatar src={p.account.avatar} size={22} />
         {!p.compact && (
-          <span style={{
-            fontSize: 12, letterSpacing: '0.02em', minWidth: 0,
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          }}>{who}</span>
+          <>
+            <span style={{
+              fontSize: 12.5, letterSpacing: '0.02em', minWidth: 0, flex: 1,
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              textAlign: 'left',
+            }}>{who ?? 'Signed in'}</span>
+            <svg
+              width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
+              style={{ flex: 'none', opacity: 0.7 }} aria-hidden
+            ><path d="m5 9 7 7 7-7" /></svg>
+          </>
         )}
-      </button>
+      </button>,
+      )}
 
       {menu && (
         <div
@@ -142,7 +175,7 @@ export function AccountButton(p: AccountButtonProps) {
               <div style={{
                 fontSize: 13, color: '#ece6da', overflow: 'hidden',
                 textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-              }}>{who}</div>
+              }}>{who ?? 'Signed in'}</div>
               {p.account.email && p.account.email !== who && (
                 <div style={{
                   fontSize: 11, color: '#8a8275', overflow: 'hidden',

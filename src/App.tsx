@@ -817,7 +817,9 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
           <AccountButton
             account={account}
             busy={authBusy}
-            compact={vp.drawer}
+            // narrow, not short: a wide-but-low window folds the bar to its
+            // strip, and there the name still fits and is the whole point
+            compact={vp.phone}
             onSignIn={() => { setAuthError(null); setSignInOpen(true) }}
             onSignOut={doSignOut}
           />
