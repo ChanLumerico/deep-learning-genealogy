@@ -215,3 +215,17 @@ html, body { overscroll-behavior: none; }
   input[type=range] { height: 34px; }
   * { -webkit-tap-highlight-color: transparent; }
 }
+
+/* Notices arrive from above the sheet, the direction they are anchored to.
+   Reduced motion keeps the fade and drops the travel — the point is to
+   notice the thing, not to watch it move. */
+@keyframes gx-toast-in {
+  from { opacity: 0; transform: translateY(-7px); }
+  to   { opacity: 1; transform: none; }
+}
+.gx-toast { animation: gx-toast-in 160ms ease-out; }
+
+@media (prefers-reduced-motion: reduce) {
+  @keyframes gx-toast-in { from { opacity: 0; } to { opacity: 1; } }
+  .gx-toast { animation-duration: 1ms; }
+}

@@ -28,6 +28,9 @@ import { allPaths } from './view/walk'
 import type { Step, WalkCourse } from './view/walk'
 import { WalkBar } from './components/WalkBar'
 import { StartHere } from './components/StartHere'
+import { Toasts } from './components/Toasts'
+import { useToasts } from './view/useToasts'
+import { countPhrase } from './view/toasts'
 import { AccountButton } from './components/AccountButton'
 import { SignInDialog } from './components/SignInDialog'
 import { SearchPalette } from './components/SearchPalette'
@@ -103,6 +106,10 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
   const [tip, setTip] = useState<string | null>(null)
   const [tipPos, setTipPos] = useState({ x: 0, y: 0 })
 
+  // Transient notices. Changes are made from the sheet as often as from the
+  // panel, and the panel is usually shut when they are.
+  const { toasts, notify, dismiss } = useToasts()
+
   // The reading list. It belongs to the account, so it starts empty and is
   // filled by signing in — see data/readingLog.ts for why the browser is only
   // ever a cache of it.
@@ -149,9 +156,10 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
     signOut().finally(() => {
       mergedFor.current = null
       setAuthBusy(false)
-      setAuthNote('Signed out. This browser keeps its own copy.')
+      setAuthNote(null)
+      notify('Signed out')
     })
-  }, [])
+  }, [notify])
   useEffect(() => {
     if (!authWanted || !accountsAvailable) return
     return watchAccount(setAccount)
@@ -182,16 +190,22 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
         const p = plan(cached, remote)
         ReadingLog.save(account.id, p.merged)
         setRead(p.merged)
-        setAuthNote(describeSync(cached, remote))
+        const note = describeSync(cached, remote)
+        setAuthNote(note)
+        notify(`Signed in as ${account.name ?? account.email ?? 'your account'}`, 'good')
+        if (note) notify(note)
         return addReading(account.id, p.toUpload)
       })
       .catch((e) => {
         console.warn('[account] could not load the stored list', e)
-        if (live) setAuthNote('Could not reach your account — showing the last list this browser saw.')
+        if (live) {
+          setAuthNote('Could not reach your account — showing the last list this browser saw.')
+          notify('Could not reach your account', 'bad')
+        }
       })
       .finally(() => { if (live) setAuthBusy(false) })
     return () => { live = false }
-  }, [account])
+  }, [account, notify])
 
   const [importMode, setImportMode] = useState<ImportMode>('add')
   const [importNote, setImportNote] = useState('')
@@ -631,34 +645,41 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
     ]).catch((e) => {
       console.warn('[account] could not save', e)
       setAuthNote('Saved in this browser — your account could not be reached.')
+      notify('Not saved to your account — kept here for now', 'bad')
     })
-  }, [])
+  }, [notify])
 
   const toggleRead = useCallback((id: string) => {
     // The list is the account's, so there is nowhere to put a tick without
     // one. Offering the way in beats a checkbox that quietly does nothing.
     if (!accountRef.current) { setAuthError(null); setSignInOpen(true); return }
+    const name = graph?.nodes.find((n) => n.id === id)?.name ?? 'Paper'
     setRead((prev) => {
       const next = { ...prev }
       const wasRead = !!next[id]
+      notify(wasRead ? `${name} — unread` : `${name} — read`, wasRead ? 'info' : 'good')
       if (wasRead) delete next[id]; else next[id] = 1
       ReadingLog.save(accountRef.current?.id ?? null, next)
       push(wasRead ? [] : [id], wasRead ? [id] : [])
       return next
     })
-  }, [push])
+  }, [push, graph, notify])
 
   const setAllRead = useCallback((ids: string[], value: boolean) => {
     if (!accountRef.current) { setAuthError(null); setSignInOpen(true); return }
     setRead((prev) => {
       const next = { ...prev }
       const changed = ids.filter((id) => !!next[id] !== value)
+      if (changed.length) {
+        notify(countPhrase(changed.length, value ? 'marked read' : 'marked unread'),
+          value ? 'good' : 'info')
+      }
       ids.forEach((id) => { if (value) next[id] = 1; else delete next[id] })
       ReadingLog.save(accountRef.current?.id ?? null, next)
       push(value ? changed : [], value ? [] : changed)
       return next
     })
-  }, [push])
+  }, [push, notify])
 
   /** Whole-list writes — the ones that do not need the previous state. */
   /** Whole-list writes — the ones that do not need the previous state. */
@@ -680,8 +701,13 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
     const reader = new FileReader()
     reader.onload = () => {
       const res = PaperCsv.parse(String(reader.result), PaperCsv.index(graph.nodes, paperIds))
-      if (!res.ok) { setImportNote(res.error); setImportBad(true); return }
+      if (!res.ok) { setImportNote(res.error); setImportBad(true); notify(res.error, 'bad'); return }
       setImportBad(false)
+      // the pill carries the outcome; the panel keeps the detail, which is
+      // too long to read in two seconds and worth having afterwards
+      notify(res.count
+        ? countPhrase(res.count, importMode === 'replace' ? 'imported · list replaced' : 'imported')
+        : 'Nothing in that file matched a model', res.count ? 'good' : 'bad')
       setImportNote(res.count + ' of ' + res.rows + ' rows matched' +
         (importMode === 'replace' ? ' · list replaced' : '') +
         (res.ignored.length
@@ -697,19 +723,24 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
         return prev
       })
     }
-    reader.onerror = () => { setImportNote('Could not read that file.'); setImportBad(true) }
+    reader.onerror = () => {
+      setImportNote('Could not read that file.'); setImportBad(true)
+      notify('Could not read that file', 'bad')
+    }
     reader.readAsText(file)
-  }, [graph, importMode, paperIds, commitRead])
+  }, [graph, importMode, paperIds, commitRead, notify])
 
   const exportCsv = useCallback(() => {
     if (!graph) return
     if (!graph.nodes.some((n) => read[n.id])) {
-      setImportNote('Nothing is marked read yet.'); setImportBad(true); return
+      setImportNote('Nothing is marked read yet.'); setImportBad(true)
+      notify('Nothing is marked read yet', 'bad'); return
     }
     setImportBad(false)
     setImportNote('')
     exportReadingCsv(graph.nodes, read, paperIds)
-  }, [graph, read])
+    notify('Reading list downloaded')
+  }, [graph, read, paperIds, notify])
 
   const clearRead = useCallback(() => {
     commitRead({})
@@ -718,7 +749,8 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
     if (accountRef.current) clearReading().catch(() => {})
     setImportBad(false)
     setImportNote('Reading list cleared.')
-  }, [commitRead])
+    notify('Reading list cleared')
+  }, [commitRead, notify])
 
   const doExport = useCallback(async () => {
     if (exporting || !svgRef.current) return
@@ -954,6 +986,8 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
             onClose={() => setSearchOpen(false)}
           />
         )}
+
+        <Toasts toasts={toasts} onDismiss={dismiss} />
 
         {signInOpen && (
           <SignInDialog
