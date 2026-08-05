@@ -4,7 +4,7 @@
 // client or edited by hand.
 
 import { describe, expect, it } from 'vitest'
-import { EMPTY, isNavigation, parseHash, sameUrl, toHash } from '../src/view/url'
+import { EMPTY, isAuthFragment, isNavigation, parseHash, sameUrl, toHash } from '../src/view/url'
 import type { UrlState } from '../src/view/url'
 
 const state = (over: Partial<UrlState> = {}): UrlState => ({ ...EMPTY, ...over })
@@ -133,5 +133,28 @@ describe('what earns a history entry', () => {
   it('knows when two states are the same link', () => {
     expect(sameUrl(at('resnet'), at('resnet'))).toBe(true)
     expect(sameUrl(at('resnet'), at('vgg'))).toBe(false)
+  })
+})
+
+// The bug this locks was silent in every direction: the provider redirected
+// back with the session in the fragment, this app wrote its own fragment over
+// it before the lazily-imported auth client arrived, and the result was a
+// session on the server, nothing in the browser, and no error anywhere.
+describe('an auth redirect owns the fragment', () => {
+  it('recognises what a provider sends back', () => {
+    expect(isAuthFragment('#access_token=abc&refresh_token=def&token_type=bearer')).toBe(true)
+    expect(isAuthFragment('#error_code=403&error_description=denied')).toBe(true)
+    expect(isAuthFragment('#/node/resnet&provider_token=x')).toBe(true)
+  })
+
+  it('does not mistake our own links for one', () => {
+    for (const h of ['', '#/', '#/node/resnet', '#/path/depth?step=4',
+      '#/node/vit?year=2020&lanes=cv,nlp', '#/edge/vgg/resnet', '#/list'])
+      expect(isAuthFragment(h)).toBe(false)
+  })
+
+  it('is not fooled by a model whose name contains the word', () => {
+    // matched with a leading # or &, so a path segment cannot trip it
+    expect(isAuthFragment('#/node/accesstoken')).toBe(false)
   })
 })

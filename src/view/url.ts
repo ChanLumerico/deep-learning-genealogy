@@ -48,6 +48,21 @@ export const EMPTY: UrlState = {
 /** ids are lowercase alphanumeric slugs; anything else did not come from us */
 const ID = /^[a-z0-9]+$/
 
+/**
+ * Is this fragment an auth redirect's, rather than ours?
+ *
+ * OAuth's implicit flow returns the whole session in the fragment. This app
+ * writes the fragment on load, and the auth client is imported lazily, so
+ * writing ours first destroys the tokens before anything can read them — a
+ * session on the server and nothing in the browser, with no error anywhere.
+ * The flow is configured as PKCE so this should never arise; the guard stays
+ * because a fragment that is plainly not ours is not ours to overwrite, and
+ * because the failure it prevents is completely silent.
+ */
+export const isAuthFragment = (hash: string) =>
+  /[#&](access_token|refresh_token|provider_token|error_code|error_description)=/
+    .test(String(hash ?? ''))
+
 const list = (v: string | null) =>
   (v ?? '').split(',').map((s) => s.trim()).filter((s) => ID.test(s)).sort()
 

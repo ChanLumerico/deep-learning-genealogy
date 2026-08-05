@@ -60,6 +60,15 @@ function db(): Promise<SupabaseClient> {
         // the OAuth callback comes back on the URL; take the session out of it
         // and put the address bar back the way the reader left it
         detectSessionInUrl: true,
+        // PKCE, explicitly — supabase-js still defaults to the implicit flow,
+        // which returns the session in the URL *fragment*. This app is hash
+        // routed and writes the fragment on load, and the auth client is
+        // imported lazily so it arrives after that write: the tokens were
+        // being thrown away before anything could read them, leaving a session
+        // on the server and nothing in the browser. PKCE puts a code in the
+        // query string instead, where the router cannot reach it — and keeps
+        // tokens out of the URL and the history besides.
+        flowType: 'pkce',
       },
     }))
   return pending

@@ -6,7 +6,7 @@
 // is our own echo and is ignored.
 
 import { useEffect, useRef } from 'react'
-import { isNavigation, parseHash, sameUrl, toHash } from './url'
+import { isAuthFragment, isNavigation, parseHash, sameUrl, toHash } from './url'
 import type { UrlState } from './url'
 
 export interface UrlSync {
@@ -40,6 +40,8 @@ export function useUrlState({ state, apply }: UrlSync, ready: boolean) {
   // ── write: mirror the app back into the address bar ──────────────────────
   useEffect(() => {
     if (!ready) return
+    // an auth redirect owns the fragment until its client has consumed it
+    if (isAuthFragment(window.location.hash)) return
     const prev = last.current
     if (prev && sameUrl(prev, state)) return
     const hash = toHash(state)

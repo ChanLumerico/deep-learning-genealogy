@@ -49,6 +49,9 @@ jobs:
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          # which providers to offer. Left out, the app offers its default pair
+          # and one of them was not registered yet — an error page on click.
+          VITE_AUTH_PROVIDERS: ${{ secrets.VITE_AUTH_PROVIDERS }}
 
       # Guards the reason the fonts were self-hosted in the first place. If a
       # third-party URL creeps back into the bundle, fail here rather than
