@@ -20,19 +20,24 @@ browser can do nothing except read and write rows whose `user_id` matches the
 signed-in user, and that is enforced by the row-level policies rather than by
 the client.
 
-## 3. Turn on the providers
+## 3. Turn on the provider
 
-Dashboard → Authentication → Providers.
+Dashboard → Authentication → Providers → **GitHub**. It shows a callback URL
+of the form `https://<project>.supabase.co/auth/v1/callback`.
 
-**Google** — create an OAuth client at
-<https://console.cloud.google.com/apis/credentials> (type: Web application).
-Authorised redirect URI: the callback shown on the Supabase provider page,
-which looks like `https://<project>.supabase.co/auth/v1/callback`. Paste the
-client ID and secret back into Supabase.
+Create an OAuth App at <https://github.com/settings/developers> with that as
+the Authorization callback URL, then paste the client ID and secret back into
+Supabase and enable it.
 
-**GitHub** — <https://github.com/settings/developers> → New OAuth App.
-Authorisation callback URL: the same Supabase callback. Paste the client ID
-and secret back.
+**Another provider later.** Register it in Supabase the same way and add its
+name to `VITE_AUTH_PROVIDERS` (see below); the app needs no change. Google is
+the one already written in — its client is made in the Google Cloud console
+under APIs & Services, and its consent screen has to be *published* or only
+accounts you list as testers can sign in.
+
+Identities with the same verified email address are linked to one user
+automatically, so signing in with a second provider that reports the address
+you already used does not create a second account or a second reading list.
 
 ## 4. Tell Supabase where the site lives
 

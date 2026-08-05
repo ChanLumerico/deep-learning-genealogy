@@ -35,12 +35,15 @@ export const accountsAvailable = !!(URL_ && KEY)
 /**
  * Which providers to offer, in order.
  *
- * Listed rather than assumed: a provider that is offered but not registered
- * in Supabase sends the reader to an error page, which is worse than not
- * offering it. Set VITE_AUTH_PROVIDERS to the ones actually configured.
+ * GitHub alone by default, because that is what this project registered. A
+ * provider offered but not registered in Supabase sends the reader to an
+ * error page, so the default has to be the conservative one — adding a name
+ * to VITE_AUTH_PROVIDERS is a deliberate act, forgetting to remove one is an
+ * accident. Google is supported here and simply not set up; enabling it is
+ * the provider in Supabase plus this variable, and nothing in the app.
  */
 export const PROVIDERS: Provider[] = String(
-  import.meta.env.VITE_AUTH_PROVIDERS ?? 'google,github',
+  import.meta.env.VITE_AUTH_PROVIDERS ?? 'github',
 )
   .split(',')
   .map((s) => s.trim().toLowerCase())
