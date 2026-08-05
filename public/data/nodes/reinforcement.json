@@ -335,7 +335,7 @@
   "s": "S",
   "p": "World models were not accurate enough for Atari",
   "i": "Replace Gaussian latents with 32 categoricals",
-  "l": "Every new domain still needs its own tuning"
+  "l": "The gradient estimator itself is a per-domain switch"
  },
  {
   "id": "dreamer3",
@@ -348,7 +348,7 @@
   "s": "S",
   "p": "Every new domain needed its own hyperparameters",
   "i": "symlog, two-hot and free bits make scales comparable",
-  "l": "All behaviour still comes from inside the model"
+  "l": "Behaviour still comes only from inside the model"
  },
  {
   "id": "cql",

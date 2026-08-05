@@ -116,3 +116,18 @@ describe('every essay is well formed', () => {
     }
   })
 })
+
+// A block heading is a caption: DetailPanel renders it as plain text under
+// `text-transform: uppercase`, so it never reaches the prose parser. TeX put
+// there does not render — it is uppercased as source, and `$\epsilon$` reaches
+// the reader as `$\EPSILON$`. Two headings shipped that way before anyone
+// noticed, because nothing failed; it merely looked like a typo.
+describe('block headings are prose, not markup', () => {
+  it('carries no maths or code, which a caption cannot render', () => {
+    const offenders = all.flatMap(([file, key, d]) =>
+      (d.blocks ?? [])
+        .filter((b) => /[$`]/.test(b.h ?? ''))
+        .map((b) => `${file} · ${key} · ${b.h}`))
+    expect(offenders).toEqual([])
+  })
+})

@@ -1,327 +1,327 @@
 {
-  "showtell>showattend": {
-    "lead": "Show and Tell squeezes an image into one vector and asks an LSTM to carry it through an entire sentence. Show, Attend and Tell keeps a grid of features and lets the decoder query it at every word — Bahdanau's attention, moved from source tokens to image regions within months of its publication.",
-    "blocks": [
-      {
-        "h": "The bottleneck being removed",
-        "b": "A single fixed-length vector must hold everything about the image that any part of the caption might mention. The failure is visible in the outputs: captions that are fluent and plausible and unspecific, describing a common configuration rather than what is present.\n\nThe same complaint had just been made about machine translation, where an encoder RNN compressed a whole source sentence into one state. Bahdanau's answer there was to keep the encoder's per-position states and let the decoder attend over them, and the transplant is direct — image locations replace source positions."
-      },
-      {
-        "h": "Soft and hard",
-        "b": "Features are taken from a lower convolutional layer, giving one vector per spatial location. At each step the decoder scores every location against its hidden state and forms a context vector.\n\n**Soft** attention takes a weighted average, $\\hat{z}_t = \\sum_i \\alpha_{ti} a_i$, which is differentiable and trained by backpropagation. **Hard** attention samples a single location and is trained with a score-function estimator and a baseline — REINFORCE, appearing here in a supervised-looking problem.\n\nThe paper reports both, with hard attention marginally better on its metrics and soft attention far simpler. Soft attention is what the field kept, and it is what every subsequent cross-attention mechanism is.\n\nA **doubly stochastic** regulariser encourages the weights to sum to roughly one across time for each location, so the caption's total attention is spread over the image rather than fixating."
-      },
-      {
-        "h": "What became visible",
-        "b": "Overlaying attention weights on the image as each word is produced shows the model looking at the object it is naming. That figure is the paper's most reproduced output and its most consequential effect: the model's behaviour became inspectable, where the fixed-vector version's was not.\n\nThe attention is nonetheless over a fixed convolutional grid, so its units are receptive-field patches rather than things. An object smaller than a cell cannot be attended to alone, and one spanning several is attended to piecewise.\n\nThat is what the region-based line changes — ViLBERT and LXMERT attend over detector proposals, so the units are candidate objects with categories — and what the vision transformers later change again by making the grid itself the sequence and letting self-attention group it."
-      }
-    ],
-    "refs": [
-      {
-        "t": "Show, Attend and Tell: Neural Image Caption Generation with Visual Attention",
-        "y": 2015
-      },
-      {
-        "t": "Show and Tell: A Neural Image Caption Generator",
-        "y": 2015
-      },
-      {
-        "t": "Neural Machine Translation by Jointly Learning to Align and Translate",
-        "y": 2015
-      }
-    ]
-  },
-  "showattend>vilbert": {
-    "lead": "Captioning, question answering, retrieval and grounding had each been a separate architecture trained on its own dataset. ViLBERT and LXMERT apply BERT's recipe to vision and language: pretrain one model on image-text pairs with self-supervised objectives, then fine-tune it per task.",
-    "blocks": [
-      {
-        "h": "From a task to a representation",
-        "b": "Show, Attend and Tell is a captioner. Its attention mechanism is general and its training is not — the model exists to produce captions, and using it for question answering means building a different model.\n\nThe BERT argument is that the representation should be learned first and the task attached second. Transplanting it needs a self-supervised objective that spans both modalities, and a way to represent an image as a sequence.\n\nThe image becomes a set of **region** features from a Faster R-CNN detector, each with its box encoded as a positional signal. Regions rather than a grid, on the reasoning that the units should be objects — which is precisely the complaint against attending over a convolutional grid."
-      },
-      {
-        "h": "Two streams, co-attending",
-        "b": "The design question is whether to concatenate the modalities into one transformer or keep them apart. ViLBERT keeps them apart with a **co-attentional** layer between: each stream's queries attend to the other's keys and values, so language attends to regions and regions attend to words. LXMERT uses a similar arrangement with its own cross-modal encoder.\n\nSeparate streams let each have its own depth — language wants more layers than the visual side — and let the text stream be initialised from a pretrained BERT.\n\nThe objectives are masked language modelling unchanged, a visual analogue that masks regions and predicts the detector's **distribution** over classes rather than reconstructing the feature, and an image-text alignment loss that forces the streams to relate rather than each modelling its own modality."
-      },
-      {
-        "h": "The detector in the middle",
-        "b": "One pretrained model, fine-tuned, beat task-specific architectures across visual question answering, referring expressions, retrieval and commonsense reasoning. Pretraining transferred, which is what the paper set out to show.\n\nEverything depends on the object detector, and it is the binding constraint. Its roughly 1600-class vocabulary bounds what can be perceived — anything outside it is not a region and effectively does not exist — and running it dominates inference cost while being trained separately from everything else.\n\nThe dataset is the other constraint: around three million curated pairs, small because curation is expensive. CLIP removes both by taking four hundred million uncurated pairs and a plain transformer over patches, with no detector, no class vocabulary and no separate model in the pipeline."
-      }
-    ],
-    "refs": [
-      {
-        "t": "ViLBERT: Pretraining Task-Agnostic Visiolinguistic Representations for Vision-and-Language Tasks",
-        "y": 2019
-      },
-      {
-        "t": "LXMERT: Learning Cross-Modality Encoder Representations from Transformers",
-        "y": 2019
-      },
-      {
-        "t": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
-        "y": 2019
-      }
-    ]
-  },
-  "vilbert>clip": {
-    "lead": "ViLBERT's images are sets of detector proposals and its corpus is three million curated pairs. CLIP discards both: patches instead of regions, four hundred million uncurated web pairs instead of a filtered set, and a contrastive objective instead of masked prediction with cross-attention.",
-    "blocks": [
-      {
-        "h": "Three things removed",
-        "b": "**The detector.** ViLBERT represents an image as region features from a Faster R-CNN, which caps perception at its class vocabulary and makes the detector the dominant inference cost. CLIP uses a vision transformer over raw patches — no proposals, no vocabulary, no second model.\n\n**The curation.** Three million pairs is small because filtering is expensive. CLIP collects 400 million with light filtering, on the reasoning that coverage matters more than cleanliness.\n\n**The fusion.** ViLBERT's co-attention layers connect the two streams throughout. CLIP has no fusion at all: two towers, each producing one embedding, joined only by a dot product."
-      },
-      {
-        "h": "Why a contrastive objective scales better",
-        "b": "Masked prediction requires modelling the joint distribution in detail — predicting the masked word or the masked region's class. Contrastive learning only requires identifying which caption goes with which image in a batch, which is a much easier problem and a much cheaper signal.\n\nCLIP's ablation reports the contrastive form reaching a given accuracy several times faster than a generative objective on the same data. At web scale that difference decides what is trainable.\n\nRemoving the fusion module is what makes the result deployable as well: image embeddings can be computed once and cached, so retrieval over a large corpus is a matrix multiply rather than a forward pass per pair."
-      },
-      {
-        "h": "Zero-shot, and what was given up",
-        "b": "Because the text tower embeds arbitrary strings, classification needs no training — embed the class names, embed the image, take the nearest. CLIP matched a supervised ResNet-50 on ImageNet with no ImageNet training examples, and was far more robust on distribution-shifted variants.\n\nWhat the two-tower design gives up is exactly what ViLBERT's co-attention provided: fine-grained interaction between the modalities. A single embedding per side cannot represent which word refers to which object, and CLIP's documented bag-of-words behaviour on compositional prompts is the consequence — a red cube and a blue sphere are not reliably distinguished from a blue cube and a red sphere.\n\nThat weakness propagates into everything built on the embedding, which is why DALL-E 2's failure cases are relational and why Imagen argued for conditioning on a full token sequence instead."
-      }
-    ],
-    "refs": [
-      {
-        "t": "Learning Transferable Visual Models From Natural Language Supervision",
-        "y": 2021
-      },
-      {
-        "t": "ViLBERT: Pretraining Task-Agnostic Visiolinguistic Representations for Vision-and-Language Tasks",
-        "y": 2019
-      }
-    ]
-  },
-  "clip>align": {
-    "lead": "CLIP's 400 million pairs were filtered and balanced, and assembling that dataset was substantial work. ALIGN tests whether the curation earned its cost: take 1.8 billion raw alt-text pairs with only trivial cleaning, keep the objective identical, and see what scale alone buys.",
-    "blocks": [
-      {
-        "h": "The variable is the data",
-        "b": "The objective is the same in-batch contrastive loss with a learned temperature. The towers are ordinary — an EfficientNet for images, a BERT for text — and deliberately unremarkable, because the paper's claim is about the corpus.\n\nWhere CLIP applied filtering and class balancing, ALIGN keeps only trivial frequency-based filters and accepts the rest: alt text that is a filename, a watermark, boilerplate, or simply wrong.\n\nThe result matches or exceeds CLIP on zero-shot classification and sets the state of the art on image-text retrieval, from a dataset nobody curated."
-      },
-      {
-        "h": "Why noise averages out",
-        "b": "The implicit argument is statistical. Noise in alt text is largely uncorrelated with image content, so it contributes variance rather than bias, and enough pairs average it away.\n\nCuration removes noise and also removes coverage — the unusual, the domain-specific, and anything the filter's heuristics did not anticipate. At small scale the noise dominates and filtering wins; past some point the coverage dominates and it does not.\n\nThat conclusion held. Later vision-language and multimodal systems scaled the corpus and applied light filtering rather than careful curation, and the practical question moved from how to clean a dataset to how to obtain a larger one."
-      },
-      {
-        "h": "What comes with it",
-        "b": "Uncurated data carries its biases undiluted, and at this scale nobody has read it. The paper acknowledges this without resolving it — the trade is explicit: coverage and scale in exchange for any control over what the model absorbs.\n\nEvery limitation of the objective is inherited unchanged, since only the data moved: bag-of-words behaviour on compositional prompts, weakness on counting and fine-grained distinctions, sensitivity to prompt wording.\n\nAnd the weights were not released. Combined with a dataset only a few organisations could assemble, that is why CLIP rather than ALIGN became the component the rest of this lane is built on — an availability outcome rather than a technical one."
-      }
-    ],
-    "refs": [
-      {
-        "t": "Scaling Up Visual and Vision-Language Representation Learning With Noisy Text Supervision",
-        "y": 2021
-      },
-      {
-        "t": "Learning Transferable Visual Models From Natural Language Supervision",
-        "y": 2021
-      }
-    ]
-  },
-  "dalle>dalle2": {
-    "lead": "DALL-E generates an image one discrete token at a time, which is 1024 sequential forward passes and a tokeniser that caps what can be rendered. DALL-E 2 abandons the formulation: a prior maps text to a CLIP image embedding, and a diffusion decoder draws from it.",
-    "blocks": [
-      {
-        "h": "What the autoregressive route cost",
-        "b": "Sampling is sequential and unavoidably so — the factorisation is the model, not the network. The raster ordering over image tokens is as arbitrary as PixelCNN's was. And the discrete VAE is a hard ceiling: detail its codebook cannot represent is unavailable to the transformer however large it grows.\n\nThere is also a subtler problem. An autoregressive model commits early — the first tokens fix the composition, and later tokens can only elaborate what has been chosen. Diffusion revises globally at every step, which is a better fit for a task where the arrangement of the whole image matters."
-      },
-      {
-        "h": "The two-stage replacement",
-        "b": "CLIP supplies a space in which an image and its caption land near each other. DALL-E 2 inverts it — hence unCLIP.\n\nA **prior** maps the text embedding to a plausible image embedding; the paper compares an autoregressive prior with a diffusion one and finds the latter better and cheaper. A **decoder**, a diffusion model, generates the image conditioned on that embedding, followed by two diffusion upsamplers.\n\nThe split separates a semantic, low-dimensional problem from a perceptual, high-dimensional one. A useful side effect falls out: encoding a real image with CLIP and decoding gives variations of it, since the interface does not care where the embedding came from."
-      },
-      {
-        "h": "A different bottleneck",
-        "b": "The tokeniser's ceiling is gone and replaced by a narrower one. Everything the decoder knows about the prompt arrives as a single embedding, and an embedding is a summary — spatial relations, counts and attribute binding between objects are exactly what a global vector compresses away.\n\nThe paper documents these as failure cases: the right objects with the wrong relationships. That is CLIP's bag-of-words behaviour on compositional prompts, inherited by anything conditioned on its embedding.\n\nImagen makes the contrary argument at the same moment — condition on a large frozen language model's full token sequence rather than a pooled vector — and reports scaling the text encoder helping more than scaling the generator. The pooled-embedding interface did not survive, but the diffusion decoder did: after this, the renderer in text-to-image systems is a diffusion model and the open question is how the prompt reaches it."
-      }
-    ],
-    "refs": [
-      {
-        "t": "Hierarchical Text-Conditional Image Generation with CLIP Latents",
-        "y": 2022
-      },
-      {
-        "t": "Zero-Shot Text-to-Image Generation",
-        "y": 2021
-      }
-    ]
-  },
-  "clip>dalle2": {
-    "lead": "DALL-E 2's architecture is organised entirely around CLIP's embedding space. It is not a component the system uses but the interface it is built on — the prior's output, the decoder's conditioning, and the reason the model can also produce variations of a real image.",
-    "blocks": [
-      {
-        "h": "The space as an interface",
-        "b": "CLIP aligns images and text so that a picture and its caption land near each other. DALL-E 2 treats that as a protocol: text goes in one side, an image embedding comes out, and something else renders it.\n\nThe **prior** learns $p(z_i \\mid y)$, mapping a caption to a plausible CLIP **image** embedding. The **decoder** learns $p(x \\mid z_i)$, inverting the CLIP image encoder — which is why the paper calls the method unCLIP.\n\nBoth halves exist only because the space is shared. Without a common embedding for text and images there is nothing for the prior to map into and nothing for the decoder to invert."
-      },
-      {
-        "h": "What the shared space buys",
-        "b": "Because the decoder is conditioned on an image embedding rather than on text, the system does image variations for free: encode a real photograph with CLIP, decode, and get a different image with the same semantic content. Nothing in the pipeline is specialised for that.\n\nInterpolation follows too — move along a line between two image embeddings and decode along the way — and text-guided editing works by moving an image embedding in the direction of a text embedding difference. All three are consequences of the interface rather than features that were built.\n\nThe paper also uses CLIP for reranking, as DALL-E did, scoring candidate generations against the prompt."
-      },
-      {
-        "h": "The interface is also the limit",
-        "b": "A CLIP image embedding is a summary. The decoder receives that vector and nothing else about the prompt, so whatever the embedding compressed away is unavailable at render time.\n\nCLIP's known weakness on compositional prompts therefore becomes the generator's. Attribute binding fails — a red cube and a blue sphere come out with confused colours — spatial relations are unreliable, and counting is approximate. These are not decoder failures; encoding and decoding a real image shows the semantic content preserved and the relational detail lost.\n\nImagen's contemporaneous result is the argument against the interface: condition on a large frozen text encoder's full token sequence instead of a pooled vector, and text alignment improves more than any change to the diffusion model does. SD3 continues in that direction, and the pooled-CLIP-embedding conditioning did not persist — though CLIP's text encoder, used as a token sequence rather than a summary, is still in Stable Diffusion."
-      }
-    ],
-    "refs": [
-      {
-        "t": "Hierarchical Text-Conditional Image Generation with CLIP Latents",
-        "y": 2022
-      },
-      {
-        "t": "Learning Transferable Visual Models From Natural Language Supervision",
-        "y": 2021
-      },
-      {
-        "t": "Photorealistic Text-to-Image Diffusion Models with Deep Language Understanding",
-        "y": 2022
-      }
-    ]
-  },
-  "dalle2>imagen": {
-    "lead": "Both systems appeared within weeks of each other, both use a diffusion decoder with a cascade, and they disagree about one thing: whether the prompt should reach the generator as a single embedding from a jointly-trained image-text model, or as a full token sequence from a large text-only one.",
-    "blocks": [
-      {
-        "h": "The disagreement, stated",
-        "b": "DALL-E 2 conditions on a CLIP **image** embedding produced by a prior from the text. The reasoning is that CLIP's space already encodes semantics shared between the modalities, so an image embedding is a compact statement of what the picture should be.\n\nImagen conditions on the **full token sequence** from a frozen T5-XXL, trained on text alone and never fine-tuned on images. The reasoning is that a pooled vector discards exactly the structure — which adjective attaches to which noun, what is on top of what — that compositional prompts depend on.\n\nThe two are testing whether the useful thing about a text representation is that it has seen images, or that it has seen a great deal of language."
-      },
-      {
-        "h": "The ablation that settled it",
-        "b": "Imagen's central experiment compares scaling the text encoder against scaling the diffusion model, and finds the former clearly more effective for both fidelity and text alignment.\n\nThat is a surprising result, since the generator is where the pixels come from, and it says the binding constraint was language understanding rather than image synthesis. A text-only encoder has also seen far more language than any image-text corpus contains, including the syntax and compositional structure captions rarely exercise — CLIP's text tower is trained on alt text and is correspondingly shallow about language.\n\nImagen introduces DrawBench to measure this, a prompt set probing compositionality, cardinality, spatial relations and rare words — the failures FID does not register. That the evaluation had to be built alongside the model says how poor the automated metrics were."
-      },
-      {
-        "h": "How it resolved",
-        "b": "The token-sequence route won. Stable Diffusion attends to a text encoder's full sequence through cross-attention rather than conditioning on a pooled vector; SD3 uses T5-XXL alongside two CLIP encoders and attributes its improvements on typography and attribute binding to that.\n\nImagen also contributes **dynamic thresholding** — clamp to a percentile of the current prediction's magnitude and rescale, rather than clipping to a fixed range — which permits much higher classifier-free guidance weights without the saturation that previously limited them. A substantial part of its reported quality comes from that alone.\n\nNeither model's weights were released. Imagen's paper is explicit about why: uncurated web training data with the biases that implies. So the influence of both is in the findings rather than the artefacts, and the finding that mattered was about where to put the text."
-      }
-    ],
-    "refs": [
-      {
-        "t": "Photorealistic Text-to-Image Diffusion Models with Deep Language Understanding",
-        "y": 2022
-      },
-      {
-        "t": "Hierarchical Text-Conditional Image Generation with CLIP Latents",
-        "y": 2022
-      }
-    ]
-  },
-  "clip>flamingo": {
-    "lead": "CLIP produces a representation and cannot generate; a language model generates and cannot see. Flamingo connects them without training either — both frozen — by inserting gated cross-attention layers that begin as exact no-ops and grow their contribution only as the gradient earns it.",
-    "blocks": [
-      {
-        "h": "Grafting onto a working model",
-        "b": "Inserting untrained layers into a pretrained language model destroys it immediately: at initialisation they emit noise into a stream that was carefully balanced.\n\nFlamingo's fix is a $\\tanh$ gate with a learnable scalar initialised to zero:\n\n$$h \\leftarrow h + \\tanh(\\alpha) \\cdot \\mathrm{CrossAttn}(h, x_{\\text{vis}}), \\qquad \\alpha \\text{ initialised to } 0$$\n\nAt step zero the model computes exactly what the frozen language model would, so nothing is at risk, and training grows $\\alpha$ only where the visual signal helps.\n\nThis is the same construction as DiT's adaLN-Zero and the residual scaling Inception-ResNet needed for stability — start as the identity, let the gradient decide how much to add — and it recurs whenever something is attached to a network that already works."
-      },
-      {
-        "h": "Fixed-size visual input",
-        "b": "A vision encoder produces a variable number of features depending on resolution and, for video, on frame count. Cross-attention wants a small fixed set.\n\nThe **Perceiver Resampler** attends from a fixed number of learned latent queries to however many visual features arrive, emitting a constant-size output. That decouples the cross-attention cost from the input size, and it is what lets the model accept **interleaved** sequences of images and text of arbitrary length.\n\nInterleaving is the point. Training data is web pages with pictures in them rather than caption pairs, so the model sees the format it will be prompted in. An attention mask restricts each text token to the most recent preceding image, which the ablation finds better than allowing attention to all of them."
-      },
-      {
-        "h": "Few-shot, and the cost of freezing",
-        "b": "Because the language model is frozen, its in-context learning survives intact. Show Flamingo a few image-question-answer triples and then a new image and it continues the pattern, beating models fine-tuned on the target task on several benchmarks with no gradient updates at test time.\n\nThat is GPT-3's in-context learning extended across modalities, and it reframed vision-language work from fine-tuning towards prompting.\n\nWhat freezing costs is adaptation: the visual encoder is never tuned for the language task, so whatever CLIP-style pretraining failed to encode stays unavailable. And the inserted layers, while a small fraction of the total, are numerous — one per few language-model blocks — which is the cost BLIP-2 attacks by reducing the bridge to a single small Q-Former that can pair any two frozen towers."
-      }
-    ],
-    "refs": [
-      {
-        "t": "Flamingo: a Visual Language Model for Few-Shot Learning",
-        "y": 2022
-      },
-      {
-        "t": "Learning Transferable Visual Models From Natural Language Supervision",
-        "y": 2021
-      },
-      {
-        "t": "Perceiver IO: A General Architecture for Structured Inputs & Outputs",
-        "y": 2022
-      }
-    ]
-  },
-  "flamingo>blip2": {
-    "lead": "Flamingo bridges two frozen towers with gated cross-attention layers threaded through the language model, which works and is still costly to train and specific to the pair it was built for. BLIP-2 reduces the bridge to one small module producing a prefix of soft tokens, and the language model is not modified at all.",
-    "blocks": [
-      {
-        "h": "A prefix instead of inserted layers",
-        "b": "Flamingo interleaves new cross-attention blocks throughout the language model, each with its own gate. The language model's forward pass is changed, so the bridge is specific to that architecture and its parameter count scales with the model's depth.\n\nBLIP-2's **Q-Former** is a small transformer with a set of learned queries — 32 in the paper — that cross-attend to the frozen image encoder's output. The resulting vectors are projected into the language model's embedding space and prepended to its input as if they were tokens.\n\nNothing is inserted. The language model receives a short prefix and continues as usual, so no gating is needed, no initialisation care is required, and the same bridge design works with any decoder."
-      },
-      {
-        "h": "Two stages, because one fails",
-        "b": "Training the Q-Former to produce prefix tokens directly asks it to learn what visual information matters and how to express it in the language model's space at once, and the paper reports that not working.\n\n**Stage one** trains it against the frozen image encoder alone, with three objectives borrowed from BLIP — image-text contrastive learning, image-grounded text generation and image-text matching — selected by different attention masks. This teaches the queries to extract text-relevant visual content with no language model involved.\n\n**Stage two** connects the language model and trains generatively, so the queries learn to render what they already extract into a form the frozen decoder can consume.\n\nThat representation learning and modality bridging are separable is the paper's substantive finding, and it is why the recipe transfers."
-      },
-      {
-        "h": "Modularity, and the narrow channel",
-        "b": "Because both towers stay frozen and unmodified, any image encoder can be paired with any language model, and a better decoder can be swapped in by retraining only the bridge. That is what made BLIP-2 the template — a great many models since are an encoder, a projector and an LLM.\n\nThirty-two query vectors is a thin channel for an image: enough for describing a scene, thin for questions needing detail, and the number is a hyperparameter with an obvious trade. The frozen encoder remains the perception ceiling, so small text, precise counting and fine spatial detail stay weak.\n\nWhat BLIP-2 does not have is instruction following. It captions and answers in the format it was trained on rather than doing what it is asked, which is exactly the gap LLaVA's visual instruction tuning fills — and LLaVA simplifies the bridge further, to a linear projection, on the finding that the data mattered more than the module."
-      }
-    ],
-    "refs": [
-      {
-        "t": "BLIP-2: Bootstrapping Language-Image Pre-training with Frozen Image Encoders and Large Language Models",
-        "y": 2023
-      },
-      {
-        "t": "Flamingo: a Visual Language Model for Few-Shot Learning",
-        "y": 2022
-      },
-      {
-        "t": "BLIP: Bootstrapping Language-Image Pre-training for Unified Vision-Language Understanding and Generation",
-        "y": 2022
-      }
-    ]
-  },
-  "blip2>llava": {
-    "lead": "BLIP-2 built a careful bridge between two frozen towers and produced a model that captions and answers questions in its training format. LLaVA's finding is that the missing piece was not the bridge but the data — a linear projection suffices, provided the model is then tuned on instructions a language model generated.",
-    "blocks": [
-      {
-        "h": "The bridge, simplified",
-        "b": "The Q-Former is replaced by a single linear layer — later a two-layer MLP — mapping CLIP ViT patch features into the language model's embedding space, where they are prepended as soft tokens.\n\nNo learned queries, no cross-attention, no two-stage bridge training. The implicit claim is that a well-trained vision encoder's features are already close to usable and the projection only changes coordinates.\n\nThat this works is the surprising half of the result, and it is why the architecture became the default: it is the simplest thing that could work, and it moves the effort to where the paper argues it belongs."
-      },
-      {
-        "h": "Instruction data from a text-only teacher",
-        "b": "Image-text pairs are captions, which teach a model to describe rather than to converse or follow instructions.\n\nLLaVA builds instruction data by prompting a text-only GPT-4 with an image's **symbolic** representation — its captions and its object bounding boxes — and asking for conversations, detailed descriptions and reasoning questions about a picture it cannot see. The instructions are then paired back to the image.\n\nThree types are produced deliberately, and the ablation shows the reasoning subset contributing most on the harder benchmarks. Training runs in two stages: the projection alone on caption pairs to align the spaces, then the projection **and the language model** on the instruction data. Unfreezing the decoder is what BLIP-2 declines to do, and it is what buys the conversational behaviour."
-      },
-      {
-        "h": "Cheap, and circular to evaluate",
-        "b": "The recipe trains in hours on a single node, which is why the open vision-language ecosystem is built on it rather than on BLIP-2's.\n\nThe instruction data's quality is bounded by what the annotations conveyed — the teacher worked from captions and boxes, so anything they omitted cannot appear, and the teacher's hallucinations become training targets. The frozen CLIP encoder remains the perception ceiling, so small text and precise counting stay weak.\n\nEvaluation is the harder problem. LLaVA is scored partly by GPT-4 comparing its answers to reference ones, which is convenient and circular given the same model family generated the training data. The paper is aware of it and the field has not resolved it — which is worth recording, because a great many results downstream rest on the same measurement."
-      }
-    ],
-    "refs": [
-      {
-        "t": "Visual Instruction Tuning",
-        "y": 2023
-      },
-      {
-        "t": "BLIP-2: Bootstrapping Language-Image Pre-training with Frozen Image Encoders and Large Language Models",
-        "y": 2023
-      },
-      {
-        "t": "Improved Baselines with Visual Instruction Tuning",
-        "y": 2024
-      }
-    ]
-  },
-  "llava>gpt4v": {
-    "lead": "LLaVA and everything before it attach vision to a language model after the fact — a frozen encoder, a projector, and a decoder trained on text alone. GPT-4V and Gemini are trained on interleaved modalities from the start, which removes the seam and, at the same time, removes any way to check the claim.",
-    "blocks": [
-      {
-        "h": "What the bridged design assumes",
-        "b": "In LLaVA the boundary is explicit. A CLIP encoder trained on image-text pairs produces features; a projection converts them; a language model trained on text consumes them. Each stage was optimised for something other than the whole, and the visual features are extracted before the question is known.\n\nTraining on interleaved image and text data from the beginning means no stage is retrofitted. The representation is shaped by both modalities throughout, and Gemini's report states this as a design principle, extending it to audio and video.\n\nThe claimed benefit is on tasks where the modalities must interact tightly — reading a chart, following a diagram, reasoning about a screenshot — precisely where a bridged model's pre-extracted features are least adequate."
-      },
-      {
-        "h": "What can be observed from outside",
-        "b": "Both systems are substantially better than the open bridged models on document understanding, chart and diagram reasoning, and reading text embedded in images. Those are the failure cases a frozen CLIP encoder is known to have, since its patch resolution and contrastive training do not preserve small text.\n\nThey are also markedly better at multi-image and interleaved reasoning, which follows from having been trained on that format rather than on caption pairs.\n\nWhere they remain weak is where every model in this lane is: precise counting, fine spatial relations, and confident hallucination of detail not present in the image."
-      },
-      {
-        "h": "What cannot",
-        "b": "The weights are closed, the training data is undisclosed, and the architecture is described in outline. The published system cards report evaluations and safety mitigations rather than method.\n\nSo the claim that native multimodal pretraining beats bridging is plausible and not independently checkable. The comparison is against models trained with vastly less compute on public data, so the training regime and the resource level cannot be separated from outside. Benchmark contamination cannot be ruled out without knowing the data, and much of the comparison is on benchmarks the open models were developed against.\n\nThis arrow therefore marks where the lane's frontier moves behind closed doors — a fact about the field rather than a criticism of the work. The open line continues along the bridged path with better encoders, higher input resolutions and more instruction data, and closes part of the measurable gap. Whether the remainder is the regime or the compute is an open question, and is better left stated than settled."
-      }
-    ],
-    "refs": [
-      {
-        "t": "GPT-4 Technical Report",
-        "y": 2023
-      },
-      {
-        "t": "Gemini: A Family of Highly Capable Multimodal Models",
-        "y": 2023
-      },
-      {
-        "t": "Visual Instruction Tuning",
-        "y": 2023
-      }
-    ]
-  }
+ "showtell>showattend": {
+  "lead": "Show and Tell squeezes an image into one vector and asks an LSTM to carry it through an entire sentence. Show, Attend and Tell keeps a grid of features and lets the decoder query it at every word — Bahdanau's attention, moved from source tokens to image regions within months of its publication.",
+  "blocks": [
+   {
+    "h": "The bottleneck being removed",
+    "b": "A single fixed-length vector must hold everything about the image that any part of the caption might mention. The failure is visible in the outputs: captions that are fluent and plausible and unspecific, describing a common configuration rather than what is present.\n\nThe same complaint had just been made about machine translation, where an encoder RNN compressed a whole source sentence into one state. Bahdanau's answer there was to keep the encoder's per-position states and let the decoder attend over them, and the transplant is direct — image locations replace source positions."
+   },
+   {
+    "h": "Soft and hard",
+    "b": "Features are taken from a lower convolutional layer, giving one vector per spatial location. At each step the decoder scores every location against its hidden state and forms a context vector.\n\n**Soft** attention takes a weighted average, $\\hat{z}_t = \\sum_i \\alpha_{ti} a_i$, which is differentiable and trained by backpropagation. **Hard** attention samples a single location and is trained with a score-function estimator and a baseline — REINFORCE, appearing here in a supervised-looking problem.\n\nThe paper reports both, with hard attention marginally better on its metrics and soft attention far simpler. Soft attention is what the field kept, and it is what every subsequent cross-attention mechanism is.\n\nA **doubly stochastic** regulariser encourages the weights to sum to roughly one across time for each location, so the caption's total attention is spread over the image rather than fixating."
+   },
+   {
+    "h": "What became visible",
+    "b": "Overlaying attention weights on the image as each word is produced shows the model looking at the object it is naming. That figure is the paper's most reproduced output and its most consequential effect: the model's behaviour became inspectable, where the fixed-vector version's was not.\n\nThe attention is nonetheless over a fixed convolutional grid, so its units are receptive-field patches rather than things. An object smaller than a cell cannot be attended to alone, and one spanning several is attended to piecewise.\n\nThat is what the region-based line changes — ViLBERT and LXMERT attend over detector proposals, so the units are candidate objects with categories — and what the vision transformers later change again by making the grid itself the sequence and letting self-attention group it."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Show, Attend and Tell: Neural Image Caption Generation with Visual Attention",
+    "y": 2015
+   },
+   {
+    "t": "Show and Tell: A Neural Image Caption Generator",
+    "y": 2015
+   },
+   {
+    "t": "Neural Machine Translation by Jointly Learning to Align and Translate",
+    "y": 2015
+   }
+  ]
+ },
+ "showattend>vilbert": {
+  "lead": "Captioning, question answering, retrieval and grounding had each been a separate architecture trained on its own dataset. ViLBERT and LXMERT apply BERT's recipe to vision and language: pretrain one model on image-text pairs with self-supervised objectives, then fine-tune it per task.",
+  "blocks": [
+   {
+    "h": "From a task to a representation",
+    "b": "Show, Attend and Tell is a captioner. Its attention mechanism is general and its training is not — the model exists to produce captions, and using it for question answering means building a different model.\n\nThe BERT argument is that the representation should be learned first and the task attached second. Transplanting it needs a self-supervised objective that spans both modalities, and a way to represent an image as a sequence.\n\nThe image becomes a set of **region** features from a Faster R-CNN detector, each with its box encoded as a positional signal. Regions rather than a grid, on the reasoning that the units should be objects — which is precisely the complaint against attending over a convolutional grid."
+   },
+   {
+    "h": "Two streams, co-attending",
+    "b": "The design question is whether to concatenate the modalities into one transformer or keep them apart. ViLBERT keeps them apart with a **co-attentional** layer between: each stream's queries attend to the other's keys and values, so language attends to regions and regions attend to words. LXMERT uses a similar arrangement with its own cross-modal encoder.\n\nSeparate streams let each have its own depth — language wants more layers than the visual side — and let the text stream be initialised from a pretrained BERT.\n\nThe objectives are masked language modelling unchanged, a visual analogue that masks regions and predicts the detector's **distribution** over classes rather than reconstructing the feature, and an image-text alignment loss that forces the streams to relate rather than each modelling its own modality."
+   },
+   {
+    "h": "The detector in the middle",
+    "b": "One pretrained model, fine-tuned, beat task-specific architectures across visual question answering, referring expressions, retrieval and commonsense reasoning. Pretraining transferred, which is what the paper set out to show.\n\nEverything depends on the object detector, and it is the binding constraint. Its roughly 1600-class vocabulary bounds what can be perceived — anything outside it is not a region and effectively does not exist — and running it dominates inference cost while being trained separately from everything else.\n\nThe dataset is the other constraint: around three million curated pairs, small because curation is expensive. CLIP removes both by taking four hundred million uncurated pairs and a plain transformer over patches, with no detector, no class vocabulary and no separate model in the pipeline."
+   }
+  ],
+  "refs": [
+   {
+    "t": "ViLBERT: Pretraining Task-Agnostic Visiolinguistic Representations for Vision-and-Language Tasks",
+    "y": 2019
+   },
+   {
+    "t": "LXMERT: Learning Cross-Modality Encoder Representations from Transformers",
+    "y": 2019
+   },
+   {
+    "t": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+    "y": 2019
+   }
+  ]
+ },
+ "vilbert>clip": {
+  "lead": "ViLBERT's images are sets of detector proposals and its corpus is three million curated pairs. CLIP discards both: patches instead of regions, four hundred million uncurated web pairs instead of a filtered set, and a contrastive objective instead of masked prediction with cross-attention.",
+  "blocks": [
+   {
+    "h": "Three things removed",
+    "b": "**The detector.** ViLBERT represents an image as region features from a Faster R-CNN, which caps perception at its class vocabulary and makes the detector the dominant inference cost. CLIP uses a vision transformer over raw patches — no proposals, no vocabulary, no second model.\n\n**The curation.** Three million pairs is small because filtering is expensive. CLIP collects 400 million with light filtering, on the reasoning that coverage matters more than cleanliness.\n\n**The fusion.** ViLBERT's co-attention layers connect the two streams throughout. CLIP has no fusion at all: two towers, each producing one embedding, joined only by a dot product."
+   },
+   {
+    "h": "Why a contrastive objective scales better",
+    "b": "Masked prediction requires modelling the joint distribution in detail — predicting the masked word or the masked region's class. Contrastive learning only requires identifying which caption goes with which image in a batch, which is a much easier problem and a much cheaper signal.\n\nCLIP's ablation reports the contrastive form reaching a given accuracy several times faster than a generative objective on the same data. At web scale that difference decides what is trainable.\n\nRemoving the fusion module is what makes the result deployable as well: image embeddings can be computed once and cached, so retrieval over a large corpus is a matrix multiply rather than a forward pass per pair."
+   },
+   {
+    "h": "Zero-shot, and what was given up",
+    "b": "Because the text tower embeds arbitrary strings, classification needs no training — embed the class names, embed the image, take the nearest. CLIP matched a supervised ResNet-50 on ImageNet with no ImageNet training examples, and was far more robust on distribution-shifted variants.\n\nWhat the two-tower design gives up is exactly what ViLBERT's co-attention provided: fine-grained interaction between the modalities. A single embedding per side cannot represent which word refers to which object, and CLIP's documented bag-of-words behaviour on compositional prompts is the consequence — a red cube and a blue sphere are not reliably distinguished from a blue cube and a red sphere.\n\nThat weakness propagates into everything built on the embedding, which is why DALL-E 2's failure cases are relational and why Imagen argued for conditioning on a full token sequence instead."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Learning Transferable Visual Models From Natural Language Supervision",
+    "y": 2021
+   },
+   {
+    "t": "ViLBERT: Pretraining Task-Agnostic Visiolinguistic Representations for Vision-and-Language Tasks",
+    "y": 2019
+   }
+  ]
+ },
+ "clip>align": {
+  "lead": "CLIP's 400 million pairs were filtered and balanced, and assembling that dataset was substantial work. ALIGN tests whether the curation earned its cost: take 1.8 billion raw alt-text pairs with only trivial cleaning, keep the objective identical, and see what scale alone buys.",
+  "blocks": [
+   {
+    "h": "The variable is the data",
+    "b": "The objective is the same in-batch contrastive loss with a learned temperature. The towers are ordinary — an EfficientNet for images, a BERT for text — and deliberately unremarkable, because the paper's claim is about the corpus.\n\nWhere CLIP applied filtering and class balancing, ALIGN keeps only trivial frequency-based filters and accepts the rest: alt text that is a filename, a watermark, boilerplate, or simply wrong.\n\nThe result matches or exceeds CLIP on zero-shot classification and sets the state of the art on image-text retrieval, from a dataset nobody curated."
+   },
+   {
+    "h": "Why noise averages out",
+    "b": "The implicit argument is statistical. Noise in alt text is largely uncorrelated with image content, so it contributes variance rather than bias, and enough pairs average it away.\n\nCuration removes noise and also removes coverage — the unusual, the domain-specific, and anything the filter's heuristics did not anticipate. At small scale the noise dominates and filtering wins; past some point the coverage dominates and it does not.\n\nThat conclusion held. Later vision-language and multimodal systems scaled the corpus and applied light filtering rather than careful curation, and the practical question moved from how to clean a dataset to how to obtain a larger one."
+   },
+   {
+    "h": "What comes with it",
+    "b": "Uncurated data carries its biases undiluted, and at this scale nobody has read it. The paper acknowledges this without resolving it — the trade is explicit: coverage and scale in exchange for any control over what the model absorbs.\n\nEvery limitation of the objective is inherited unchanged, since only the data moved: bag-of-words behaviour on compositional prompts, weakness on counting and fine-grained distinctions, sensitivity to prompt wording.\n\nAnd the weights were not released. Combined with a dataset only a few organisations could assemble, that is why CLIP rather than ALIGN became the component the rest of this lane is built on — an availability outcome rather than a technical one."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Scaling Up Visual and Vision-Language Representation Learning With Noisy Text Supervision",
+    "y": 2021
+   },
+   {
+    "t": "Learning Transferable Visual Models From Natural Language Supervision",
+    "y": 2021
+   }
+  ]
+ },
+ "dalle>dalle2": {
+  "lead": "DALL-E generates an image one discrete token at a time, which is 1024 sequential forward passes and a tokeniser that caps what can be rendered. DALL-E 2 abandons the formulation: a prior maps text to a CLIP image embedding, and a diffusion decoder draws from it.",
+  "blocks": [
+   {
+    "h": "What the autoregressive route cost",
+    "b": "Sampling is sequential and unavoidably so — the factorisation is the model, not the network. The raster ordering over image tokens is as arbitrary as PixelCNN's was. And the discrete VAE is a hard ceiling: detail its codebook cannot represent is unavailable to the transformer however large it grows.\n\nThere is also a subtler problem. An autoregressive model commits early — the first tokens fix the composition, and later tokens can only elaborate what has been chosen. Diffusion revises globally at every step, which is a better fit for a task where the arrangement of the whole image matters."
+   },
+   {
+    "h": "The two-stage replacement",
+    "b": "CLIP supplies a space in which an image and its caption land near each other. DALL-E 2 inverts it — hence unCLIP.\n\nA **prior** maps the text embedding to a plausible image embedding; the paper compares an autoregressive prior with a diffusion one and finds the latter better and cheaper. A **decoder**, a diffusion model, generates the image conditioned on that embedding, followed by two diffusion upsamplers.\n\nThe split separates a semantic, low-dimensional problem from a perceptual, high-dimensional one. A useful side effect falls out: encoding a real image with CLIP and decoding gives variations of it, since the interface does not care where the embedding came from."
+   },
+   {
+    "h": "A different bottleneck",
+    "b": "The tokeniser's ceiling is gone and replaced by a narrower one. Everything the decoder knows about the prompt arrives as a single embedding, and an embedding is a summary — spatial relations, counts and attribute binding between objects are exactly what a global vector compresses away.\n\nThe paper documents these as failure cases: the right objects with the wrong relationships. That is CLIP's bag-of-words behaviour on compositional prompts, inherited by anything conditioned on its embedding.\n\nImagen makes the contrary argument at the same moment — condition on a large frozen language model's full token sequence rather than a pooled vector — and reports scaling the text encoder helping more than scaling the generator. The pooled-embedding interface did not survive, but the diffusion decoder did: after this, the renderer in text-to-image systems is a diffusion model and the open question is how the prompt reaches it."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Hierarchical Text-Conditional Image Generation with CLIP Latents",
+    "y": 2022
+   },
+   {
+    "t": "Zero-Shot Text-to-Image Generation",
+    "y": 2021
+   }
+  ]
+ },
+ "clip>dalle2": {
+  "lead": "DALL-E 2's architecture is organised entirely around CLIP's embedding space. It is not a component the system uses but the interface it is built on — the prior's output, the decoder's conditioning, and the reason the model can also produce variations of a real image.",
+  "blocks": [
+   {
+    "h": "The space as an interface",
+    "b": "CLIP aligns images and text so that a picture and its caption land near each other. DALL-E 2 treats that as a protocol: text goes in one side, an image embedding comes out, and something else renders it.\n\nThe **prior** learns $p(z_i \\mid y)$, mapping a caption to a plausible CLIP **image** embedding. The **decoder** learns $p(x \\mid z_i)$, inverting the CLIP image encoder — which is why the paper calls the method unCLIP.\n\nBoth halves exist only because the space is shared. Without a common embedding for text and images there is nothing for the prior to map into and nothing for the decoder to invert."
+   },
+   {
+    "h": "What the shared space buys",
+    "b": "Because the decoder is conditioned on an image embedding rather than on text, the system does image variations for free: encode a real photograph with CLIP, decode, and get a different image with the same semantic content. Nothing in the pipeline is specialised for that.\n\nInterpolation follows too — move along a line between two image embeddings and decode along the way — and text-guided editing works by moving an image embedding in the direction of a text embedding difference. All three are consequences of the interface rather than features that were built.\n\nThe paper also uses CLIP for reranking, as DALL-E did, scoring candidate generations against the prompt."
+   },
+   {
+    "h": "The interface is also the limit",
+    "b": "A CLIP image embedding is a summary. The decoder receives that vector and nothing else about the prompt, so whatever the embedding compressed away is unavailable at render time.\n\nCLIP's known weakness on compositional prompts therefore becomes the generator's. Attribute binding fails — a red cube and a blue sphere come out with confused colours — spatial relations are unreliable, and counting is approximate. These are not decoder failures; encoding and decoding a real image shows the semantic content preserved and the relational detail lost.\n\nImagen's contemporaneous result is the argument against the interface: condition on a large frozen text encoder's full token sequence instead of a pooled vector, and text alignment improves more than any change to the diffusion model does. SD3 continues in that direction, and the pooled-CLIP-embedding conditioning did not persist — though CLIP's text encoder, used as a token sequence rather than a summary, is still in Stable Diffusion."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Hierarchical Text-Conditional Image Generation with CLIP Latents",
+    "y": 2022
+   },
+   {
+    "t": "Learning Transferable Visual Models From Natural Language Supervision",
+    "y": 2021
+   },
+   {
+    "t": "Photorealistic Text-to-Image Diffusion Models with Deep Language Understanding",
+    "y": 2022
+   }
+  ]
+ },
+ "dalle2>imagen": {
+  "lead": "Both systems appeared within weeks of each other, both use a diffusion decoder with a cascade, and they disagree about one thing: whether the prompt should reach the generator as a single embedding from a jointly-trained image-text model, or as a full token sequence from a large text-only one.",
+  "blocks": [
+   {
+    "h": "The disagreement, stated",
+    "b": "DALL-E 2 conditions on a CLIP **image** embedding produced by a prior from the text. The reasoning is that CLIP's space already encodes semantics shared between the modalities, so an image embedding is a compact statement of what the picture should be.\n\nImagen conditions on the **full token sequence** from a frozen T5-XXL, trained on text alone and never fine-tuned on images. The reasoning is that a pooled vector discards exactly the structure — which adjective attaches to which noun, what is on top of what — that compositional prompts depend on.\n\nThe two are testing whether the useful thing about a text representation is that it has seen images, or that it has seen a great deal of language."
+   },
+   {
+    "h": "The ablation that settled it",
+    "b": "Imagen's central experiment compares scaling the text encoder against scaling the diffusion model, and finds the former clearly more effective for both fidelity and text alignment.\n\nThat is a surprising result, since the generator is where the pixels come from, and it says the binding constraint was language understanding rather than image synthesis. A text-only encoder has also seen far more language than any image-text corpus contains, including the syntax and compositional structure captions rarely exercise — CLIP's text tower is trained on alt text and is correspondingly shallow about language.\n\nImagen introduces DrawBench to measure this, a prompt set probing compositionality, cardinality, spatial relations and rare words — the failures FID does not register. That the evaluation had to be built alongside the model says how poor the automated metrics were."
+   },
+   {
+    "h": "How it resolved",
+    "b": "The token-sequence route won. Stable Diffusion attends to a text encoder's full sequence through cross-attention rather than conditioning on a pooled vector; SD3 uses T5-XXL alongside two CLIP encoders and attributes its improvements on typography and attribute binding to that.\n\nImagen also contributes **dynamic thresholding** — clamp to a percentile of the current prediction's magnitude and rescale, rather than clipping to a fixed range — which permits much higher classifier-free guidance weights without the saturation that previously limited them. A substantial part of its reported quality comes from that alone.\n\nNeither model's weights were released. Imagen's paper is explicit about why: uncurated web training data with the biases that implies. So the influence of both is in the findings rather than the artefacts, and the finding that mattered was about where to put the text."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Photorealistic Text-to-Image Diffusion Models with Deep Language Understanding",
+    "y": 2022
+   },
+   {
+    "t": "Hierarchical Text-Conditional Image Generation with CLIP Latents",
+    "y": 2022
+   }
+  ]
+ },
+ "clip>flamingo": {
+  "lead": "CLIP produces a representation and cannot generate; a language model generates and cannot see. Flamingo connects them without training either — both frozen — by inserting gated cross-attention layers that begin as exact no-ops and grow their contribution only as the gradient earns it.",
+  "blocks": [
+   {
+    "h": "Grafting onto a working model",
+    "b": "Inserting untrained layers into a pretrained language model destroys it immediately: at initialisation they emit noise into a stream that was carefully balanced.\n\nFlamingo's fix is a $\\tanh$ gate with a learnable scalar initialised to zero:\n\n$$h \\leftarrow h + \\tanh(\\alpha) \\cdot \\mathrm{CrossAttn}(h, x_{\\text{vis}}), \\qquad \\alpha \\text{ initialised to } 0$$\n\nAt step zero the model computes exactly what the frozen language model would, so nothing is at risk, and training grows $\\alpha$ only where the visual signal helps.\n\nThis is the same construction as DiT's adaLN-Zero and the residual scaling Inception-ResNet needed for stability — start as the identity, let the gradient decide how much to add — and it recurs whenever something is attached to a network that already works."
+   },
+   {
+    "h": "Fixed-size visual input",
+    "b": "A vision encoder produces a variable number of features depending on resolution and, for video, on frame count. Cross-attention wants a small fixed set.\n\nThe **Perceiver Resampler** attends from a fixed number of learned latent queries to however many visual features arrive, emitting a constant-size output. That decouples the cross-attention cost from the input size, and it is what lets the model accept **interleaved** sequences of images and text of arbitrary length.\n\nInterleaving is the point. Training data is web pages with pictures in them rather than caption pairs, so the model sees the format it will be prompted in. An attention mask restricts each text token to the most recent preceding image, which the ablation finds better than allowing attention to all of them."
+   },
+   {
+    "h": "Few-shot, and the cost of freezing",
+    "b": "Because the language model is frozen, its in-context learning survives intact. Show Flamingo a few image-question-answer triples and then a new image and it continues the pattern, beating models fine-tuned on the target task on several benchmarks with no gradient updates at test time.\n\nThat is GPT-3's in-context learning extended across modalities, and it reframed vision-language work from fine-tuning towards prompting.\n\nWhat freezing costs is adaptation: the visual encoder is never tuned for the language task, so whatever CLIP-style pretraining failed to encode stays unavailable. And the inserted layers, while a small fraction of the total, are numerous — one per few language-model blocks — which is the cost BLIP-2 attacks by reducing the bridge to a single small Q-Former that can pair any two frozen towers."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Flamingo: a Visual Language Model for Few-Shot Learning",
+    "y": 2022
+   },
+   {
+    "t": "Learning Transferable Visual Models From Natural Language Supervision",
+    "y": 2021
+   },
+   {
+    "t": "Perceiver IO: A General Architecture for Structured Inputs & Outputs",
+    "y": 2022
+   }
+  ]
+ },
+ "flamingo>blip2": {
+  "lead": "Flamingo bridges two frozen towers with gated cross-attention layers threaded through the language model, which works and is still costly to train and specific to the pair it was built for. BLIP-2 reduces the bridge to one small module producing a prefix of soft tokens, and the language model is not modified at all.",
+  "blocks": [
+   {
+    "h": "A prefix instead of inserted layers",
+    "b": "Flamingo interleaves new cross-attention blocks throughout the language model, each with its own gate. The language model's forward pass is changed, so the bridge is specific to that architecture and its parameter count scales with the model's depth.\n\nBLIP-2's **Q-Former** is a small transformer with a set of learned queries — 32 in the paper — that cross-attend to the frozen image encoder's output. The resulting vectors are projected into the language model's embedding space and prepended to its input as if they were tokens.\n\nNothing is inserted. The language model receives a short prefix and continues as usual, so no gating is needed, no initialisation care is required, and the same bridge design works with any decoder."
+   },
+   {
+    "h": "Two stages, because one fails",
+    "b": "Training the Q-Former to produce prefix tokens directly asks it to learn what visual information matters and how to express it in the language model's space at once, and the paper reports that not working.\n\n**Stage one** trains it against the frozen image encoder alone, with three objectives borrowed from BLIP — image-text contrastive learning, image-grounded text generation and image-text matching — selected by different attention masks. This teaches the queries to extract text-relevant visual content with no language model involved.\n\n**Stage two** connects the language model and trains generatively, so the queries learn to render what they already extract into a form the frozen decoder can consume.\n\nThat representation learning and modality bridging are separable is the paper's substantive finding, and it is why the recipe transfers."
+   },
+   {
+    "h": "Modularity, and the narrow channel",
+    "b": "Because both towers stay frozen and unmodified, any image encoder can be paired with any language model, and a better decoder can be swapped in by retraining only the bridge. That is what made BLIP-2 the template — a great many models since are an encoder, a projector and an LLM.\n\nThirty-two query vectors is a thin channel for an image: enough for describing a scene, thin for questions needing detail, and the number is a hyperparameter with an obvious trade. The frozen encoder remains the perception ceiling, so small text, precise counting and fine spatial detail stay weak.\n\nWhat BLIP-2 does not have is instruction following. It captions and answers in the format it was trained on rather than doing what it is asked, which is exactly the gap LLaVA's visual instruction tuning fills — and LLaVA simplifies the bridge further, to a linear projection, on the finding that the data mattered more than the module."
+   }
+  ],
+  "refs": [
+   {
+    "t": "BLIP-2: Bootstrapping Language-Image Pre-training with Frozen Image Encoders and Large Language Models",
+    "y": 2023
+   },
+   {
+    "t": "Flamingo: a Visual Language Model for Few-Shot Learning",
+    "y": 2022
+   },
+   {
+    "t": "BLIP: Bootstrapping Language-Image Pre-training for Unified Vision-Language Understanding and Generation",
+    "y": 2022
+   }
+  ]
+ },
+ "blip2>llava": {
+  "lead": "BLIP-2 built a careful bridge between two frozen towers and produced a model that captions and answers questions in its training format. LLaVA's finding is that the missing piece was not the bridge but the data — a linear projection suffices, provided the model is then tuned on instructions a language model generated.",
+  "blocks": [
+   {
+    "h": "The bridge, simplified",
+    "b": "The Q-Former is replaced by a single linear layer — later a two-layer MLP — mapping CLIP ViT patch features into the language model's embedding space, where they are prepended as soft tokens.\n\nNo learned queries, no cross-attention, no two-stage bridge training. The implicit claim is that a well-trained vision encoder's features are already close to usable and the projection only changes coordinates.\n\nThat this works is the surprising half of the result, and it is why the architecture became the default: it is the simplest thing that could work, and it moves the effort to where the paper argues it belongs."
+   },
+   {
+    "h": "Instruction data from a text-only teacher",
+    "b": "Image-text pairs are captions, which teach a model to describe rather than to converse or follow instructions.\n\nLLaVA builds instruction data by prompting a text-only GPT-4 with an image's **symbolic** representation — its captions and its object bounding boxes — and asking for conversations, detailed descriptions and reasoning questions about a picture it cannot see. The instructions are then paired back to the image.\n\nThree types are produced deliberately, and the ablation shows the reasoning subset contributing most on the harder benchmarks. Training runs in two stages: the projection alone on caption pairs to align the spaces, then the projection **and the language model** on the instruction data. Unfreezing the decoder is what BLIP-2 declines to do, and it is what buys the conversational behaviour."
+   },
+   {
+    "h": "Cheap, and circular to evaluate",
+    "b": "The recipe trains in hours on a single node, which is why the open vision-language ecosystem is built on it rather than on BLIP-2's.\n\nThe instruction data's quality is bounded by what the annotations conveyed — the teacher worked from captions and boxes, so anything they omitted cannot appear, and the teacher's hallucinations become training targets. The frozen CLIP encoder remains the perception ceiling, so small text and precise counting stay weak.\n\nEvaluation is the harder problem. LLaVA is scored partly by GPT-4 comparing its answers to reference ones, which is convenient and circular given the same model family generated the training data. The paper is aware of it and the field has not resolved it — which is worth recording, because a great many results downstream rest on the same measurement."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Visual Instruction Tuning",
+    "y": 2023
+   },
+   {
+    "t": "BLIP-2: Bootstrapping Language-Image Pre-training with Frozen Image Encoders and Large Language Models",
+    "y": 2023
+   },
+   {
+    "t": "Improved Baselines with Visual Instruction Tuning",
+    "y": 2024
+   }
+  ]
+ },
+ "llava>gpt4v": {
+  "lead": "LLaVA and everything before it attach vision to a language model after the fact — a frozen encoder, a projector, and a decoder trained on text alone. GPT-4V and Gemini are trained on interleaved modalities from the start, which removes the seam and, at the same time, removes any way to check the claim.",
+  "blocks": [
+   {
+    "h": "What the bridged design assumes",
+    "b": "In LLaVA the boundary is explicit. A CLIP encoder trained on image-text pairs produces features; a projection converts them; a language model trained on text consumes them. Each stage was optimised for something other than the whole, and the visual features are extracted before the question is known.\n\nTraining on interleaved image and text data from the beginning means no stage is retrofitted. The representation is shaped by both modalities throughout, and Gemini's report states this as a design principle, extending it to audio and video.\n\nThe claimed benefit is on tasks where the modalities must interact tightly — reading a chart, following a diagram, reasoning about a screenshot — precisely where a bridged model's pre-extracted features are least adequate."
+   },
+   {
+    "h": "What can be observed from outside",
+    "b": "Both systems are substantially better than the open bridged models on document understanding, chart and diagram reasoning, and reading text embedded in images. Those are the failure cases a frozen CLIP encoder is known to have, since its patch resolution and contrastive training do not preserve small text.\n\nThey are also markedly better at multi-image and interleaved reasoning, which follows from having been trained on that format rather than on caption pairs.\n\nWhere they remain weak is where every model in this lane is: precise counting, fine spatial relations, and confident hallucination of detail not present in the image."
+   },
+   {
+    "h": "What cannot",
+    "b": "The weights are closed, the training data is undisclosed, and the architecture is described in outline. The published system cards report evaluations and safety mitigations rather than method.\n\nSo the claim that native multimodal pretraining beats bridging is plausible and not independently checkable. The comparison is against models trained with vastly less compute on public data, so the training regime and the resource level cannot be separated from outside. Benchmark contamination cannot be ruled out without knowing the data, and much of the comparison is on benchmarks the open models were developed against.\n\nThis arrow therefore marks where the lane's frontier moves behind closed doors — a fact about the field rather than a criticism of the work. The open line continues along the bridged path with better encoders, higher input resolutions and more instruction data, and closes part of the measurable gap. Whether the remainder is the regime or the compute is an open question, and is better left stated than settled."
+   }
+  ],
+  "refs": [
+   {
+    "t": "GPT-4 Technical Report",
+    "y": 2023
+   },
+   {
+    "t": "Gemini: A Family of Highly Capable Multimodal Models",
+    "y": 2023
+   },
+   {
+    "t": "Visual Instruction Tuning",
+    "y": 2023
+   }
+  ]
+ }
 }

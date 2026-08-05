@@ -229,3 +229,21 @@ html, body { overscroll-behavior: none; }
   @keyframes gx-toast-in { from { opacity: 0; } to { opacity: 1; } }
   .gx-toast { animation-duration: 1ms; }
 }
+
+/* A display formula can be wider than the panel, which is 372px by default —
+   an actor loss with three named terms under braces certainly is. It scrolls
+   inside its own box rather than being cut off at the panel edge, the same
+   rule wide content follows everywhere else here. `contain` stops that scroll
+   chaining into the panel and then into the sheet behind it. */
+.gx-tex-display {
+  display: block;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 2px;
+}
+/* centred while it fits; left-aligned once it does not, or the start of the
+   formula is the part that ends up off-screen */
+.gx-tex-display > .katex-display { text-align: initial; }
+.gx-tex-display > .katex-display > .katex { text-align: initial; }

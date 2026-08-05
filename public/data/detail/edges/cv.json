@@ -134,7 +134,7 @@
   "lead": "VGG bought accuracy with parameters, most of them in a dense head doing little visual work. GoogLeNet asked what could be had at a fixed budget instead, and answered with two moves: a $1\\times1$ convolution that reduces channel depth before any expensive kernel runs, and global average pooling in place of the fully connected classifier.",
   "blocks": [
    {
-    "h": "The $1\\times1$ convolution as a bottleneck",
+    "h": "The one-by-one convolution as a bottleneck",
     "b": "A $1\\times1$ convolution has no spatial extent; it is a learned linear map across channels applied at every position. Placed before a $3\\times3$ or $5\\times5$ kernel it cuts the channel count that kernel has to consume, and the saving is multiplicative.\n\nFor $C_{\\text{in}} = 256$ channels into a $5\\times5$ convolution producing $C_{\\text{out}} = 128$, the direct cost per position is $5^2 \\times 256 \\times 128 \\approx 819\\mathrm{K}$ multiply-accumulates. Reducing to $64$ channels first costs $256 \\times 64 = 16\\mathrm{K}$ and leaves $5^2 \\times 64 \\times 128 \\approx 205\\mathrm{K}$ — under a third of the original, for one extra layer.\n\nThe Inception module spends the saving on width: parallel $1\\times1$, $3\\times3$, $5\\times5$ and pooling branches, concatenated, so one block sees several scales at once instead of committing to a kernel size."
    },
    {

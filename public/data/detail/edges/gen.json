@@ -834,7 +834,7 @@
     "b": "DDPM's step is $x_t = \\sqrt{1-\\beta_t}\\, x_{t-1} + \\sqrt{\\beta_t}\\, \\epsilon$, which shrinks the signal as it adds noise so the total variance stays bounded. Taking the number of steps to infinity gives\n\n$$d\\mathbf{x} = -\\tfrac{1}{2}\\beta(t)\\, \\mathbf{x}\\, dt + \\sqrt{\\beta(t)}\\; d\\mathbf{w}$$\n\nThe drift term is what distinguishes it from NCSN's: it pulls the state towards the origin at the same rate noise is injected, so the marginal converges to a standard Gaussian rather than a very wide one. Hence **variance preserving**.\n\nWith the two named as neighbouring choices in one family, the paper is able to propose a third — sub-VP — that improves likelihoods, which is the sort of move the discrete formulations made hard to see."
    },
    {
-    "h": "$\\epsilon$-prediction is score estimation",
+    "h": "Noise prediction is score estimation",
     "b": "DDPM trains $\\epsilon_\\theta$ to predict the noise added at step $t$. Because the perturbation is Gaussian with known variance, the score of the noised marginal is\n\n$$\\nabla_{x} \\log p_t(x) = -\\frac{\\epsilon_\\theta(x, t)}{\\sqrt{1 - \\bar\\alpha_t}}$$\n\nso the two derivations produce the same network up to a scale factor. This is the formal statement of a coincidence the field had noticed empirically: DDPM and NCSN, derived from a variational bound and from score matching respectively, arrive at the same algorithm because they are estimating the same object.\n\nAfter this paper the distinction between \"diffusion models\" and \"score-based models\" stops being meaningful, and the literature uses the terms interchangeably."
    },
    {
