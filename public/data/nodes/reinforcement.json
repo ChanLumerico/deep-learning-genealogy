@@ -313,16 +313,42 @@
  },
  {
   "id": "dreamer",
-  "n": "Dreamer v1–v3",
-  "y": 2023,
-  "org": "DeepMind · Toronto",
-  "c": "backprop through latent rollouts",
+  "n": "Dreamer",
+  "y": 2020,
+  "org": "Google Brain · Toronto",
+  "c": "actor and critic inside the model",
   "lane": "rl",
   "tr": "plan",
   "s": "M",
   "p": "Planning every step, with no value past the horizon",
-  "i": "Propagate value gradients through RSSM imagination",
-  "l": "Compounding model error; depends on visual observation"
+  "i": "Analytic value gradients through imagined rollouts",
+  "l": "Gaussian latents; not accurate enough for Atari"
+ },
+ {
+  "id": "dreamer2",
+  "n": "Dreamer-v2",
+  "y": 2021,
+  "org": "Google Research · Toronto",
+  "c": "categorical latents, KL balanced",
+  "lane": "rl",
+  "tr": "plan",
+  "s": "S",
+  "p": "World models were not accurate enough for Atari",
+  "i": "Replace Gaussian latents with 32 categoricals",
+  "l": "Every new domain still needs its own tuning"
+ },
+ {
+  "id": "dreamer3",
+  "n": "Dreamer-v3",
+  "y": 2023,
+  "org": "Google DeepMind · Toronto",
+  "c": "one configuration, every domain",
+  "lane": "rl",
+  "tr": "plan",
+  "s": "S",
+  "p": "Every new domain needed its own hyperparameters",
+  "i": "symlog, two-hot and free bits make scales comparable",
+  "l": "All behaviour still comes from inside the model"
  },
  {
   "id": "cql",

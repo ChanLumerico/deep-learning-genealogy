@@ -1101,6 +1101,20 @@
   "hi": false
  },
  {
+  "f": "dreamer",
+  "t": "dreamer2",
+  "k": "direct",
+  "l": "Gaussian latents → 32 categoricals, KL balanced",
+  "hi": false
+ },
+ {
+  "f": "dreamer2",
+  "t": "dreamer3",
+  "k": "direct",
+  "l": "tuned per domain → one fixed configuration",
+  "hi": false
+ },
+ {
   "f": "sac",
   "t": "cql",
   "k": "direct",

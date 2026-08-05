@@ -988,8 +988,8 @@
     "b": "This is the substantive fix, and Dreamer's ablation isolates it. PlaNet sums predicted rewards over $H$ steps and stops; anything beyond $H$ is invisible, and extending $H$ only gives compounding model error more room to work.\n\nA critic changes the arithmetic. The imagined rollout is truncated at $H$ as before, but the last state is scored by a learned value rather than by nothing, so returns from beyond the horizon are folded back in. Sweeping the horizon from ten steps to forty, PlaNet's score depends sharply on where it is set while Dreamer's does not — learning a state value to estimate rewards beyond the imagination horizon is what makes it robust.\n\nAnd deciding becomes a forward pass. The actor is queried once per step; the search that cost $I \\times J$ rollouts per action is gone."
    },
    {
-    "h": "What v3 fixed, and what remains",
-    "b": "The first versions worked and needed per-domain tuning, which for a method claiming generality is the substantive objection. DreamerV3 is mostly about scale invariance: a **symlog** transform on rewards and reconstruction targets so signals differing by orders of magnitude become comparable, **two-hot** distributional prediction of values and rewards instead of scalar regression, and KL terms clipped below a floor. One configuration then handles continuous control, Atari, and collecting diamonds in Minecraft from scratch.\n\nThe ceiling is unchanged. Everything the actor learns comes from imagined rollouts, so a systematic model error becomes a systematic policy error, and the optimiser actively seeks the model's mistakes — the exploitation problem World Models met and answered with noise. Dreamer bounds it with a short imagination horizon and continual refitting, which is mitigation rather than a solution. And the reconstruction objective spends capacity on visual detail whether or not control needs it, which is exactly what MuZero's value-equivalent model avoids by never reconstructing anything."
+    "h": "What it bought, and where it stopped",
+    "b": "On the DeepMind Control Suite the result is decisive: Dreamer exceeds D4PG's final performance on far less experience, with one configuration across the suite, and deciding is a single forward pass instead of a search.\n\nWhat did not change is the world model. The RSSM, the Gaussian stochastic state and the reconstruction objective are PlaNet's, unaltered — and Atari, where model-free agents still held the 200M-step benchmark, stayed out of reach. The versions after this one are about the model rather than the behaviour, which is the clearest evidence that this step had taken the behaviour side as far as it went."
    }
   ],
   "refs": [
@@ -1004,6 +1004,64 @@
    {
     "t": "Learning Latent Dynamics for Planning from Pixels",
     "y": 2019
+   }
+  ]
+ },
+ "dreamer>dreamer2": {
+  "lead": "Dreamer had settled how to learn behaviour inside a world model. What it had not settled was whether the model could be accurate enough for a benchmark where model-free agents were strong. DreamerV2 answers by changing a single component — the distribution the stochastic state is drawn from — and nothing else.",
+  "blocks": [
+   {
+    "h": "Why the Gaussian was the suspect",
+    "b": "A diagonal Gaussian latent has to commit to one mean and one spread. When the next frame could plausibly be one of several distinct things — a sprite appears or does not, a block is destroyed or is not — the best a Gaussian can do is sit between them, and the decoder renders the average of futures that never co-occur.\n\nThe formal version of the complaint is about mixtures. Aggregate the posteriors across a dataset and a categorical prior can match the result exactly, because a mixture of categoricals is a categorical. A Gaussian prior cannot match a mixture of Gaussians. Continuous control mostly has one smooth future and tolerates this; Atari does not."
+   },
+   {
+    "h": "One change, held to one change",
+    "b": "The stochastic state becomes 32 categorical variables with 32 classes each, sampled with straight-through gradients so the discreteness does not break the backward pass. KL balancing is added alongside, weighting the KL's pull towards the prior at $\\alpha = 0.8$ against $1 - \\alpha$ towards the posterior.\n\nEverything else is held fixed. The deterministic recurrent path, the encoder and decoder, the actor and critic trained on imagined $\\lambda$-returns — all as in Dreamer. That discipline is what makes the ablation mean something: categorical latents win on 42 tasks, lose on 8, tie on 5, with the rest of the agent constant."
+   },
+   {
+    "h": "A result that outran its explanation",
+    "b": "DreamerV2 becomes the first agent learning purely inside a world model to reach human-level gamer-normalised median on the 55-game Atari benchmark, beating Rainbow and IQN on a single GPU.\n\nAnd the paper declines to claim it understands why. It lists four hypotheses — the mixture argument above, the sparsity of a 1024-bit vector with 32 bits set, the straight-through estimator dropping a term that would otherwise scale gradients, and robustness to unbounded inputs — and prefaces them with the sentence that they do not know.\n\nIt is worth noticing how often this line advances that way. PlaNet named latent overshooting as a contribution and Dreamer found it unnecessary; DreamerV2 finds the change that works and cannot say what it fixed."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Mastering Atari with Discrete World Models",
+    "y": 2021
+   },
+   {
+    "t": "Dream to Control: Learning Behaviors by Latent Imagination",
+    "y": 2020
+   },
+   {
+    "t": "Categorical Reparameterization with Gumbel-Softmax",
+    "y": 2017
+   }
+  ]
+ },
+ "dreamer2>dreamer3": {
+  "lead": "DreamerV2 used one KL scale for Atari and another for continuous control, among other differences, and every version before it had needed the same kind of adjustment. An agent that must be told what kind of world it is entering is not general. DreamerV3 attacks that directly and changes no architecture at all.",
+  "blocks": [
+   {
+    "h": "The tuning was a scale problem",
+    "b": "Domains differ in the magnitude of the numbers they produce far more than in their structure. Rewards that are a handful of points per episode and rewards in the tens of thousands both go into a squared loss, and the second overwhelms it; frequencies of reward, ranges of return and reconstruction magnitudes all vary the same way.\n\nSo per-domain hyperparameters were mostly compensating for scale rather than encoding anything about the domain. If the representation of a quantity is made scale-free, the constant that was correcting for it stops being needed — which is why nothing structural has to change."
+   },
+   {
+    "h": "Four transformations, no new components",
+    "b": "**Symlog** compresses predicted magnitudes and behaves like the identity near zero. **Symexp two-hot** replaces regression on rewards and returns with a softmax over exponentially spaced bins, read out as a weighted average, so any value is expressible and no outlier can drag the loss. **Free bits** clip the dynamics and representation losses below 1 nat so effort moves to the prediction loss once they are small. **Percentile return normalisation** scales by the 5th-to-95th range rather than by extremes.\n\nEach is a change to how a number reaches a loss. None adds a module or alters the RSSM, which still carries the categorical latents DreamerV2 introduced."
+   },
+   {
+    "h": "What one configuration turned out to reach",
+    "b": "With hyperparameters fixed, Dreamer beats tuned expert algorithms across Control Suite, Atari, ProcGen, DMLab and Minecraft, over budgets from 100K to 100M steps — and collects diamonds in Minecraft from scratch, without human data or curricula, which no method had done.\n\nThe scaling behaviour deserves as much attention: larger models score higher *and* need less interaction to get there. Capacity and sample efficiency usually trade against each other in reinforcement learning, and here they do not.\n\nThe ceiling is untouched. Behaviour is still learned only from imagined rollouts, so the actor is still free to find and exploit the model's errors, and the objective still reconstructs pixels — the two things this whole line has carried since 2018."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Mastering Diverse Domains through World Models",
+    "y": 2023
+   },
+   {
+    "t": "Mastering Atari with Discrete World Models",
+    "y": 2021
    }
   ]
  }

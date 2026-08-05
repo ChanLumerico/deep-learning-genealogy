@@ -632,6 +632,12 @@
  "dreamer": {
   "t": "Dream to Control: Learning Behaviors by Latent Imagination"
  },
+ "dreamer2": {
+  "t": "Mastering Atari with Discrete World Models"
+ },
+ "dreamer3": {
+  "t": "Mastering Diverse Domains through World Models"
+ },
  "cql": {
   "t": "Conservative Q-Learning for Offline Reinforcement Learning"
  },

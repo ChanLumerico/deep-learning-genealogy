@@ -764,23 +764,23 @@
   ]
  },
  "dreamer": {
-  "lead": "World Models trained a tiny controller by evolution inside a frozen dynamics model. Dreamer keeps the latent world model and makes it differentiable end to end — the policy gradient flows backwards through imagined rollouts into the actor — which turns the idea into a method competitive with the model-free state of the art.",
+  "lead": "PlaNet's model was good enough that searching it beat model-free agents on a fraction of the data, but every decision cost a search and nothing beyond the planning horizon existed. Dreamer keeps the state model exactly as it was and replaces the planner with an actor and a critic trained entirely on trajectories imagined inside it.",
   "blocks": [
    {
-    "h": "The recurrent state-space model",
-    "b": "The world model carries a state with two parts: a deterministic recurrent component $h_t$ and a stochastic component $z_t$ sampled from a learned distribution. The split matters. A purely deterministic model cannot represent uncertainty about what happens next; a purely stochastic one struggles to remember information over long horizons, since noise is injected at every step.\n\nTraining maximises a variational bound with three reconstruction terms — observation, reward and episode continuation — plus a KL between the **posterior** state, which sees the current observation, and the **prior** state, which must predict it without. That KL term is the one that matters for planning: it is what forces the model to be able to imagine forward without seeing anything."
+    "h": "Analytic gradients through a learned model",
+    "b": "A model-free actor is scored on returns it actually collected, and the gradient has to be estimated from those samples. Dreamer's model is differentiable, so it need not be.\n\nFrom each encoded real state the model is rolled forward $H = 15$ steps under the current actor. The critic scores the imagined states, and that value is differentiated **through the dynamics** back into the actor's parameters — the same advantage the deterministic policy gradient has over REINFORCE, extended across a multi-step rollout rather than one step.\n\nThe two are trained on the same imagined trajectories: the actor to maximise the value estimate, the critic to regress onto it. Real experience is used only to fit the world model."
    },
    {
-    "h": "Backpropagating through imagination",
-    "b": "Once the dynamics are differentiable, the actor need not be trained by sampling returns. Dreamer rolls the model forward from encoded real states for a fixed horizon, evaluates the imagined trajectory with a learned critic, and differentiates that value **through the dynamics** with respect to the actor's parameters.\n\nThe gradient is analytic rather than an estimate — the same advantage the deterministic policy gradient has over REINFORCE, extended over a multi-step imagined rollout. The critic is trained on imagined trajectories too, with $\\lambda$-returns balancing bias against variance.\n\nEnvironment interaction is then only needed to keep the model honest, which is where the sample efficiency comes from: a few hundred thousand real steps for tasks that model-free methods need tens of millions for."
+    "h": "A value beyond the horizon",
+    "b": "The critic is what removes PlaNet's wall. Truncating an imagined rollout at $H$ steps and summing rewards means anything past $H$ is invisible; truncating it and then scoring the final state with a learned value folds the rest of the future back in.\n\nThe targets are $\\lambda$-returns rather than plain $H$-step sums, mixing horizons geometrically with $\\lambda = 0.95$ and $\\gamma = 0.99$, so a single bad long-range estimate is not the whole signal.\n\nDreamer's own ablation sweeps the imagination horizon from ten steps to forty. PlaNet's score depends sharply on where it is set; Dreamer's barely moves. That flatness is the contribution, stated as a graph."
    },
    {
-    "h": "What v3 changed",
-    "b": "The first two versions worked well and needed per-domain tuning, which for a method claiming generality is the substantive objection. DreamerV3's contribution is mostly about scale invariance, so that one hyperparameter set works everywhere.\n\nA **symlog** transformation, $\\mathrm{sign}(x)\\log(|x|+1)$, is applied to rewards and to reconstruction targets, so signals differing by orders of magnitude across domains are compressed into a comparable range. Values and rewards are predicted as **two-hot** distributions over a fixed set of bins rather than as scalars, which makes the regression robust to outliers. KL terms are clipped below a floor, so the model does not spend capacity driving an already-small divergence to zero.\n\nWith those, one configuration handles continuous control, Atari, and — the headline — collecting diamonds in Minecraft from scratch, a long-horizon sparse-reward task with no curriculum."
+    "h": "What it inherited unchanged",
+    "b": "It is worth being precise about how little of the model changed. The RSSM is PlaNet's, with the same deterministic recurrent path and Gaussian stochastic state, and the same reconstruction objective. Dreamer's paper reports that it \"did not find latent overshooting for learning the model, an entropy bonus for the action model, or target networks for the value model necessary\" — the multi-step objective PlaNet had named as its own second contribution was quietly dropped.\n\nSo the step from PlaNet to Dreamer is not a better world model. It is the same world model with the search taken out and a policy put in."
    },
    {
-    "h": "The model is still the ceiling",
-    "b": "Everything the actor learns comes from imagined rollouts, so a systematic model error becomes a systematic policy error, and the optimiser actively seeks out the model's mistakes — the exploitation problem World Models met and answered with noise.\n\nDreamer bounds it by keeping the imagination horizon short and by continually refitting the model on fresh data, which is mitigation rather than a solution. And the reconstruction objective spends capacity on visual detail regardless of whether it matters for control, which is exactly the criticism MuZero's value-equivalent model avoids by never reconstructing anything.\n\nThe two therefore represent the fork in model-based RL: reconstruct the world and plan in it, or learn only what planning consumes."
+    "h": "Where it stopped",
+    "b": "On the DeepMind Control Suite, Dreamer exceeds D4PG's final performance while using far less experience, and it does so with a single configuration across those tasks.\n\nAtari was another matter. World models had not been accurate enough to compete on the 200M-step benchmark against model-free agents, and Dreamer did not change that — the domain has discrete actions, sticky-action stochasticity, and visual detail that a Gaussian latent predicting one blurred future handles badly. The next version's entire argument is that the shape of the latent variable was the thing standing in the way."
    }
   ],
   "refs": [
@@ -789,12 +789,12 @@
     "y": 2020
    },
    {
-    "t": "Mastering Diverse Domains through World Models",
-    "y": 2023
-   },
-   {
     "t": "Learning Latent Dynamics for Planning from Pixels",
     "y": 2019
+   },
+   {
+    "t": "Continuous Control with Deep Reinforcement Learning",
+    "y": 2016
    }
   ]
  },
@@ -1024,6 +1024,76 @@
    {
     "t": "Deep Reinforcement Learning in a Handful of Trials using Probabilistic Dynamics Models",
     "y": 2018
+   }
+  ]
+ },
+ "dreamer2": {
+  "lead": "Dreamer worked on continuous control and could not touch Atari, where model-free agents had held the benchmark for years. DreamerV2 changes one thing about the world model — the shape of its stochastic state — and becomes the first agent trained purely inside a learned model to reach human-level Atari performance.",
+  "blocks": [
+   {
+    "h": "Thirty-two categoricals instead of a Gaussian",
+    "b": "PlaNet and Dreamer both draw the stochastic part of the state from a diagonal Gaussian. DreamerV2 replaces it with a vector of 32 categorical variables of 32 classes each, sampled with straight-through gradients.\n\nFlattened, that is a sparse binary vector of length 1024 with exactly 32 bits set. Nothing else about the architecture moves: the same deterministic recurrent path, the same encoder and decoder, the same actor and critic trained in imagination.\n\nThe paper's stated reason for expecting this to help is about mixtures. A categorical prior can fit an aggregate of categorical posteriors exactly, because a mixture of categoricals is again a categorical; a Gaussian prior cannot fit a mixture of Gaussians, so a model that must predict which of several things happens next is forced to average them. Atari is full of such moments."
+   },
+   {
+    "h": "KL balancing",
+    "b": "The world-model loss is the ELBO of a sequential latent-variable model, and its KL term is doing two jobs at once: training the prior to predict the posterior, and holding the posterior close to what the prior can express. Those pull in opposite directions, and the second one throws away information about the image.\n\nKL balancing gives the two directions different learning rates — $\\alpha = 0.8$ towards the prior and $1 - \\alpha$ towards the posterior — so the prior is pulled towards the representation much harder than the representation is pulled towards the prior.\n\nThe effect is to prefer an accurate prior over a low-entropy posterior. Since the prior is exactly the thing that has to imagine forward without seeing the next frame, that is the direction worth spending the loss on."
+   },
+   {
+    "h": "The result, and the admission",
+    "b": "On the 55-game Atari benchmark with sticky actions at 200M steps, DreamerV2 reaches human-level gamer-normalised median score and beats the top single-GPU agents Rainbow and IQN — the first time an agent learning purely within a world model had done so.\n\nThe ablation is unusually candid. Categorical latents beat Gaussian ones on 42 tasks, lose on 8 and tie on 5, and then the paper says plainly: **\"While we do not know the reason why the categorical variables are beneficial, we state several hypotheses that can be investigated in future work.\"** Four follow — mixtures, sparsity, the straight-through estimator dropping a gradient-scaling term, and robustness to unbounded inputs.\n\nA central design decision that clearly works and is explicitly not understood is worth recording as exactly that."
+   },
+   {
+    "h": "Still one benchmark at a time",
+    "b": "What remains is the thing the version numbers keep circling. DreamerV2's KL scale is $\\beta = 0.1$ for Atari and $\\beta = 1.0$ for continuous control, and that is one of several settings that differ between the two domains.\n\nAn agent that needs to be told which kind of world it is in before it starts is not yet general, whatever its scores. That objection is the whole subject of the version after it."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Mastering Atari with Discrete World Models",
+    "y": 2021
+   },
+   {
+    "t": "Dream to Control: Learning Behaviors by Latent Imagination",
+    "y": 2020
+   },
+   {
+    "t": "Neural Discrete Representation Learning",
+    "y": 2017
+   }
+  ]
+ },
+ "dreamer3": {
+  "lead": "Every version so far had to be retuned for the domain it was pointed at, which for a method whose claim is generality is the objection that matters. DreamerV3 changes no architecture. It changes how quantities are represented to the loss, so that signals differing by orders of magnitude become comparable — and one fixed configuration then works across more than 150 tasks.",
+  "blocks": [
+   {
+    "h": "Making magnitudes comparable",
+    "b": "Rewards in one domain are a few points per episode and in another are tens of thousands. A squared loss on raw values makes the second dominate; scaling per domain fixes it and is exactly the tuning being objected to.\n\nDreamerV3 predicts through a **symlog** transform, a signed logarithm that compresses large magnitudes and approximates the identity near zero, so small targets are unaffected and large ones stop dominating the gradient.\n\nFor stochastic targets — rewards and returns — it goes further and gives up regression altogether. The network outputs logits over exponentially spaced bins and the prediction is read out as a **two-hot** weighted average of bin positions, so any continuous value is still expressible while the loss is a cross-entropy that cannot be dragged by an outlier."
+   },
+   {
+    "h": "Free bits and percentile returns",
+    "b": "Two more of the same kind. The dynamics and representation losses are clipped below **1 nat** — free bits — which switches them off once they are already small so the optimiser stops buying accuracy on an easy term. Without it there is a degenerate solution where the dynamics become trivially predictable by carrying no information about the input.\n\nReturn normalisation is scaled by the range from the **5th to the 95th percentile** of returns in the batch, smoothed by an exponential moving average. The paper is explicit that this differs from the usual practice of normalising advantages: normalising advantages puts a fixed amount of emphasis on maximising returns regardless of how much they actually vary, which is wrong in exactly the sparse-reward domains this is for.\n\nEach of these is small. Together they are what the paper means by robustness."
+   },
+   {
+    "h": "One configuration, and a diamond",
+    "b": "With hyperparameters fixed across every domain, Dreamer outperforms tuned expert algorithms across Control Suite, Atari, ProcGen, DMLab and Minecraft, at data budgets from 100K to 100M steps.\n\nThe headline is Minecraft. Applied out of the box, it is the first algorithm to collect diamonds from scratch **without human data or curricula** — a task requiring a long sequence of prerequisite steps discovered from sparse reward in an open world, and one that every previous approach had solved only with demonstrations or hand-built task decompositions.\n\nThe scaling result is quieter and may matter more: larger models not only score higher but need *less* interaction to reach a given score, which makes capacity and sample efficiency point the same way rather than trading off."
+   },
+   {
+    "h": "The model is still the ceiling",
+    "b": "Everything the actor learns comes from rollouts imagined inside the world model, and the optimiser is actively searching for the highest-value trajectory it can find — including trajectories that are only high-value because the model is wrong about them. This is the exploitation problem World Models named in 2018 and answered with injected noise; Dreamer bounds it with a short horizon and continual refitting, which is mitigation rather than a cure.\n\nAnd the objective still reconstructs pixels, so representation capacity is spent on visual detail in proportion to how much of the image it occupies rather than how much control depends on it. MuZero's answer — never reconstruct, and require only that the latent predict reward, value and policy — remains the standing alternative, and the two lines have not been reconciled."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Mastering Diverse Domains through World Models",
+    "y": 2023
+   },
+   {
+    "t": "Mastering Atari with Discrete World Models",
+    "y": 2021
+   },
+   {
+    "t": "Mastering Atari, Go, Chess and Shogi by Planning with a Learned Model",
+    "y": 2020
    }
   ]
  }
