@@ -61,6 +61,31 @@ export const isAuthFragment = (hash: string) =>
   /[#&](access_token|refresh_token|provider_token|error_code|error_description)=/
     .test(String(hash ?? ''))
 
+/**
+ * The message a provider sent back when it refused, or null.
+ *
+ * A failed sign-in returns to the site with the reason in the URL and nothing
+ * else — no session, no console error. Left unread it looks exactly like a
+ * sign-in that quietly did nothing, which is the failure mode this whole
+ * feature has already produced once. It arrives in the fragment or the query
+ * depending on where the flow broke, so both are searched.
+ */
+export function authError(href: string): string | null {
+  const raw = String(href ?? '')
+  const hash = raw.slice(raw.indexOf('#') + 1)
+  const q = raw.includes('?') ? raw.slice(raw.indexOf('?') + 1).split('#')[0] : ''
+  for (const part of [hash, q]) {
+    const p = new URLSearchParams(part)
+    const desc = p.get('error_description') || p.get('error_code') || p.get('error')
+    if (desc) {
+      // providers send these plus-encoded and sentence-less
+      const text = desc.replace(/\+/g, ' ').trim()
+      return text.charAt(0).toUpperCase() + text.slice(1)
+    }
+  }
+  return null
+}
+
 const list = (v: string | null) =>
   (v ?? '').split(',').map((s) => s.trim()).filter((s) => ID.test(s)).sort()
 

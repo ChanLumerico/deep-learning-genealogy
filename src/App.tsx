@@ -22,7 +22,7 @@ import { exportReadingCsv } from './export/csv'
 import { useViewport } from './view/useViewport'
 import { useCamera, ZOOM } from './view/useCamera'
 import { useUrlState } from './view/useUrlState'
-import { parseHash, toHash } from './view/url'
+import { authError as urlAuthError, parseHash, toHash } from './view/url'
 import { ancestry, clampStep, steps } from './view/walk'
 import { allPaths } from './view/walk'
 import type { Step, WalkCourse } from './view/walk'
@@ -140,6 +140,18 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
   // sign-in button lives. Otherwise supabase-js is never fetched at all.
   const [authWanted, setAuthWanted] = useState(() => accountNeededNow())
   useEffect(() => { if (listOpen) setAuthWanted(true) }, [listOpen])
+
+  // A provider that refuses sends the reason back on the URL and nothing else.
+  // Unread it is indistinguishable from a sign-in that did nothing at all.
+  useEffect(() => {
+    const err = urlAuthError(window.location.href)
+    if (!err) return
+    notify(err, 'bad')
+    const u = new URL(window.location.href)
+    for (const k of ['error', 'error_code', 'error_description']) u.searchParams.delete(k)
+    if (/[#&](error|error_code|error_description)=/.test(u.hash)) u.hash = ''
+    window.history.replaceState(window.history.state, '', u.toString())
+  }, [notify])
   useEffect(() => { if (account) { setSignInOpen(false); setAuthError(null) } }, [account])
 
   const doSignIn = useCallback((p: Provider) => {

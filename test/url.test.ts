@@ -4,7 +4,7 @@
 // client or edited by hand.
 
 import { describe, expect, it } from 'vitest'
-import { EMPTY, isAuthFragment, isNavigation, parseHash, sameUrl, toHash } from '../src/view/url'
+import { EMPTY, authError, isAuthFragment, isNavigation, parseHash, sameUrl, toHash } from '../src/view/url'
 import type { UrlState } from '../src/view/url'
 
 const state = (over: Partial<UrlState> = {}): UrlState => ({ ...EMPTY, ...over })
@@ -155,5 +155,29 @@ describe('an auth redirect owns the fragment', () => {
   it('is not fooled by a model whose name contains the word', () => {
     // matched with a leading # or &, so a path segment cannot trip it
     expect(isAuthFragment('#/node/accesstoken')).toBe(false)
+  })
+})
+
+// A provider that refuses puts the reason on the URL and nothing else — no
+// session, no console error. Unread, it looks exactly like a sign-in that
+// quietly did nothing, which this feature has already produced once.
+describe('a provider that refuses', () => {
+  it('reads the reason from the fragment', () => {
+    expect(authError('https://x/#error=server_error&error_description=Unsupported+provider'))
+      .toBe('Unsupported provider')
+  })
+
+  it('reads it from the query too, wherever the flow broke', () => {
+    expect(authError('https://x/?error_description=Database+error+saving+new+user'))
+      .toBe('Database error saving new user')
+  })
+
+  it('falls back to the code when there is no description', () => {
+    expect(authError('https://x/#error_code=403')).toBe('403')
+  })
+
+  it('finds nothing in an ordinary link', () => {
+    for (const u of ['https://x/', 'https://x/#/node/resnet', 'https://x/?code=abc'])
+      expect(authError(u)).toBe(null)
   })
 })
