@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  CANVAS, EDGE_KINDS, EDGE_KIND_KEYS, EdgeStyle, LANES, NodeStyle, TICK_YEARS, TIME, TimeScale,
+  CANVAS, EDGE_KINDS, EDGE_KIND_KEYS, EdgeStyle, LANES, NodeStyle, TICK_YEARS, TIME,
   LayoutEngine,
 } from './layout'
 import type { EdgeKindKey, EdgeModel, Genealogy, LaneId, NodeModel } from './layout'
@@ -95,7 +95,6 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
   // filters
   const [lanesOff, setLanesOff] = useState<Record<string, boolean>>({})
   const [kindsOff, setKindsOff] = useState<Record<string, boolean>>({})
-  const [timeX, setTimeX] = useState(5420)
   const [query, setQuery] = useState('')
 
   // selection
@@ -268,8 +267,6 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
     return null
   }, [graph, sel, selE])
 
-  const yearMax = useMemo(() => TIME.yearAt(timeX), [timeX])
-
   /** the chain being walked, its title, and the alternating steps over it */
   const walking = useMemo(() => {
     if (!graph || !walk) return null
@@ -330,14 +327,12 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
       : null,
     listOpen,
     walk: walking && walk ? { kind: walk.kind, id: walk.id, step: walking.step } : null,
-    year: timeX >= TIME.max ? null : Math.round(TIME.yearAt(timeX)),
     lanesOff: Object.keys(lanesOff).filter((x) => lanesOff[x]).sort(),
     kindsOff: Object.keys(kindsOff).filter((x) => kindsOff[x]).sort(),
-  }), [sel, selE, listOpen, walk, walking, timeX, lanesOff, kindsOff])
+  }), [sel, selE, listOpen, walk, walking, lanesOff, kindsOff])
 
   const applyUrl = useCallback((u: UrlState) => {
     if (!graph) return
-    setTimeX(u.year == null ? TIME.max : TIME.x(u.year))
     setLanesOff(Object.fromEntries(u.lanesOff.map((x) => [x, true])))
     setKindsOff(Object.fromEntries(u.kindsOff.map((x) => [x, true])))
     setListOpen(u.listOpen)
@@ -455,7 +450,7 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
       view[n.id] = {
         visible: laneOn(n.lane.id) && readOk(n.id),
         read: isRead(n.id),
-        future: n.year > yearMax,
+        future: false,
         inLineage: !!(lineSet && lineSet[n.id]),
         lineageActive: !!lineSet,
         selected: sel === n.id,
@@ -486,7 +481,7 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
     })
 
     return { nodes, back, front, hits, isRead }
-  }, [graph, lanesOff, kindsOff, read, readFilter, lineSet, sel, selE, yearMax, dimOpacity])
+  }, [graph, lanesOff, kindsOff, read, readFilter, lineSet, sel, selE, dimOpacity])
 
   const lanes: LaneVM[] = useMemo(() => LANES.map((L) => ({
     id: L.id, label: L.label, big: L.big, c: L.c, y0: L.y0, y1: L.y1, h: L.y1 - L.y0,
@@ -503,11 +498,11 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
     })).filter((x) => x.top > -60 && x.top < 4000)
   }, [graph, lanesOff, k, ty])
 
+  // Every decade is drawn the same. The ticks used to fade past whatever the
+  // timeline was set to; without one there is no "past it".
   const ticks: TickVM[] = useMemo(() => TICK_YEARS.map((y) => ({
-    year: y, x: TIME.x(y),
-    gridOp: y <= yearMax ? 0.075 : 0.03,
-    op: y <= yearMax ? 0.85 : 0.28,
-  })), [yearMax])
+    year: y, x: TIME.x(y), gridOp: 0.075, op: 0.85,
+  })), [])
 
   const markers = useMemo(() => EdgeStyle.markers(), [])
 
@@ -789,8 +784,6 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
       background: '#0E1116', overflow: 'hidden',
     }}>
       <TopBar
-        yearLabel={TimeScale.label(yearMax)}
-        timeMin={TIME.min} timeMax={TIME.max} timeX={timeX} onYear={setTimeX}
         laneToggles={laneToggles} edgeToggles={edgeToggles} readFilters={readFilterToggles}
         query={query} onQuery={setQuery}
         onQuerySubmit={() => {
@@ -812,7 +805,6 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
         phone={vp.drawer}
         open={controlsOpen}
         onToggleOpen={() => setControlsOpen((v) => !v)}
-        accountWide={!!account}
         account={accountsAvailable ? (
           <AccountButton
             account={account}

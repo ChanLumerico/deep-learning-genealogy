@@ -62,10 +62,9 @@ describe('writing a link', () => {
   it('carries the view when it is not at its default', () => {
     expect(toHash(state({
       sel: { kind: 'node', id: 'vit' },
-      year: 2020,
       lanesOff: ['nlp', 'cv'],
       kindsOff: ['alt'],
-    }))).toBe('#/node/vit?year=2020&lanes=cv,nlp&kinds=alt')
+    }))).toBe('#/node/vit?lanes=cv,nlp&kinds=alt')
   })
 
   it('orders the lists, so the same view is always the same link', () => {
@@ -82,7 +81,7 @@ describe('reading a link', () => {
       state({ sel: { kind: 'node', id: 'resnet' } }),
       state({ sel: { kind: 'edge', from: 'vgg', to: 'resnet' } }),
       state({ listOpen: true }),
-      state({ sel: { kind: 'node', id: 'vit' }, year: 2020, lanesOff: ['cv'], kindsOff: ['alt', 'cross'] }),
+      state({ sel: { kind: 'node', id: 'vit' }, lanesOff: ['cv'], kindsOff: ['alt', 'cross'] }),
     ]) expect(parseHash(toHash(s)), toHash(s)).toEqual(s)
   })
 
@@ -104,10 +103,10 @@ describe('reading a link', () => {
     expect(parseHash('#/edge/vgg/<img>').sel).toBe(null)
   })
 
-  it('ignores a year that is not one', () => {
-    expect(parseHash('#/?year=abc').year).toBe(null)
-    expect(parseHash('#/?year=99999').year).toBe(null)
-    expect(parseHash('#/?year=2017').year).toBe(2017)
+  it('still opens a link from when there was a timeline', () => {
+    // ?year= was dropped with the slider; an old link must not fail closed
+    expect(parseHash('#/node/resnet?year=2017').sel).toEqual({ kind: 'node', id: 'resnet' })
+    expect(parseHash('#/?year=abc&lanes=cv').lanesOff).toEqual(['cv'])
   })
 
   it('drops junk out of the filter lists but keeps the rest', () => {
@@ -126,7 +125,7 @@ describe('what earns a history entry', () => {
 
   it('does not count nudging the view', () => {
     // otherwise dragging the timeline buries the page you arrived from
-    expect(isNavigation(at('resnet'), { ...at('resnet'), year: 2015 })).toBe(false)
+    expect(isNavigation(at('resnet'), { ...at('resnet'), lanesOff: ['cv'] })).toBe(false)
     expect(isNavigation(at('resnet'), { ...at('resnet'), lanesOff: ['cv'] })).toBe(false)
   })
 
@@ -149,7 +148,7 @@ describe('an auth redirect owns the fragment', () => {
 
   it('does not mistake our own links for one', () => {
     for (const h of ['', '#/', '#/node/resnet', '#/path/depth?step=4',
-      '#/node/vit?year=2020&lanes=cv,nlp', '#/edge/vgg/resnet', '#/list'])
+      '#/node/vit?lanes=cv,nlp', '#/edge/vgg/resnet', '#/list'])
       expect(isAuthFragment(h)).toBe(false)
   })
 

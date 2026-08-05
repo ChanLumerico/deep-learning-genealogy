@@ -1,9 +1,11 @@
-// The account control, pinned to the top-right corner and never moving.
+// The account control: under the title, in the slot the timeline used to have.
 //
-// It sits *outside* the top bar's flex flow, because that flow is sized by its
-// contents and wraps as a whole — dropping another item into it is how the bar
-// used to lose a button to a second line. The bar reserves the corner instead
-// (see WIDTH below), so the two cannot collide.
+// It was pinned to the top-right corner first, which meant reserving width
+// from a row that had none to give. The bar's three groups need 1336px side by
+// side, so a 1440-wide window has 64px spare and the reserve pushed the whole
+// bar onto a second line. Here the title already sets this group's width and
+// the space beneath it was going spare, so the control costs nothing and has
+// nothing to collide with.
 //
 // Signed out it is one button. Signed in it is who you are, and a menu holding
 // the one thing you might want next.
@@ -12,16 +14,11 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { Account } from '../data/account'
 
 /**
- * What the top bar keeps clear for this, and the cap on the chip itself.
- *
- * Measured, not guessed. The bar's three groups need 1336px side by side, so
- * the corner has 136px to spend at 1512 wide and 64px at 1440 — which is why
- * the signed-in chip is capped at 116 rather than sized to the longest name:
- * one pixel more and a 1512 window gains a whole row of toolbar. Below about
- * 1500 it gains one anyway, and below 1366 the bar was already two rows.
- * The full name and the email are in the menu, where there is room for them.
+ * The chip's cap. With the whole width of the title block to sit in, a name
+ * has room to be a name rather than being cut to fit a corner. The email is
+ * in the menu either way.
  */
-export const ACCOUNT_WIDTH = { out: 72, in: 116 }
+const CHIP_MAX = 264
 
 /** the state, said out loud — the caption is how this bar labels everything */
 const SIGNED_IN_TINT = '#8f9c86'
@@ -93,7 +90,7 @@ export function AccountButton(p: AccountButtonProps) {
   // this bar — Domains, Edges, Reading, View. Without the caption this was the
   // one control aligned to nothing, which is exactly what it looked like.
   const framed = (control: React.ReactNode) => (p.compact ? control : (
-    <div className="gx-field" style={{ alignItems: 'flex-end' }}>
+    <div className="gx-field" style={{ alignItems: 'flex-start' }}>
       <div className="gx-cap" style={{ color: p.account ? SIGNED_IN_TINT : undefined }}>
         {p.account ? 'Signed in' : 'Account'}
       </div>
@@ -109,7 +106,7 @@ export function AccountButton(p: AccountButtonProps) {
         onClick={p.onSignIn}
         disabled={p.busy}
         style={{
-          flex: '0 0 auto', height: 30, padding: '0 13px',
+          height: 30, padding: '0 13px',
           background: 'rgba(233,229,221,0.1)',
           border: '1px solid rgba(233,229,221,0.42)', color: '#dcd6ca',
           letterSpacing: '0.06em', opacity: p.busy ? 0.5 : 1,
@@ -129,8 +126,8 @@ export function AccountButton(p: AccountButtonProps) {
         aria-label={`Signed in as ${who ?? 'your account'}`}
         title={p.compact ? `Signed in as ${who ?? 'your account'}` : undefined}
         style={{
-          display: 'inline-flex', alignItems: 'center', gap: 8, flex: '0 0 auto',
-          maxWidth: p.compact ? undefined : ACCOUNT_WIDTH.in,
+          display: 'inline-flex', alignItems: 'center', gap: 8,
+          maxWidth: p.compact ? undefined : CHIP_MAX,
           height: 30, padding: p.compact ? 2 : '0 8px 0 4px',
           borderRadius: p.compact ? '50%' : 15,
           // tinted rather than neutral: signed in is a state, and the bar has

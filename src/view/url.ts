@@ -12,7 +12,7 @@
 // with the view carried as a query, and omitted wherever it is at its default
 // so an ordinary link stays short:
 //
-//   #/node/vit?year=2020&lanes=cv,nlp&kinds=direct,fusion
+//   #/node/vit?lanes=cv,nlp&kinds=direct,fusion
 //
 // The hash is deliberate. A path (`/node/resnet`) would need the server to
 // serve the app for URLs that are not files, which GitHub Pages does only via
@@ -33,8 +33,6 @@ export interface UrlState {
   walk: { kind: 'path'; id: string; step: number }
     | { kind: 'trace'; id: string; step: number }
     | null
-  /** timeline position, as a year; null means "all of it" */
-  year: number | null
   /** lanes switched OFF, sorted; empty means every lane is showing */
   lanesOff: string[]
   /** edge kinds switched OFF, sorted */
@@ -42,7 +40,7 @@ export interface UrlState {
 }
 
 export const EMPTY: UrlState = {
-  sel: null, listOpen: false, walk: null, year: null, lanesOff: [], kindsOff: [],
+  sel: null, listOpen: false, walk: null, lanesOff: [], kindsOff: [],
 }
 
 /** ids are lowercase alphanumeric slugs; anything else did not come from us */
@@ -89,14 +87,10 @@ export function parseHash(hash: string): UrlState {
     listOpen = true
   }
 
-  const yearRaw = Number(q.get('year'))
-  // a year outside the sheet is someone's typo, not a filter
-  const year = Number.isFinite(yearRaw) && yearRaw >= 1900 && yearRaw <= 2100
-    ? Math.round(yearRaw)
-    : null
-
+  // `year` used to live here, from the timeline. Links carrying it still open
+  // — the parameter is simply not read any more.
   return {
-    sel, listOpen, walk, year,
+    sel, listOpen, walk,
     lanesOff: list(q.get('lanes')), kindsOff: list(q.get('kinds')),
   }
 }
@@ -110,7 +104,6 @@ export function toHash(s: UrlState): string {
 
   const q = new URLSearchParams()
   if (s.walk && s.walk.step > 0) q.set('step', String(s.walk.step))
-  if (s.year != null) q.set('year', String(s.year))
   if (s.lanesOff.length) q.set('lanes', [...s.lanesOff].sort().join(','))
   if (s.kindsOff.length) q.set('kinds', [...s.kindsOff].sort().join(','))
   const query = q.toString()
@@ -130,5 +123,5 @@ export const sameUrl = (a: UrlState, b: UrlState) => toHash(a) === toHash(b)
  * exploration would bury the page you arrived from under fifty entries.
  */
 export const isNavigation = (a: UrlState, b: UrlState) =>
-  toHash({ ...a, year: null, lanesOff: [], kindsOff: [] }) !==
-  toHash({ ...b, year: null, lanesOff: [], kindsOff: [] })
+  toHash({ ...a, lanesOff: [], kindsOff: [] }) !==
+  toHash({ ...b, lanesOff: [], kindsOff: [] })

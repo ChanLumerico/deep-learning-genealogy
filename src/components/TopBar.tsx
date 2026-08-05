@@ -1,4 +1,3 @@
-import { ACCOUNT_WIDTH } from './AccountButton'
 import type { ToggleVM } from '../view/types'
 
 const CAP_SPLIT: React.CSSProperties = { justifyContent: 'space-between', gap: 10 }
@@ -21,11 +20,6 @@ function Toggles({ items, wrap }: { items: ToggleVM[]; wrap?: boolean }) {
 }
 
 export interface TopBarProps {
-  yearLabel: string
-  timeMin: number
-  timeMax: number
-  timeX: number
-  onYear: (v: number) => void
   laneToggles: ToggleVM[]
   edgeToggles: ToggleVM[]
   readFilters: ToggleVM[]
@@ -49,13 +43,13 @@ export interface TopBarProps {
   open: boolean
   onToggleOpen: () => void
   /**
-   * The account control, pinned to the corner. It is passed in rather than
-   * built here so the bar stays a presentation component, and it is rendered
-   * outside the wrapping flow — see `reserve` below.
+   * The account control. It sits under the title, in the slot the timeline
+   * used to have — the only space in this bar that costs nothing, because the
+   * title already sets that group's width. Pinning it to the corner instead
+   * meant reserving width from a row that had none to spare, which pushed a
+   * 1440-wide window onto a second line.
    */
   account?: React.ReactNode
-  /** true once signed in: the chip carries a name and needs more room */
-  accountWide?: boolean
 }
 
 /** points the way the bar will move: up to fold it away, down to bring it back */
@@ -89,17 +83,10 @@ export function TopBar(p: TopBarProps) {
   // than any control does.
   const showControls = !p.phone || p.open
 
-  // The corner the account control occupies, kept clear of the groups. They
-  // are content-sized and wrap as whole units, so an overlap would not be
-  // resolved by reflow — it would simply be an overlap.
-  const reserve = p.account && !p.phone
-    ? (p.accountWide ? ACCOUNT_WIDTH.in : ACCOUNT_WIDTH.out) + 18
-    : 0
-
   return (
     <div
       style={{
-        display: 'flex', flexDirection: 'column', position: 'relative',
+        display: 'flex', flexDirection: 'column',
         borderBottom: '1px solid rgba(233,229,221,0.22)', background: '#0B0E12',
         flex: 'none',
         // the drawer can outgrow a short phone screen, so it scrolls itself
@@ -120,12 +107,11 @@ export function TopBar(p: TopBarProps) {
               lineHeight: 1.15, whiteSpace: 'nowrap', overflow: 'hidden',
               textOverflow: 'ellipsis',
             }}>Deep Learning Model Genealogy</div>
-            {/* collapsed, the year still has to be legible — it is what the
-                timeline is currently filtering to */}
             <div style={{
               fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase',
               color: '#8d8578', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
-            }}>{p.yearLabel}</div>
+              overflow: 'hidden', textOverflow: 'ellipsis',
+            }}>1957 — 2025</div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 7, flex: 'none' }}>
           {p.account}
@@ -148,13 +134,6 @@ export function TopBar(p: TopBarProps) {
         </div>
       )}
 
-      {/* Desktop and tablet: out of the flow entirely, in the corner it is
-          always in. `reserve` above is what stops the groups reaching it. */}
-      {p.account && !p.phone && (
-        <div style={{ position: 'absolute', top: 12, right: 20, zIndex: 5 }}>
-          {p.account}
-        </div>
-      )}
 
       {/* The groups wrap rather than overflow: a narrow desktop window drops
           the view controls onto a second line instead of cutting them off at
@@ -166,7 +145,6 @@ export function TopBar(p: TopBarProps) {
         flexWrap: p.compact ? 'nowrap' : 'wrap',
         gap: p.compact ? 10 : '14px 30px',
         padding: p.phone ? '2px 13px 11px' : '12px 20px',
-        paddingRight: p.phone ? undefined : 20 + reserve,
         minWidth: 0,
       }}>
 
@@ -192,19 +170,9 @@ export function TopBar(p: TopBarProps) {
             </div>
           )}
 
-          <div className="gx-field">
-            <div className="gx-cap" style={CAP_SPLIT}>
-              <span>Timeline</span><span style={VALUE}>{p.yearLabel}</span>
-            </div>
-            <div style={{ height: 30, display: 'flex', alignItems: 'center' }}>
-              <input
-                type="range" min={p.timeMin} max={p.timeMax} step={2} value={p.timeX}
-                onChange={(e) => p.onYear(parseFloat(e.target.value))}
-                aria-label="Show models up to this year"
-                style={{ width: '100%', height: 16, margin: 0 }}
-              />
-            </div>
-          </div>
+          {/* Under the title, where the timeline was. Free space: the title
+              sets this group's width, so nothing else has to give any up. */}
+          {!p.phone && p.account}
         </div>
 
         {(
