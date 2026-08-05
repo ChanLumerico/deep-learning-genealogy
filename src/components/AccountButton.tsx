@@ -20,6 +20,9 @@ import type { Account } from '../data/account'
  */
 const CHIP_MAX = 264
 
+/** the menu's own width, needed to keep it on screen before it is painted */
+const MENU_W = 232
+
 /** the state, said out loud — the caption is how this bar labels everything */
 const SIGNED_IN_TINT = '#8f9c86'
 
@@ -55,15 +58,23 @@ function Avatar({ src, size }: { src: string | null; size: number }) {
 export function AccountButton(p: AccountButtonProps) {
   const [menu, setMenu] = useState(false)
   const btn = useRef<HTMLButtonElement>(null)
-  const [at, setAt] = useState({ top: 0, right: 0 })
+  const [at, setAt] = useState({ top: 0, left: 0 })
 
   // The menu is positioned fixed against the button's own rect rather than
   // nested under it. On a phone the top bar scrolls itself, and a nested
   // absolute menu would be clipped by that scroller.
+  //
+  // It hangs from the button's left edge and is then clamped to the window.
+  // Anchoring it by the right edge instead worked only while the button was
+  // in the top-right corner; under the title the menu ran off the left of the
+  // screen and was cut in half by the boundary. Clamping covers both, and the
+  // phone strip — where the button really is hard against the right.
   useLayoutEffect(() => {
     if (!menu) return
     const r = btn.current?.getBoundingClientRect()
-    if (r) setAt({ top: r.bottom + 6, right: Math.max(8, window.innerWidth - r.right) })
+    if (!r) return
+    const room = window.innerWidth - MENU_W - 8
+    setAt({ top: r.bottom + 6, left: Math.max(8, Math.min(r.left, room)) })
   }, [menu])
 
   useEffect(() => {
@@ -160,7 +171,7 @@ export function AccountButton(p: AccountButtonProps) {
           data-account
           role="menu"
           style={{
-            position: 'fixed', top: at.top, right: at.right, zIndex: 60, width: 232,
+            position: 'fixed', top: at.top, left: at.left, zIndex: 60, width: MENU_W,
             background: 'rgba(11,14,18,0.99)',
             border: '1px solid rgba(233,229,221,0.22)', borderRadius: 6,
             boxShadow: '0 18px 44px rgba(0,0,0,0.6)', padding: 12,
