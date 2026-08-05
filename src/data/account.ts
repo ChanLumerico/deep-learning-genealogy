@@ -32,6 +32,20 @@ const KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
 /** false on a fork with no project of its own; the app then stays local-only */
 export const accountsAvailable = !!(URL_ && KEY)
 
+/**
+ * Which providers to offer, in order.
+ *
+ * Listed rather than assumed: a provider that is offered but not registered
+ * in Supabase sends the reader to an error page, which is worse than not
+ * offering it. Set VITE_AUTH_PROVIDERS to the ones actually configured.
+ */
+export const PROVIDERS: Provider[] = String(
+  import.meta.env.VITE_AUTH_PROVIDERS ?? 'google,github',
+)
+  .split(',')
+  .map((s) => s.trim().toLowerCase())
+  .filter((s): s is Provider => s === 'google' || s === 'github')
+
 // The client is imported on demand. supabase-js is 57 kB gzipped — more than
 // a fifth of everything else here — and most readers never sign in, so it must
 // not sit in the initial bundle. Vite splits it into its own chunk.

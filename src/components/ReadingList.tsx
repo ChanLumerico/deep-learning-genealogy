@@ -1,8 +1,6 @@
 import type { ReadGroupVM, ToggleVM } from '../view/types'
 import { PanelResizer } from './PanelResizer'
 import { BottomSheet } from './BottomSheet'
-import { AccountBar } from './AccountBar'
-import type { Account, Provider } from '../data/account'
 
 /** Shared by every button in the header strip. */
 const ACTION: React.CSSProperties = {
@@ -27,12 +25,13 @@ export interface ReadingListProps {
   hasRead: boolean
   /** phone: dock to the bottom instead of taking a full-height column */
   sheet?: boolean
-  /** undefined when the build has no Supabase project — then no sign-in shows */
-  account?: Account | null
-  authBusy?: boolean
+  /**
+   * Where this list is being kept. undefined when the build has no Supabase
+   * project at all, false when signed out, true when it is on the account.
+   * Sign-in itself lives in the top bar, not here.
+   */
+  synced?: boolean
   authNote?: string | null
-  onSignIn?: (p: Provider) => void
-  onSignOut?: () => void
   /** side-panel width, reader-adjustable; ignored in sheet mode */
   width?: number
   onResize?: (next: number) => void
@@ -65,7 +64,7 @@ export function ReadingList(p: ReadingListProps) {
               letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums',
             }}>{p.readCount}</div>
             <div style={{ fontSize: 11.5, color: '#9c9488', fontVariantNumeric: 'tabular-nums' }}>
-              {p.readPct} of the genealogy · kept in this browser
+              {p.readPct} of the genealogy · {p.synced ? 'saved to your account' : 'kept in this browser'}
             </div>
           </div>
           <button
@@ -121,14 +120,10 @@ export function ReadingList(p: ReadingListProps) {
           Zotero or Mendeley export works unchanged.
         </div>
 
-        {p.account !== undefined && p.onSignIn && p.onSignOut && (
-          <AccountBar
-            account={p.account}
-            busy={!!p.authBusy}
-            note={p.authNote ?? null}
-            onSignIn={p.onSignIn}
-            onSignOut={p.onSignOut}
-          />
+        {p.authNote && (
+          <div style={{
+            fontSize: 11, lineHeight: 1.45, marginTop: 9, color: '#8f9c86',
+          }}>{p.authNote}</div>
         )}
 
         {p.importNote && (

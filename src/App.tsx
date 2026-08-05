@@ -11,8 +11,8 @@ import type { Detail } from './data/detail'
 import type { ImportMode, PaperIds } from './data/csv'
 import { READ_FILTERS, ReadingLog } from './data/readingLog'
 import {
-  accountNeededNow, accountsAvailable, addReading, clearReading, fetchReading, removeReading,
-  signIn, signOut, watchAccount,
+  accountNeededNow, accountsAvailable, addReading, clearReading, fetchReading,
+  PROVIDERS, removeReading, signIn, signOut, watchAccount,
 } from './data/account'
 import type { Account, Provider } from './data/account'
 import { describe as describeSync, plan } from './data/sync'
@@ -28,6 +28,8 @@ import { allPaths } from './view/walk'
 import type { Step, WalkCourse } from './view/walk'
 import { WalkBar } from './components/WalkBar'
 import { StartHere } from './components/StartHere'
+import { AccountButton } from './components/AccountButton'
+import { SignInDialog } from './components/SignInDialog'
 import { SearchPalette } from './components/SearchPalette'
 import type { SearchIndex } from './view/search'
 import { move } from './view/keys'
@@ -120,6 +122,8 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
   const [account, setAccount] = useState<Account | null>(null)
   const [authBusy, setAuthBusy] = useState(false)
   const [authNote, setAuthNote] = useState<string | null>(null)
+  const [signInOpen, setSignInOpen] = useState(false)
+  const [authError, setAuthError] = useState<string | null>(null)
   const accountRef = useRef<Account | null>(null)
   accountRef.current = account
 
@@ -128,6 +132,25 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
   // sign-in button lives. Otherwise supabase-js is never fetched at all.
   const [authWanted, setAuthWanted] = useState(() => accountNeededNow())
   useEffect(() => { if (listOpen) setAuthWanted(true) }, [listOpen])
+  useEffect(() => { if (account) { setSignInOpen(false); setAuthError(null) } }, [account])
+
+  const doSignIn = useCallback((p: Provider) => {
+    setAuthBusy(true); setAuthError(null)
+    signIn(p).catch(() => {
+      setAuthBusy(false)
+      setAuthError('Could not start sign-in. Try again in a moment.')
+    })
+  }, [])
+
+  const doSignOut = useCallback(() => {
+    setAuthBusy(true)
+    // the list stays in this browser; signing out is not a delete
+    signOut().finally(() => {
+      mergedFor.current = null
+      setAuthBusy(false)
+      setAuthNote('Signed out. This browser keeps its own copy.')
+    })
+  }, [])
   useEffect(() => {
     if (!authWanted || !accountsAvailable) return
     return watchAccount(setAccount)
@@ -362,7 +385,8 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
       const typing = !!t?.closest('input,textarea,select,[contenteditable]')
 
       if (ev.key === 'Escape') {
-        if (searchOpen) setSearchOpen(false)
+        if (signInOpen) setSignInOpen(false)
+        else if (searchOpen) setSearchOpen(false)
         else if (startOpen) setStartOpen(false)
         else if (walk) setWalk(null)
         else if (listOpen) setListOpen(false)
@@ -376,7 +400,7 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
         ev.preventDefault()
         return
       }
-      if (searchOpen || startOpen) return
+      if (searchOpen || startOpen || signInOpen) return
 
       // stepping a walk from the keyboard, since that is a linear reading
       if (walk && (ev.key === 'ArrowRight' || ev.key === 'ArrowLeft')) {
@@ -400,7 +424,7 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [graph, sel, walk, searchOpen, startOpen, listOpen, goNode, stepBy])
+  }, [graph, sel, walk, searchOpen, startOpen, signInOpen, listOpen, goNode, stepBy])
 
   /** open whatever a search result points at, leaving any walk behind */
   const openResult = useCallback((kind: 'n' | 'e', id: string) => {
@@ -788,6 +812,16 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
         phone={vp.drawer}
         open={controlsOpen}
         onToggleOpen={() => setControlsOpen((v) => !v)}
+        accountWide={!!account}
+        account={accountsAvailable ? (
+          <AccountButton
+            account={account}
+            busy={authBusy}
+            compact={vp.drawer}
+            onSignIn={() => { setAuthError(null); setSignInOpen(true) }}
+            onSignOut={doSignOut}
+          />
+        ) : undefined}
       />
 
       {/* The gesture handlers live here, but `touch-action: none` does NOT:
@@ -889,25 +923,8 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
             onClearAll={clearRead}
             hasRead={readCount > 0}
             sheet={vp.phone}
-            account={accountsAvailable ? account : undefined}
-            authBusy={authBusy}
+            synced={accountsAvailable ? !!account : undefined}
             authNote={authNote}
-            onSignIn={(p: Provider) => {
-              setAuthBusy(true); setAuthNote(null)
-              signIn(p).catch(() => {
-                setAuthBusy(false)
-                setAuthNote('Could not start sign-in. Try again in a moment.')
-              })
-            }}
-            onSignOut={() => {
-              setAuthBusy(true)
-              // the list stays in this browser; signing out is not a delete
-              signOut().finally(() => {
-                mergedFor.current = null
-                setAuthBusy(false)
-                setAuthNote('Signed out. This browser keeps its own copy.')
-              })
-            }}
             width={panelWidth}
             onResize={resizePanel}
             onToggleRead={toggleRead}
@@ -923,6 +940,16 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
             colours={Object.fromEntries(LANES.map((L) => [L.id, L.c]))}
             onOpen={openResult}
             onClose={() => setSearchOpen(false)}
+          />
+        )}
+
+        {signInOpen && (
+          <SignInDialog
+            providers={PROVIDERS}
+            busy={authBusy}
+            error={authError}
+            onPick={doSignIn}
+            onClose={() => setSignInOpen(false)}
           />
         )}
 

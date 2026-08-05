@@ -1,3 +1,4 @@
+import { ACCOUNT_WIDTH } from './AccountButton'
 import type { ToggleVM } from '../view/types'
 
 const CAP_SPLIT: React.CSSProperties = { justifyContent: 'space-between', gap: 10 }
@@ -47,6 +48,14 @@ export interface TopBarProps {
   phone: boolean
   open: boolean
   onToggleOpen: () => void
+  /**
+   * The account control, pinned to the corner. It is passed in rather than
+   * built here so the bar stays a presentation component, and it is rendered
+   * outside the wrapping flow — see `reserve` below.
+   */
+  account?: React.ReactNode
+  /** true once signed in: the chip carries a name and needs more room */
+  accountWide?: boolean
 }
 
 /** points the way the bar will move: up to fold it away, down to bring it back */
@@ -80,10 +89,17 @@ export function TopBar(p: TopBarProps) {
   // than any control does.
   const showControls = !p.phone || p.open
 
+  // The corner the account control occupies, kept clear of the groups. They
+  // are content-sized and wrap as whole units, so an overlap would not be
+  // resolved by reflow — it would simply be an overlap.
+  const reserve = p.account && !p.phone
+    ? (p.accountWide ? ACCOUNT_WIDTH.in : ACCOUNT_WIDTH.out) + 18
+    : 0
+
   return (
     <div
       style={{
-        display: 'flex', flexDirection: 'column',
+        display: 'flex', flexDirection: 'column', position: 'relative',
         borderBottom: '1px solid rgba(233,229,221,0.22)', background: '#0B0E12',
         flex: 'none',
         // the drawer can outgrow a short phone screen, so it scrolls itself
@@ -111,6 +127,8 @@ export function TopBar(p: TopBarProps) {
               color: '#8d8578', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
             }}>{p.yearLabel}</div>
           </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, flex: 'none' }}>
+          {p.account}
           <button
             className="gx-btn gx-tap"
             onClick={p.onToggleOpen}
@@ -126,6 +144,15 @@ export function TopBar(p: TopBarProps) {
             <Chevron up={p.open} />
             {p.open ? 'Hide' : 'Menu'}
           </button>
+          </div>
+        </div>
+      )}
+
+      {/* Desktop and tablet: out of the flow entirely, in the corner it is
+          always in. `reserve` above is what stops the groups reaching it. */}
+      {p.account && !p.phone && (
+        <div style={{ position: 'absolute', top: 12, right: 20, zIndex: 5 }}>
+          {p.account}
         </div>
       )}
 
@@ -139,6 +166,7 @@ export function TopBar(p: TopBarProps) {
         flexWrap: p.compact ? 'nowrap' : 'wrap',
         gap: p.compact ? 10 : '14px 30px',
         padding: p.phone ? '2px 13px 11px' : '12px 20px',
+        paddingRight: p.phone ? undefined : 20 + reserve,
         minWidth: 0,
       }}>
 
