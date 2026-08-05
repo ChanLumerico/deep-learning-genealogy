@@ -1088,9 +1088,17 @@
  },
  {
   "f": "worldmodels",
+  "t": "planet",
+  "k": "direct",
+  "l": "fitted in sequence → model and data grow together",
+  "hi": false
+ },
+ {
+  "f": "planet",
   "t": "dreamer",
   "k": "direct",
-  "l": "separate stages → backprop through rollouts"
+  "l": "search every step → a learned actor and critic",
+  "hi": false
  },
  {
   "f": "sac",

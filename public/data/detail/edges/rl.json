@@ -702,37 +702,6 @@
    }
   ]
  },
- "worldmodels>dreamer": {
-  "lead": "World Models trained a tiny controller by evolution inside a frozen dynamics model, with the three components fitted in sequence. Dreamer makes the model differentiable and trains through it — the policy gradient flows backwards through imagined rollouts — which turns a demonstration into a method competitive with model-free state of the art.",
-  "blocks": [
-   {
-    "h": "Removing the separation",
-    "b": "In World Models, V is fitted to random-policy data, M is fitted to V's encodings, and C is searched by CMA-ES inside the frozen pair. The staging is what keeps the controller small enough for a derivative-free optimiser, and it is also the weakness: V never sees the states a good policy visits, and no gradient connects the controller's performance back to the model's representation.\n\nDreamer trains the world model and the behaviour together, alternating between fitting the model on replayed real experience and improving actor and critic on trajectories imagined within it. The representation is therefore shaped by data the current policy actually generates."
-   },
-   {
-    "h": "Backpropagation through imagination",
-    "b": "Once the dynamics are differentiable, the actor need not be scored on sampled returns. Dreamer rolls the model forward from encoded real states for a fixed horizon, evaluates with a learned critic, and differentiates that value **through the dynamics** into the actor's parameters.\n\nThe gradient is analytic rather than estimated — the same advantage the deterministic policy gradient has over REINFORCE, extended across a multi-step imagined rollout.\n\nThe model itself is a recurrent state-space model with both a deterministic recurrent component and a stochastic one. The split matters: a purely deterministic model cannot express uncertainty about what happens next, and a purely stochastic one struggles to carry information over long horizons. The KL between the posterior state, which sees the observation, and the prior state, which must predict it blind, is what forces the model to be able to imagine forward at all."
-   },
-   {
-    "h": "What v3 fixed, and what remains",
-    "b": "The first versions worked and needed per-domain tuning, which for a method claiming generality is the substantive objection. DreamerV3 is mostly about scale invariance: a **symlog** transform on rewards and reconstruction targets so signals differing by orders of magnitude become comparable, **two-hot** distributional prediction of values and rewards instead of scalar regression, and KL terms clipped below a floor. One configuration then handles continuous control, Atari, and collecting diamonds in Minecraft from scratch.\n\nThe ceiling is unchanged. Everything the actor learns comes from imagined rollouts, so a systematic model error becomes a systematic policy error, and the optimiser actively seeks the model's mistakes — the exploitation problem World Models met and answered with noise. Dreamer bounds it with a short imagination horizon and continual refitting, which is mitigation rather than a solution. And the reconstruction objective spends capacity on visual detail whether or not control needs it, which is exactly what MuZero's value-equivalent model avoids by never reconstructing anything."
-   }
-  ],
-  "refs": [
-   {
-    "t": "Dream to Control: Learning Behaviors by Latent Imagination",
-    "y": 2020
-   },
-   {
-    "t": "Mastering Diverse Domains through World Models",
-    "y": 2023
-   },
-   {
-    "t": "World Models",
-    "y": 2018
-   }
-  ]
- },
  "sac>cql": {
   "lead": "SAC is off-policy and still assumes it can keep interacting. Fix the dataset and it fails, for a specific reason: the bootstrap queries $Q$ at actions the data never contains, those values are unconstrained, and the actor is trained to find whichever is highest.",
   "blocks": [
@@ -977,6 +946,64 @@
    {
     "t": "DAPO: An Open-Source LLM Reinforcement Learning System at Scale",
     "y": 2025
+   }
+  ]
+ },
+ "worldmodels>planet": {
+  "lead": "World Models fits its three parts one after another: the autoencoder on random-policy rollouts, the recurrent model on that autoencoder's codes, and finally a controller searched by evolution inside the frozen pair. The staging is what keeps the controller small enough for a derivative-free optimiser, and it is also what limits the whole arrangement. PlaNet removes it.",
+  "blocks": [
+   {
+    "h": "The cost of fitting in sequence",
+    "b": "V is trained on data gathered at random, so it learns to encode what a flailing agent sees. The states a competent policy spends its time in are, almost by definition, not in that distribution — and V is frozen before any competent policy exists, so it never gets to learn them.\n\nThe second consequence is subtler. Because C is optimised inside a frozen V and M, no gradient ever runs from the controller's performance back into the representation. Nothing tells the encoder which parts of the image mattered for control. The representation is fitted to reconstruct, and control has to make do with whatever that produced."
+   },
+   {
+    "h": "One model, grown with its own data",
+    "b": "PlaNet interleaves instead. It seeds the dataset with a handful of episodes of random actions, fits the latent model, then collects one more episode using the planner, and repeats — the model is refitted every $C$ update steps against a dataset that keeps growing in the direction the current planner can reach.\n\nSo the distribution the model is trained on tracks the agent's competence rather than preceding it. The failure mode of the staged version — a model that is accurate about the states you have left behind and vague about the ones you are heading into — cannot arise, because there is no point at which the model is finished."
+   },
+   {
+    "h": "And nothing to evolve",
+    "b": "The controller disappears entirely. World Models needed C to be tiny because CMA-ES does not scale to many parameters; PlaNet has no parameters to search because it has no policy — the action is whatever the cross-entropy method decides after replanning against the current model.\n\nThis trades one cost for another rather than removing it. Evolution is expensive once, at training time; planning is expensive every time, at decision time. What it buys is that the burden of being good now rests entirely on the model, which is the thing the interleaved loop is making better."
+   }
+  ],
+  "refs": [
+   {
+    "t": "World Models",
+    "y": 2018
+   },
+   {
+    "t": "Learning Latent Dynamics for Planning from Pixels",
+    "y": 2019
+   }
+  ]
+ },
+ "planet>dreamer": {
+  "lead": "PlaNet's model was good enough that the planner searching it could beat model-free agents on a fraction of the data. What it could not do was want anything further away than its planning horizon, and it paid for every decision with a search. Dreamer keeps the state model unchanged and replaces the search with an actor and a critic trained inside it.",
+  "blocks": [
+   {
+    "h": "Backpropagation through imagination",
+    "b": "Once the dynamics are differentiable, an actor need not be scored on sampled returns at all. Dreamer rolls the model forward from encoded real states for a fixed horizon, evaluates the imagined trajectory with a learned critic, and differentiates that value **through the dynamics** into the actor's parameters.\n\nThe gradient is analytic rather than estimated — the same advantage the deterministic policy gradient has over REINFORCE, extended across a multi-step imagined rollout rather than a single step.\n\nModel and behaviour are now trained together, alternating between fitting the model on replayed real experience and improving actor and critic on trajectories imagined within it."
+   },
+   {
+    "h": "A value beyond the horizon",
+    "b": "This is the substantive fix, and Dreamer's ablation isolates it. PlaNet sums predicted rewards over $H$ steps and stops; anything beyond $H$ is invisible, and extending $H$ only gives compounding model error more room to work.\n\nA critic changes the arithmetic. The imagined rollout is truncated at $H$ as before, but the last state is scored by a learned value rather than by nothing, so returns from beyond the horizon are folded back in. Sweeping the horizon from ten steps to forty, PlaNet's score depends sharply on where it is set while Dreamer's does not — learning a state value to estimate rewards beyond the imagination horizon is what makes it robust.\n\nAnd deciding becomes a forward pass. The actor is queried once per step; the search that cost $I \\times J$ rollouts per action is gone."
+   },
+   {
+    "h": "What v3 fixed, and what remains",
+    "b": "The first versions worked and needed per-domain tuning, which for a method claiming generality is the substantive objection. DreamerV3 is mostly about scale invariance: a **symlog** transform on rewards and reconstruction targets so signals differing by orders of magnitude become comparable, **two-hot** distributional prediction of values and rewards instead of scalar regression, and KL terms clipped below a floor. One configuration then handles continuous control, Atari, and collecting diamonds in Minecraft from scratch.\n\nThe ceiling is unchanged. Everything the actor learns comes from imagined rollouts, so a systematic model error becomes a systematic policy error, and the optimiser actively seeks the model's mistakes — the exploitation problem World Models met and answered with noise. Dreamer bounds it with a short imagination horizon and continual refitting, which is mitigation rather than a solution. And the reconstruction objective spends capacity on visual detail whether or not control needs it, which is exactly what MuZero's value-equivalent model avoids by never reconstructing anything."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Dream to Control: Learning Behaviors by Latent Imagination",
+    "y": 2020
+   },
+   {
+    "t": "Mastering Diverse Domains through World Models",
+    "y": 2023
+   },
+   {
+    "t": "Learning Latent Dynamics for Planning from Pixels",
+    "y": 2019
    }
   ]
  }

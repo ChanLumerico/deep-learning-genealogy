@@ -626,6 +626,9 @@
  "worldmodels": {
   "t": "World Models"
  },
+ "planet": {
+  "t": "Learning Latent Dynamics for Planning from Pixels"
+ },
  "dreamer": {
   "t": "Dream to Control: Learning Behaviors by Latent Imagination"
  },
