@@ -26,11 +26,12 @@ export interface ReadingListProps {
   /** phone: dock to the bottom instead of taking a full-height column */
   sheet?: boolean
   /**
-   * Where this list is being kept. undefined when the build has no Supabase
-   * project at all, false when signed out, true when it is on the account.
-   * Sign-in itself lives in the top bar, not here.
+   * The list is the account's. Signed out there is nothing to show and
+   * nothing to tick, so the panel offers the way in instead of an empty list
+   * that would quietly refuse every click.
    */
-  synced?: boolean
+  signedIn: boolean
+  onSignIn: () => void
   authNote?: string | null
   /** side-panel width, reader-adjustable; ignored in sheet mode */
   width?: number
@@ -62,9 +63,11 @@ export function ReadingList(p: ReadingListProps) {
             <div style={{
               fontSize: 24, fontWeight: 600, color: '#f2ece1', lineHeight: 1.1,
               letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums',
-            }}>{p.readCount}</div>
+            }}>{p.signedIn ? p.readCount : '—'}</div>
             <div style={{ fontSize: 11.5, color: '#9c9488', fontVariantNumeric: 'tabular-nums' }}>
-              {p.readPct} of the genealogy · {p.synced ? 'saved to your account' : 'kept in this browser'}
+              {p.signedIn
+                ? `${p.readPct} of the genealogy · saved to your account`
+                : 'Sign in to keep one'}
             </div>
           </div>
           <button
@@ -73,6 +76,22 @@ export function ReadingList(p: ReadingListProps) {
           >×</button>
         </div>
 
+        {/* Signed out there is no list to act on — importing, exporting and
+            clearing all need somewhere to write. One way in, then. */}
+        {!p.signedIn ? (
+          <>
+            <div style={{ fontSize: 11.5, lineHeight: 1.6, color: '#9d9689', margin: '11px 0 10px' }}>
+              A reading list belongs to you, not to this browser, so it lives on
+              your account and travels with it. Everything else here — the
+              graph, the essays, the walks — needs no account at all.
+            </div>
+            <button
+              style={{ ...ACTION, background: 'rgba(233,229,221,0.1)' }}
+              onClick={p.onSignIn}
+            >Sign in</button>
+          </>
+        ) : (
+        <>
         {/* carry the list between browsers */}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 11 }}>
           <label style={{ ...ACTION, display: 'inline-flex', alignItems: 'center' }}>
@@ -119,6 +138,8 @@ export function ReadingList(p: ReadingListProps) {
           Any CSV with a DOI, an arXiv id, a paper title or a model name — a
           Zotero or Mendeley export works unchanged.
         </div>
+        </>
+        )}
 
         {p.authNote && (
           <div style={{

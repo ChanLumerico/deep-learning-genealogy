@@ -8,13 +8,55 @@ import type { ReadMap } from '../src/data/readingLog'
 const graph = buildLayout()
 const index = PaperCsv.index(graph.nodes)
 
-describe('reading state belongs to the visitor', () => {
+/** the smallest localStorage that behaves like one; vitest runs under node */
+function stubStorage() {
+  const m = new Map<string, string>()
+  const store = {
+    getItem: (k: string) => m.get(k) ?? null,
+    setItem: (k: string, v: string) => { m.set(k, v) },
+    removeItem: (k: string) => { m.delete(k) },
+    get length() { return m.size },
+    key: (i: number) => [...m.keys()][i] ?? null,
+    clear: () => m.clear(),
+  }
+  ;(globalThis as { window?: unknown }).window = { localStorage: store }
+  return { store, keys: () => [...m.keys()] }
+}
+
+describe('reading state belongs to the account', () => {
   // The regression this guards: the log used to seed every paper in PAPERS as
   // read, so every first-time visitor inherited one person's reading history.
   it('falls back to an empty list, never to a seed', () => {
     // there is no window under vitest's node environment, so this exercises the
     // same branch an unavailable or empty localStorage takes in the browser
-    expect(ReadingLog.load()).toEqual({})
+    expect(ReadingLog.load('someone')).toEqual({})
+  })
+
+  it('has nothing at all for nobody', () => {
+    // Signed out the list is empty, full stop. It used to persist in the
+    // browser, so signing out left one reader's history for the next person.
+    const { store } = stubStorage()
+    ReadingLog.save('u1', { resnet: 1 })
+    expect(ReadingLog.load(null)).toEqual({})
+    // and saving under no account writes nothing to write later
+    ReadingLog.save(null, { vgg: 1 })
+    expect(JSON.parse(store.getItem('dlg.reading.v4')!).map).toEqual({ resnet: 1 })
+  })
+
+  it('will not hand one account the cache of another', () => {
+    stubStorage()
+    ReadingLog.save('u1', { resnet: 1, vgg: 1 })
+    expect(ReadingLog.load('u1')).toEqual({ resnet: 1, vgg: 1 })
+    expect(ReadingLog.load('u2')).toEqual({})
+  })
+
+  it('clears the copy, including the one from when the browser owned it', () => {
+    const { store, keys } = stubStorage()
+    store.setItem('dlg.reading.v3', JSON.stringify({ perceptron: 1 }))
+    ReadingLog.save('u1', { resnet: 1 })
+    ReadingLog.clear()
+    expect(keys()).toEqual([])
+    expect(ReadingLog.load('u1')).toEqual({})
   })
 
   it('ships no built-in list of models to mark read', () => {

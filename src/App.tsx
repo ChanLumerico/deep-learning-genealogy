@@ -103,8 +103,10 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
   const [tip, setTip] = useState<string | null>(null)
   const [tipPos, setTipPos] = useState({ x: 0, y: 0 })
 
-  // reading log
-  const [read, setRead] = useState<ReadMap>(() => ReadingLog.load())
+  // The reading list. It belongs to the account, so it starts empty and is
+  // filled by signing in — see data/readingLog.ts for why the browser is only
+  // ever a cache of it.
+  const [read, setRead] = useState<ReadMap>({})
   const [readFilter, setReadFilter] = useState<ReadFilterId>('all')
   const [listOpen, setListOpen] = useState(false)
   // The DOI / arXiv / title table the importer matches against. Only the
@@ -159,23 +161,33 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
   // data/sync.ts — the absence of a tick is not evidence a paper was unread.
   const mergedFor = useRef<string | null>(null)
   useEffect(() => {
-    if (!account || mergedFor.current === account.id) return
+    // Signed out is empty, always. The cache is this account's and goes with
+    // it; leaving it behind is how one reader's history ended up visible to
+    // the next person to open the browser.
+    if (!account) { setRead({}); ReadingLog.clear(); return }
+    if (mergedFor.current === account.id) return
     mergedFor.current = account.id
+
+    // paint from the cache at once, then reconcile with the server
+    const cached = ReadingLog.load(account.id)
+    setRead(cached)
+
     let live = true
     setAuthBusy(true)
     fetchReading()
       .then((remote) => {
         if (!live) return
-        const local = ReadingLog.load()
-        const p = plan(local, remote)
-        ReadingLog.save(p.merged)
+        // union, never subtraction — a tick made offline is still a tick, and
+        // the cache is the only place it survived
+        const p = plan(cached, remote)
+        ReadingLog.save(account.id, p.merged)
         setRead(p.merged)
-        setAuthNote(describeSync(local, remote))
+        setAuthNote(describeSync(cached, remote))
         return addReading(account.id, p.toUpload)
       })
       .catch((e) => {
         console.warn('[account] could not load the stored list', e)
-        if (live) setAuthNote('Could not reach your account — this browser\'s list is unchanged.')
+        if (live) setAuthNote('Could not reach your account — showing the last list this browser saw.')
       })
       .finally(() => { if (live) setAuthBusy(false) })
     return () => { live = false }
@@ -623,22 +635,26 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
   }, [])
 
   const toggleRead = useCallback((id: string) => {
+    // The list is the account's, so there is nowhere to put a tick without
+    // one. Offering the way in beats a checkbox that quietly does nothing.
+    if (!accountRef.current) { setAuthError(null); setSignInOpen(true); return }
     setRead((prev) => {
       const next = { ...prev }
       const wasRead = !!next[id]
       if (wasRead) delete next[id]; else next[id] = 1
-      ReadingLog.save(next)
+      ReadingLog.save(accountRef.current?.id ?? null, next)
       push(wasRead ? [] : [id], wasRead ? [id] : [])
       return next
     })
   }, [push])
 
   const setAllRead = useCallback((ids: string[], value: boolean) => {
+    if (!accountRef.current) { setAuthError(null); setSignInOpen(true); return }
     setRead((prev) => {
       const next = { ...prev }
       const changed = ids.filter((id) => !!next[id] !== value)
       ids.forEach((id) => { if (value) next[id] = 1; else delete next[id] })
-      ReadingLog.save(next)
+      ReadingLog.save(accountRef.current?.id ?? null, next)
       push(value ? changed : [], value ? [] : changed)
       return next
     })
@@ -648,7 +664,7 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
   /** Whole-list writes — the ones that do not need the previous state. */
   const commitRead = useCallback((next: ReadMap) => {
     setRead((prev) => {
-      ReadingLog.save(next)
+      ReadingLog.save(accountRef.current?.id ?? null, next)
       if (accountRef.current) {
         const added = Object.keys(next).filter((id) => !prev[id])
         const removed = Object.keys(prev).filter((id) => !next[id])
@@ -659,6 +675,7 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
   }, [push])
 
   const importCsv = useCallback((file: File) => {
+    if (!accountRef.current) { setAuthError(null); setSignInOpen(true); return }
     if (!graph) return
     const reader = new FileReader()
     reader.onload = () => {
@@ -917,7 +934,8 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
             onClearAll={clearRead}
             hasRead={readCount > 0}
             sheet={vp.phone}
-            synced={accountsAvailable ? !!account : undefined}
+            signedIn={!!account}
+            onSignIn={() => { setAuthError(null); setSignInOpen(true) }}
             authNote={authNote}
             width={panelWidth}
             onResize={resizePanel}
