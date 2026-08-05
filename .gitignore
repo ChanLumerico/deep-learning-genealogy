@@ -9,6 +9,8 @@ coverage/
 legacy/
 CLAUDE.md
 
-# local secrets; .env.example is the committed template
-.env
-.env.local
+# local secrets; .env.example is the committed template. Broad on purpose —
+# .env.supabase-admin holds an account-wide token, and a rule that only names
+# the files that exist today is a rule that misses the next one.
+.env*
+!.env.example
