@@ -219,3 +219,135 @@ describe('export round-trip', () => {
     expect(csv.trim().split('\n')).toHaveLength(1)
   })
 })
+
+// A title arrives wrapped in things that are not the title — a list index, the
+// venue, "(arXiv preprint)" — and against exact matching alone a whole file of
+// them scored zero rather than nearly-zero. These are the shapes that produced
+// that, measured against the real corpus.
+describe('a title that arrives decorated', () => {
+  it('ignores a leading list index', () => {
+    expect(hit('Title\n[2012] ImageNet Classification with Deep Convolutional Neural Networks'))
+      .toEqual(['alexnet'])
+    expect(hit('Title\n3. Deep Residual Learning for Image Recognition')).toContain('resnet')
+  })
+
+  it('ignores a trailing venue or preprint note', () => {
+    expect(hit('Title\nAttention Is All You Need (NeurIPS 2017)')).toEqual(['transformer'])
+    expect(hit('Title\nAn Image is Worth 16x16 Words: Transformers for Image Recognition at Scale (arXiv preprint)'))
+      .toEqual(['vit'])
+    expect(hit('Title\nDeep Residual Learning for Image Recognition, arXiv:1512.03385'))
+      .toContain('resnet')
+  })
+
+  it('accepts a title cut off at its subtitle', () => {
+    expect(hit('Title\nMobileNets')).toEqual(['mobilenet'])
+    expect(hit('Title\nAn Image is Worth 16x16 Words')).toEqual(['vit'])
+  })
+
+  it('leaves a short title alone rather than guessing', () => {
+    // "Fast R-CNN" is eight characters normalised — too short to be found by
+    // containment, and it does not need to be: undecorating makes it exact
+    expect(hit('Title\nFast R-CNN (arXiv preprint)')).toEqual(['fastrcnn'])
+  })
+})
+
+describe('a model name that carries a size or a version', () => {
+  it('reads a size as the same paper', () => {
+    expect(hit('Model\nResNet-50')).toContain('resnet')
+    expect(hit('Model\nVGG-16')).toEqual(['vgg'])
+    expect(hit('Model\nViT-B/16')).toEqual(['vit'])
+  })
+
+  it('does not read a version as the same paper', () => {
+    // DALL-E 3 is not the DALL·E the graph holds, and crediting a reader with
+    // a paper they did not read is worse than leaving the row unmatched
+    expect(hit('Model\nDALL-E 3')).toEqual([])
+    expect(hit('Model\nGPT-4')).toEqual([])
+  })
+})
+
+describe('columns named in other vocabularies', () => {
+  const rows = 'AlexNet,ImageNet Classification with Deep Convolutional Neural Networks'
+
+  it('recognises Korean headers as headers, not as a first row', () => {
+    const r = PaperCsv.parse(`모델,논문\n${rows}`, ix)
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      expect(r.rows).toBe(1)          // the header was not eaten as data
+      expect(r.ignored).toEqual([])
+      expect(Object.keys(r.matched)).toEqual(['alexnet'])
+    }
+  })
+
+  it('recognises the words a hand-kept sheet uses', () => {
+    for (const head of ['Architecture,Reference', 'Algorithm,Work', 'Method,Article'])
+      expect(hit(`${head}\n${rows}`)).toEqual(['alexnet'])
+  })
+
+  it('tries an ambiguous "Name" column as both', () => {
+    // Notion fills it with titles, a hand-made sheet with model names
+    expect(hit('Name,Tags\nImageNet Classification with Deep Convolutional Neural Networks,cv'))
+      .toEqual(['alexnet'])
+    expect(hit('Name,Tags\nAlexNet,cv')).toEqual(['alexnet'])
+  })
+})
+
+// The loose pass exists to raise recall, and the only way it can go wrong is
+// by ticking something the reader never read. Papers deliberately absent from
+// the graph must match nothing at all.
+describe('what it refuses to match', () => {
+  const absent = [
+    ['RetNet', 'Retentive Network: A Successor to Transformer for Large Language Models'],
+    ['RWKV', 'RWKV: Reinventing RNNs for the Transformer Era'],
+    ['Hyena', 'Hyena Hierarchy: Towards Larger Convolutional Language Models'],
+    ['KAN', 'KAN: Kolmogorov-Arnold Networks'],
+    ['Chinchilla', 'Training Compute-Optimal Large Language Models'],
+    ['PaLM', 'PaLM: Scaling Language Modeling with Pathways'],
+    ['Megatron', 'Megatron-LM: Training Multi-Billion Parameter Language Models'],
+    ['BigBird', 'Big Bird: Transformers for Longer Sequences'],
+    ['Reformer', 'Reformer: The Efficient Transformer'],
+    ['SimCLR', 'A Simple Framework for Contrastive Learning of Visual Representations'],
+    ['BYOL', 'Bootstrap Your Own Latent: A New Approach to Self-Supervised Learning'],
+    ['DINO', 'Emerging Properties in Self-Supervised Vision Transformers'],
+    ['NeRF', 'NeRF: Representing Scenes as Neural Radiance Fields for View Synthesis'],
+    ['MoCo', 'Momentum Contrast for Unsupervised Visual Representation Learning'],
+  ]
+
+  it('matches nothing in a list of papers the graph does not hold', () => {
+    const csv = ['Model,Paper', ...absent.map(([m, p]) => `${m},"${p}"`)].join('\n')
+    expect(hit(csv)).toEqual([])
+  })
+
+  it('reports them all as unmatched rather than silently dropping them', () => {
+    const csv = ['Model,Paper', ...absent.map(([m, p]) => `${m},"${p}"`)].join('\n')
+    const r = PaperCsv.parse(csv, ix)
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.ignored).toHaveLength(absent.length)
+  })
+})
+
+describe('what it reports back', () => {
+  it('counts rows against rows, and models separately', () => {
+    // ResNet's paper is two nodes — the technique and the model — so ticking
+    // more models than rows matched is correct, and saying "2 of 1 rows
+    // matched" would not be
+    const r = PaperCsv.parse('Model,Paper\nResNet,Deep Residual Learning for Image Recognition', ix)
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.rows).toBe(1)
+    expect(r.matchedRows).toBe(1)
+    expect(r.count).toBeGreaterThan(1)
+    expect(r.ignored).toEqual([])
+  })
+
+  it('never claims every row matched while listing one that did not', () => {
+    const r = PaperCsv.parse(
+      'Model,Paper\nAlexNet,ImageNet Classification with Deep Convolutional Neural Networks\n'
+      + 'NeRF,NeRF: Representing Scenes as Neural Radiance Fields for View Synthesis', ix)
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.rows).toBe(2)
+    expect(r.matchedRows).toBe(1)
+    expect(r.ignored).toHaveLength(1)
+  })
+})

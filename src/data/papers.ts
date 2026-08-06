@@ -92,6 +92,13 @@ export const CSV_ALIASES: Record<string, string> = {
   doubledqn: 'ddqn', duelingdqn: 'dueling', wordvec: 'w2v', word2vec: 'w2v', gpt3: 'gpt3', gpt2: 'gpt2',
   stablediffusion: 'ldm', latentdiffusion: 'ldm', llama: 'llama', llama2: 'llama2', llama3: 'llama2',
   vitvisiontransformer: 'vit', maskrcnn: 'maskrcnn', fastrcnn: 'fastrcnn', fasterrcnn: 'fasterrcnn',
+  // written-out names, which a hand-kept list uses more often than the acronym
+  visiontransformer: 'vit', inceptionv1: 'googlenet', deepqnetwork: 'dqn',
+  variationalautoencoder: 'vae', longshorttermmemory: 'lstm', gatedrecurrentunit: 'gru',
+  generativeadversarialnetwork: 'gan', proximalpolicyoptimization: 'ppo',
+  trustregionpolicyoptimization: 'trpo', softactorcritic: 'sac',
+  deterministicpolicygradient: 'dpg', denoisingdiffusion: 'ddpm',
+  scorebasedsde: 'scoresde', scoresde: 'scoresde', maskedautoregressiveflow: 'maf',
 }
 
 /**

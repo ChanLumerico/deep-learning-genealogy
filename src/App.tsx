@@ -720,7 +720,11 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
       notify(res.count
         ? countPhrase(res.count, importMode === 'replace' ? 'imported · list replaced' : 'imported')
         : 'Nothing in that file matched a model', res.count ? 'good' : 'bad')
-      setImportNote(res.count + ' of ' + res.rows + ' rows matched' +
+      // rows against rows: `count` is models ticked, which is larger whenever
+      // two nodes share a paper, and reading "86 of 86 matched" beside a row
+      // reported as unmatched is simply a contradiction
+      setImportNote(res.matchedRows + ' of ' + res.rows + ' rows matched' +
+        (res.count !== res.matchedRows ? ` · ${res.count} models` : '') +
         (importMode === 'replace' ? ' · list replaced' : '') +
         (res.ignored.length
           ? ' · not in the tree: ' + res.ignored.slice(0, 4).join(', ') +
