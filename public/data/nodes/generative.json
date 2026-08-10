@@ -52,6 +52,19 @@
   "l": "Sampling needs a separate prior trained per level"
  },
  {
+  "id": "vqgan",
+  "n": "VQGAN",
+  "y": 2021,
+  "org": "Heidelberg",
+  "c": "image tokens a transformer can afford",
+  "lane": "gen",
+  "tr": "vae",
+  "s": "M",
+  "p": "Transformers cannot attend over a megapixel image",
+  "i": "Adversarial codebook, then a transformer prior",
+  "l": "Its best FID needs 95% of samples thrown away"
+ },
+ {
   "id": "gan",
   "n": "GAN",
   "y": 2014,

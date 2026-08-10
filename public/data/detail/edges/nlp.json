@@ -1578,5 +1578,38 @@
     "url": "https://openai.com/index/learning-to-reason-with-llms/"
    }
   ]
+ },
+ "transformer>vqgan": {
+  "lead": "Attention's cost is quadratic in the sequence, and a sequence of pixels grows with the area of the image, so transformers on raw images stopped at 64×64. Every attempt to push past that had restricted the receptive field or approximated the attention matrix, and paid for it. VQGAN does neither. It shortens the sequence until an ordinary language model can read a whole picture.",
+  "blocks": [
+   {
+    "h": "Two hundred and fifty-six tokens, and a GPT-2 off the shelf",
+    "b": "The first stage turns a 256×256 image into a 16×16 grid of codebook indices. What is left is a sequence of 256 symbols over a vocabulary of 1024 or 16384, which is a language modelling problem in the most literal sense:\n\n$$p(s) = \\prod_i p(s_i \\mid s_{<i}), \\qquad \\mathcal{L} = \\mathbb{E}_{x}\\big[-\\log p(s)\\big]$$\n\nThe model is a decoder-only transformer of GPT-2-medium size, 307M parameters, unmodified. The sequence length was not chosen for elegance either: 256 is the longest that architecture could be trained on with 12 GB of VRAM, and the compression factor of the first stage was then set to fit."
+   },
+   {
+    "h": "Conditioning by prepending, which is free",
+    "b": "A decoder-only model conditions the only way it can — put the condition at the front. For a class label that is one index. For anything with spatial extent, a second VQGAN is trained on the conditioning modality to give an index sequence $r$, which is prepended to $s$ with the loss restricted to $p(s_i \\mid s_{<i}, r)$.\n\nThe same mechanism, unchanged, then covers semantic segmentation on ADE20K and COCO-Stuff, depth-to-image, edge-to-image, pose-guided generation on DeepFashion and stochastic super-resolution. No task-specific architecture appears anywhere, which is the argument for using a transformer here rather than a purpose-built generator."
+   },
+   {
+    "h": "What the fixed budget still costs",
+    "b": "256 tokens is a hard ceiling, so images larger than the training crop are generated patch by patch with the attention window slid across them. It works, and it produced the first megapixel images from a transformer — but only where the dataset's statistics are approximately spatially invariant, or where a spatial conditioning map travels with the window to tell it where it is.\n\nThat the transformer was the right prior for these codes is measured rather than assumed. Against PixelSNAIL, the strongest of the PixelCNN family, it wins on negative log-likelihood across all five datasets tested, at equal training steps and again at equal wall-clock time — the latter being the harder comparison, since PixelSNAIL trains roughly twice as fast."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Taming Transformers for High-Resolution Image Synthesis",
+    "y": 2021,
+    "url": "https://arxiv.org/abs/2012.09841"
+   },
+   {
+    "t": "Language Models are Unsupervised Multitask Learners",
+    "y": 2019
+   },
+   {
+    "t": "Neural Discrete Representation Learning",
+    "y": 2017,
+    "url": "https://arxiv.org/abs/1711.00937"
+   }
+  ]
  }
 }

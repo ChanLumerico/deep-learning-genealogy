@@ -470,6 +470,10 @@
  "vqvae2": {
   "t": "Generating Diverse High-Fidelity Images with VQ-VAE-2"
  },
+ "vqgan": {
+  "t": "Taming Transformers for High-Resolution Image Synthesis",
+  "arxiv": "2012.09841"
+ },
  "gan": {
   "t": "Generative Adversarial Networks"
  },

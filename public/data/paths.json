@@ -124,6 +124,12 @@
     "title": "Keeping the likelihood exact",
     "blurb": "Invertible maps with a tractable Jacobian, all the way to a continuous-time version of the same idea.",
     "nodes": ["ae", "vae", "nice", "realnvp", "glow", "nde", "ffjord", "flowmatch"]
+   },
+   {
+    "id": "firststage",
+    "title": "The autoencoder under Stable Diffusion",
+    "blurb": "One question asked four times — how much can be thrown away before the model built on top stops working — and the compressor everything since has been trained inside.",
+    "nodes": ["ae", "vae", "vqvae", "vqgan", "ldm"]
    }
   ]
  },

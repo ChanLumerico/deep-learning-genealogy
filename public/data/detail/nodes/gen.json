@@ -1056,5 +1056,42 @@
     "url": "https://arxiv.org/abs/2403.03206"
    }
   ]
+ },
+ "vqgan": {
+  "lead": "By 2020 the recipe for generating an image with a transformer was both known and unusable: attention costs $O(n^2)$ in the sequence, a sequence of pixels is as long as the image is large, and 64×64 was where it stopped. VQ-VAE had the right shape of answer — encode to a grid of integers and model that instead — but its codes were trained under a squared-error loss and did not survive being compressed hard enough to matter. VQGAN's contribution is not the transformer. It is a codebook good enough that 256 integers describe a 256×256 image.",
+  "blocks": [
+   {
+    "h": "Where the sequence length has to come from",
+    "b": "A first stage that reduces an $H \\times W$ image by a factor $f$ per side leaves $\\tfrac{H}{f} \\times \\tfrac{W}{f}$ tokens, and that number is the entire budget. At $f = 8$, which is what DALL·E's discrete VAE used, a 256-pixel image is 1024 tokens. At $f = 16$ it is **256** — the longest sequence on which a GPT-2-medium of 307M parameters could be trained on a single 12 GB card, which is how the paper chose it.\n\nSo $f = 16$ is not a preference, it is the constraint. And it is exactly where VQ-VAE stops working: a squared-error reconstruction loss, faced with detail the codebook cannot represent, predicts the average of the possibilities, and the average of plausible textures is a blur. The transformer would then be modelling a vocabulary of blurs."
+   },
+   {
+    "h": "Two losses, and one weight computed rather than chosen",
+    "b": "The fix is to stop asking for pixel-wise accuracy. $\\mathcal{L}_{\\text{rec}}$ becomes a perceptual loss — a distance between deep features, which does not punish a texture for being right in kind and wrong in placement — and a patch-based discriminator is trained against the reconstruction:\n\n$$\\mathcal{L}_{\\text{GAN}} = \\log D(x) + \\log\\big(1 - D(\\hat{x})\\big)$$\n\n$$Q^* = \\arg\\min_{E,G,Z}\\max_D\\; \\mathbb{E}_{x}\\big[\\mathcal{L}_{\\text{VQ}} + \\lambda \\mathcal{L}_{\\text{GAN}}\\big]$$\n\nThe adversarial weight is the part worth noticing, because it is not a hyperparameter. It is recomputed every step from the two gradients it has to balance, taken with respect to the last layer $L$ of the decoder:\n\n$$\\lambda = \\frac{\\nabla_{G_L}\\big[\\mathcal{L}_{\\text{rec}}\\big]}{\\nabla_{G_L}\\big[\\mathcal{L}_{\\text{GAN}}\\big] + \\delta}, \\qquad \\delta = 10^{-6}$$\n\nEverything else is VQ-VAE untouched: quantisation by nearest codebook entry, the straight-through estimator, the commitment term. The only architectural addition is a single attention layer at the lowest resolution, so the encoder can aggregate context from anywhere before quantising."
+   },
+   {
+    "h": "What the codebook is worth, in one table",
+    "b": "The argument is settled by a reconstruction number rather than a sample number, and that is the right choice — reconstruction FID is a ceiling on what any prior trained over those codes could reach. On ImageNet validation:\n\nDALL·E's discrete VAE, 32×32 tokens over 8192 codes, scores **32.01**. VQGAN at 16×16 over 1024 codes scores **7.94**, and over 16384 codes **4.98**. A quarter of the sequence length and a sixth of the FID. VQ-VAE-2's two levels come to 5120 tokens for roughly 10; VQGAN reaches 7.41 on the same measure with 256.\n\nHolding the transformer and the sequence length fixed at 256 and varying $f$ shows what the compression buys. At $f = 1$ — a $k$-means palette of 512 RGB values, which is the pixel-space baseline — 256 tokens cover a patch, not a face. At $f = 8$ the layout is right but a face comes out half-bearded, viewpoints disagreeing across the image. Only $f = 16$ spans enough of the picture for global structure, and it samples **280×** faster than the pixel baseline, which needs 7258 seconds for one image on a Titan X."
+   },
+   {
+    "h": "Sampling, honestly",
+    "b": "Class-conditional ImageNet at 256×256, with $|Z| = 16384$: the best FID without any filtering is **15.78**. BigGAN was at 7.53 and ADM with classifier guidance at 4.59, both in VQGAN's own table. The number that beats them — **5.88**, at an Inception Score of 304.8 — is obtained by generating samples and keeping one in twenty on a ResNet-101 classifier's judgement. The acceptance rate is a column of that table, which is the paper being straight about it.\n\nAgainst the competition it actually claims, it wins outright: VQ-VAE-2 at roughly 31 and DCTransformer at 36.5, with about a tenth of VQ-VAE-2's estimated 13.5B parameters.\n\nWhat happened next settles which half was the contribution. The same authors' next paper keeps this autoencoder almost unchanged, discards the autoregressive transformer, and runs a diffusion model in the latent space instead; that paper is Stable Diffusion. The sliding-window trick that got megapixel images out of a 256-token model also carries a condition the paper states — it needs image statistics that are roughly spatially invariant, or a spatial conditioning map to keep the window oriented."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Taming Transformers for High-Resolution Image Synthesis",
+    "y": 2021,
+    "url": "https://arxiv.org/abs/2012.09841"
+   },
+   {
+    "t": "Neural Discrete Representation Learning",
+    "y": 2017,
+    "url": "https://arxiv.org/abs/1711.00937"
+   },
+   {
+    "t": "The Unreasonable Effectiveness of Deep Features as a Perceptual Metric",
+    "y": 2018
+   }
+  ]
  }
 }

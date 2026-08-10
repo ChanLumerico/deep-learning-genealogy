@@ -1447,5 +1447,102 @@
     "url": "https://arxiv.org/abs/2407.01392"
    }
   ]
+ },
+ "vqvae>vqgan": {
+  "lead": "VQ-VAE's codes are trained to minimise squared error in pixels, which is precisely the objective that produces a blur wherever the codebook falls short. At $f = 4$ that is survivable. The sequence length a transformer can afford needs $f = 16$, and there VQ-VAE's reconstructions come apart. VQGAN is the same architecture with the reconstruction loss replaced, and that turns out to be enough.",
+  "blocks": [
+   {
+    "h": "What breaks at sixteen",
+    "b": "Squared error, faced with genuine uncertainty about what a region contains, is minimised by the mean of the possibilities. Averaging plausible textures gives an implausible one, so the failure mode of a hard-compressing VQ-VAE is not missing detail but smeared detail — and the transformer downstream would be learning a vocabulary of smears.\n\nA perceptual loss compares activations of a pretrained network rather than pixels. A patch of bark that is the right bark in the wrong place scores well, where the squared error would have punished it into an average. That is the entire licence for compressing further."
+   },
+   {
+    "h": "The discriminator's job here is not sampling",
+    "b": "The added adversary is a patch-based discriminator told to distinguish real images from **reconstructions**, not from samples. There is a ground-truth image on the other side of the loss the whole time; the discriminator is not supplying a training signal that was missing, it is replacing one that was misleading.\n\nIts weight cannot be tuned by hand across the range of datasets involved, so it is computed — the ratio of the reconstruction gradient to the adversarial gradient at the decoder's last layer, recalculated each step. The adversarial term is thereby always scaled to the term it competes with."
+   },
+   {
+    "h": "What carries over unchanged",
+    "b": "Quantisation by nearest entry, the straight-through gradient, the commitment loss, and the two-stage structure itself — learn the codes, then learn a prior over them — are all VQ-VAE's, kept as they were.\n\nThe prior is the other substitution. VQ-VAE used PixelCNN and its descendants; VQGAN uses a decoder-only transformer, and measures the swap rather than asserting it. Across five settings — ImageNet, a restricted ImageNet, LSUN churches and towers, depth-conditioned and segmentation-conditioned — the transformer beats PixelSNAIL on negative log-likelihood both at equal steps and at equal wall-clock time, despite PixelSNAIL training about twice as fast."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Taming Transformers for High-Resolution Image Synthesis",
+    "y": 2021,
+    "url": "https://arxiv.org/abs/2012.09841"
+   },
+   {
+    "t": "Neural Discrete Representation Learning",
+    "y": 2017,
+    "url": "https://arxiv.org/abs/1711.00937"
+   },
+   {
+    "t": "The Unreasonable Effectiveness of Deep Features as a Perceptual Metric",
+    "y": 2018
+   }
+  ]
+ },
+ "gan>vqgan": {
+  "lead": "A discriminator exists because a generator has nothing to compare its output against. VQGAN puts one somewhere the comparison is available — an autoencoder's reconstruction, sitting next to the image it reconstructed. That sounds redundant, and it is the point: the pixel-wise loss already available is the one producing the blur, so the adversary is there to replace a bad signal rather than to supply a missing one.",
+  "blocks": [
+   {
+    "h": "A loss, not a generator",
+    "b": "The discriminator is patch-based, in the style pix2pix established, and it never sees a sample. It sees $x$ and $\\hat{x} = G(q(E(x)))$, and what it shapes is which properties the codebook is obliged to preserve.\n\nSampling is done elsewhere, by an autoregressive transformer maximising a likelihood. So the model sits on both sides of a divide the field had treated as a choice, and the paper describes itself that way — bridging adversarial and likelihood-based approaches — with the adversarial part demoted from generator to loss function."
+   },
+   {
+    "h": "Weighting a term you cannot tune",
+    "b": "An adversarial loss added to a reconstruction loss needs a weight, and the right value differs by dataset and drifts during training. VQGAN computes it instead:\n\n$$\\lambda = \\frac{\\nabla_{G_L}\\big[\\mathcal{L}_{\\text{rec}}\\big]}{\\nabla_{G_L}\\big[\\mathcal{L}_{\\text{GAN}}\\big] + \\delta}$$\n\nwith both gradients taken at the last layer $L$ of the decoder and $\\delta = 10^{-6}$ for safety. The adversarial gradient is rescaled to the size of the reconstruction gradient it is arguing with, every step, which is why one recipe covers faces, landscapes, ImageNet and segmentation maps alike."
+   },
+   {
+    "h": "Where this leaves the adversarial line",
+    "b": "As a face generator VQGAN was not competitive and does not pretend to be: 9.6 FID on FFHQ against StyleGAN2's 3.8, and 10.2 on CelebA-HQ against PGGAN's 8.0. Judged as a GAN it loses to GANs.\n\nWhat survived is the other use. The first stage of Stable Diffusion is trained with the same perceptual and patch-adversarial objective, and every latent diffusion model since has inherited it. The most durable thing the adversarial line contributed to the diffusion era turned out to be a loss function rather than a generator."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Taming Transformers for High-Resolution Image Synthesis",
+    "y": 2021,
+    "url": "https://arxiv.org/abs/2012.09841"
+   },
+   {
+    "t": "Image-to-Image Translation with Conditional Adversarial Networks",
+    "y": 2017
+   },
+   {
+    "t": "High-Resolution Image Synthesis with Latent Diffusion Models",
+    "y": 2022
+   }
+  ]
+ },
+ "vqgan>ldm": {
+  "lead": "VQGAN is two stages: an autoencoder that turns an image into 256 integers, and an autoregressive transformer over those integers. Stable Diffusion, from the same authors a year later, keeps the first stage almost untouched and throws the second away. Which half was replaced is the whole content of the transition.",
+  "blocks": [
+   {
+    "h": "The prior was the weak half",
+    "b": "The numbers say so plainly, and they are in VQGAN's own tables. Its autoencoder reconstructs ImageNet at **4.98** FID, so the codes were never the ceiling. Its class-conditional samples reach **15.78** without rejection filtering, while ADM with classifier guidance was already at 4.59. The gap is the prior.\n\nReplacing it with diffusion removes two things at once: the raster ordering, which forced a two-dimensional image to be generated as though it were a sentence, and the sequential sampling, which made every image cost 256 forward passes in a fixed order."
+   },
+   {
+    "h": "What the latent space did for diffusion",
+    "b": "VQGAN's argument was that a transformer should not spend its capacity on local texture, because a convolutional autoencoder handles that better and more cheaply. Latent diffusion makes the identical argument about a different prior. Pixel-space diffusion spends most of its steps on detail no one perceives; move it into the autoencoder's latent and the perceptual compression is already done, leaving the generative model the semantics.\n\nStable Diffusion keeps the perceptual and patch-adversarial training of that autoencoder, and offers it in two regularisations — a slight KL penalty, or a vector-quantised layer, which is VQGAN's quantiser used directly. The first stage is reusable across every model trained on top, which is the property that made an open release of it useful at all."
+   },
+   {
+    "h": "And the conditioning mechanism changes with it",
+    "b": "VQGAN conditions by prepending. A class index, or a second VQGAN's encoding $r$ of a segmentation map or a depth map, is placed in front of the sequence and the loss restricted to $p(s_i \\mid s_{<i}, r)$. It is elegant and it is all a decoder-only autoregressive model can do — the condition has to be tokens, and it has to come first.\n\nLatent diffusion adds cross-attention into the denoiser instead, so a condition can be a variable-length sequence from any encoder and can be attended to at every layer and every step. That is what makes text conditioning natural rather than an encoding problem, and it is the reason this branch, and not the autoregressive one, is what the next three years were built on."
+   }
+  ],
+  "refs": [
+   {
+    "t": "High-Resolution Image Synthesis with Latent Diffusion Models",
+    "y": 2022
+   },
+   {
+    "t": "Taming Transformers for High-Resolution Image Synthesis",
+    "y": 2021,
+    "url": "https://arxiv.org/abs/2012.09841"
+   },
+   {
+    "t": "Diffusion Models Beat GANs on Image Synthesis",
+    "y": 2021
+   }
+  ]
  }
 }

@@ -70,6 +70,7 @@ export const PAPERS: Record<string, string> = {
   apprentice: 'Apprenticeship Learning via Inverse Reinforcement Learning',
   maxentirl: 'Maximum Entropy Inverse Reinforcement Learning',
   gail: 'Generative Adversarial Imitation Learning',
+  vqgan: 'Taming Transformers for High-Resolution Image Synthesis',
   diamond: 'Diffusion for World Modeling: Visual Details Matter in Atari',
   genie: 'Genie: Generative Interactive Environments',
   dreamer4: 'Training Agents Inside of Scalable World Models',

@@ -694,6 +694,30 @@
   "l": "one codebook → a hierarchy of them"
  },
  {
+  "f": "vqvae",
+  "t": "vqgan",
+  "k": "direct",
+  "l": "an L2 loss blurs at f=16 → perceptual and adversarial"
+ },
+ {
+  "f": "gan",
+  "t": "vqgan",
+  "k": "cross",
+  "l": "the adversarial loss, moved onto a decoder"
+ },
+ {
+  "f": "transformer",
+  "t": "vqgan",
+  "k": "cross",
+  "l": "attention over words → over 256 image codes"
+ },
+ {
+  "f": "vqgan",
+  "t": "ldm",
+  "k": "cross",
+  "l": "an autoregressive prior → a diffusion one"
+ },
+ {
   "f": "pixelcnn",
   "t": "vqvae",
   "k": "cross",
