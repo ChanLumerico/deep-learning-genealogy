@@ -638,6 +638,18 @@
  "dreamer3": {
   "t": "Mastering Diverse Domains through World Models"
  },
+ "diamond": {
+  "t": "Diffusion for World Modeling: Visual Details Matter in Atari",
+  "arxiv": "2405.12399"
+ },
+ "genie": {
+  "t": "Genie: Generative Interactive Environments",
+  "arxiv": "2402.15391"
+ },
+ "dreamer4": {
+  "t": "Training Agents Inside of Scalable World Models",
+  "arxiv": "2509.24527"
+ },
  "cql": {
   "t": "Conservative Q-Learning for Offline Reinforcement Learning"
  },

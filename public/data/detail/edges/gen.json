@@ -1347,5 +1347,105 @@
     "y": 2024
    }
   ]
+ },
+ "vqvae>genie": {
+  "lead": "VQ-VAE's codebook exists to give images a discrete vocabulary, so that an autoregressive prior built for words has something word-shaped to model. Genie uses the same quantiser twice. Once in the ordinary way, over video. And once over something that is not an image at all — the difference between two consecutive frames — where the vocabulary that falls out is a set of buttons.",
+  "blocks": [
+   {
+    "h": "The same trick, applied to a verb",
+    "b": "An encoder reads $x_1, \\ldots, x_t$ together with $x_{t+1}$ and emits a continuous $\\tilde{a}_t$; the codebook snaps it to one of $|A| = 8$ entries; a decoder must then rebuild $\\hat{x}_{t+1}$ from the history and that single code. The straight-through estimator and the commitment loss are VQ-VAE's, unchanged.\n\nWhat has changed is what is being compressed. In VQ-VAE the code stands for a patch of appearance. Here it stands for a transition, and the reconstruction target is a frame the encoder was allowed to see — which is why the size of the codebook, rather than the architecture, is doing all the work."
+   },
+   {
+    "h": "Why this codebook has to be tiny",
+    "b": "Image codebooks run to 512 or 8192 entries and the pressure is always upward: more codes, better reconstruction, sharper samples. Genie's pressure runs the other way. Give the action encoder enough capacity and it will pass the next frame straight through the bottleneck for the decoder to copy — the reconstruction loss is delighted and no action has been learned.\n\nEight entries make that failure unavailable. Eight symbols cannot carry a frame, so the encoder is forced to spend its one code on whichever change the history least predicts. The quantiser is not compressing here; it is refusing to let the model cheat."
+   },
+   {
+    "h": "What the quantiser leaves behind",
+    "b": "At inference the entire latent action model is discarded except the codebook. The player types an integer in $[0, 8)$ and it is looked up. The codes arrive unnamed and unordered — nothing in training asked for **jump** to be code 3 — although the paper reports that a code holds its meaning across different prompt frames, so they can be learned once by trying them.\n\nEight is also the ceiling. Whatever a game needs beyond eight distinguishable moves is not expressible, and there is no inverse model left at inference to ask about anything finer."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Genie: Generative Interactive Environments",
+    "y": 2024,
+    "url": "https://arxiv.org/abs/2402.15391"
+   },
+   {
+    "t": "Neural Discrete Representation Learning",
+    "y": 2017,
+    "url": "https://arxiv.org/abs/1711.00937"
+   }
+  ]
+ },
+ "scoresde>diamond": {
+  "lead": "The score SDE collapsed diffusion into one continuous statement: a forward equation that destroys the data, a reverse one that rebuilds it, and a learned score standing in for the term nobody can compute. DIAMOND writes a world model in exactly that language, and changes one thing — the marginals being reversed are conditioned on what the agent has already seen and already done.",
+  "blocks": [
+   {
+    "h": "Conditioning the reverse process",
+    "b": "The reverse-time SDE is the one Anderson gave and Song et al. made practical:\n\n$$dx = \\big[f(x,\\tau) - g(\\tau)^2 \\nabla_x \\log p_\\tau(x)\\big]d\\tau + g(\\tau)\\,d\\bar{w}$$\n\nDIAMOND takes the variance-exploding choice, $f = 0$ and $g(\\tau) = \\sqrt{2\\dot{\\sigma}(\\tau)\\sigma(\\tau)}$, so the perturbation kernel is a plain Gaussian around the clean frame. Denoising score matching then becomes a reconstruction loss, and the only edit needed to make it a world model is in the argument list:\n\n$$\\mathcal{L}(\\theta) = \\mathbb{E}\\Big[\\big\\|D_\\theta\\big(x^\\tau_{t+1}, \\tau, x^0_{\\le t}, a_{\\le t}\\big) - x^0_{t+1}\\big\\|^2\\Big]$$"
+   },
+   {
+    "h": "Where the two clocks meet",
+    "b": "Score-based generation has one clock. A world model has two, and DIAMOND keeps the notation honest about it: $t$ steps the environment forward, $\\tau$ runs backwards from $T$ to $0$ **inside** each of those steps. Every single frame of imagination is a complete reverse process.\n\nThat is why the number of function evaluations is a first-class design variable here in a way it never is for image generation. A rollout costs frames times NFE, and the agent needs thousands of frames. Stable Diffusion spends hundreds of steps on one picture; DIAMOND spends 3 on one frame, against the 16 that IRIS needs for the same $64 \\times 64$."
+   },
+   {
+    "h": "The parameterisation is where they part",
+    "b": "Score SDE and DDPM ask the network for the noise. DIAMOND asks for a preconditioned mixture, following EDM, which is the same score model wearing a different training target. The difference shows only at the top of the noise schedule: with $\\sigma \\gg \\sigma_{\\text{data}}$ the noise-prediction objective is best satisfied by returning the input unchanged, which is a poor score estimate at precisely the moment sampling begins.\n\nGenerating a picture in several hundred steps, that hardly matters — later steps repair it. Rolling a world model out over a thousand frames at three steps each, it is the whole difference between a trajectory that holds together and one that has drifted out of distribution."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Diffusion for World Modeling: Visual Details Matter in Atari",
+    "y": 2024,
+    "url": "https://arxiv.org/abs/2405.12399"
+   },
+   {
+    "t": "Elucidating the Design Space of Diffusion-Based Generative Models",
+    "y": 2022,
+    "url": "https://arxiv.org/abs/2206.00364"
+   },
+   {
+    "t": "Score-Based Generative Modeling through Stochastic Differential Equations",
+    "y": 2021
+   }
+  ]
+ },
+ "flowmatch>dreamer4": {
+  "lead": "Flow matching threw out the diffusion machinery in favour of a straight line: interpolate noise and data, regress the velocity that points along it, integrate at sampling time. The cost is entirely in that last step. A world model an agent trains inside has to deliver a frame every fifty milliseconds, so Dreamer-v4 needs the integration to take four steps rather than sixty-four — and it needs the frames to be produced one at a time, not as a block.",
+  "blocks": [
+   {
+    "h": "The line, and the price of following it",
+    "b": "$$\\begin{aligned} x_\\tau &= (1-\\tau)x_0 + \\tau x_1 \\\\ \\mathcal{L}(\\theta) &= \\big\\|f_\\theta(x_\\tau, \\tau) - (x_1 - x_0)\\big\\|^2 \\end{aligned}$$\n\n$$x_{\\tau+d} = x_\\tau + f_\\theta(x_\\tau, \\tau)\\,d, \\qquad d = 1/K$$\n\nThe training objective could hardly be simpler, and none of the difficulty is there. It is that $K$ has to be large, because the network is only ever asked about an infinitesimal move and a large Euler step off a curved path lands somewhere else."
+   },
+   {
+    "h": "A network that knows how large a step it is taking",
+    "b": "Shortcut models add $d$ to the conditioning. At the finest step size the flow loss applies unchanged; above it, the target is two half-steps taken by the network itself and averaged, with the gradient stopped — so a big step is trained to arrive where two small ones would. Ask for $K = 4$ at inference and there is no discretisation error to pay, because that is the step size the model was taught.\n\nDiffusion forcing contributes the other half: give every frame in the sequence its own signal level, and one model can denoise the current frame while acting as clean history for the next. Shortcut forcing is both at once, over the interleaved sequence of actions and representations, and it is what turns 64 passes per frame into 4."
+   },
+   {
+    "h": "Why the loss moved into x-space",
+    "b": "Flow matching and shortcut models both predict the velocity $v = x_1 - x_0$. For an image or a video generated as one block that is the right target. For frames produced one after another, each becoming the next one's context, it is not: a $v$-prediction network is trained to emit high-frequency detail, and high-frequency error is exactly what accumulates.\n\nDreamer-v4 predicts the clean representation instead and converts to velocity space only to form the bootstrap term, scaling the result back by $(1-\\tau)^2$ — not a tuned weight but the exact relation between the two losses. The ablation is unambiguous, all at a fixed 9.1 FPS: four sampling steps alone take FVD from 306 to **875**; shortcut models bring it to 329; $x$-prediction 326; the $x$-space loss **151**; and the ramp weight $w(\\tau) = 0.9\\tau + 0.1$, which spends capacity where there is signal, **102**."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Training Agents Inside of Scalable World Models",
+    "y": 2025,
+    "url": "https://arxiv.org/abs/2509.24527"
+   },
+   {
+    "t": "Flow Matching for Generative Modeling",
+    "y": 2023
+   },
+   {
+    "t": "One Step Diffusion via Shortcut Models",
+    "y": 2024,
+    "url": "https://arxiv.org/abs/2410.12557"
+   },
+   {
+    "t": "Diffusion Forcing: Next-token Prediction Meets Full-Sequence Diffusion",
+    "y": 2024,
+    "url": "https://arxiv.org/abs/2407.01392"
+   }
+  ]
  }
 }

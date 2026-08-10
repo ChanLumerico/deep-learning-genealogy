@@ -351,6 +351,45 @@
   "l": "Behaviour still comes only from inside the model"
  },
  {
+  "id": "diamond",
+  "n": "DIAMOND",
+  "y": 2024,
+  "org": "Geneva · Edinburgh · MSR",
+  "c": "a world model that stays in pixels",
+  "lane": "rl",
+  "tr": "plan",
+  "s": "M",
+  "p": "Discrete latents drop details the agent needs",
+  "i": "Denoise the next frame itself, three EDM steps",
+  "l": "Memory is a short frame buffer, not a state"
+ },
+ {
+  "id": "genie",
+  "n": "Genie",
+  "y": 2024,
+  "org": "Google DeepMind",
+  "c": "playable worlds from video alone",
+  "lane": "rl",
+  "tr": "plan",
+  "s": "M",
+  "p": "A world model needs actions recorded alongside video",
+  "i": "Infer eight latent actions between frames, unsupervised",
+  "l": "Sixteen frames of memory, and about one frame a second"
+ },
+ {
+  "id": "dreamer4",
+  "n": "Dreamer-v4",
+  "y": 2025,
+  "org": "Google DeepMind",
+  "c": "diamonds in Minecraft, offline",
+  "lane": "rl",
+  "tr": "plan",
+  "s": "M",
+  "p": "A recurrent state model cannot fit a complex world",
+  "i": "Shortcut forcing: four passes a frame, in real time",
+  "l": "9.6 seconds of context is all the memory there is"
+ },
+ {
   "id": "cql",
   "n": "CQL",
   "y": 2020,

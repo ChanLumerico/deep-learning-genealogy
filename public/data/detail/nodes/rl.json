@@ -1096,5 +1096,119 @@
     "y": 2020
    }
   ]
+ },
+ "diamond": {
+  "lead": "World modelling had settled on discrete latents — IRIS's image tokens, DreamerV2's thirty-two categoricals — because discretising the state is what keeps error from compounding over a long rollout. What it also does is decide, at encoding time, which pixels mattered. In Atari a reward and an enemy can differ by a few of them, and the agent is the one that has to tell them apart. DIAMOND declines to compress: the world model is a diffusion model that denoises the next frame itself, in image space, and the agent is trained inside it.",
+  "blocks": [
+   {
+    "h": "The next frame as a denoising problem",
+    "b": "An unconditional diffusion model samples from $p_{\\text{data}}$. A world model has to sample from an environment's dynamics, so the network is conditioned on the history the agent has actually seen:\n\n$$\\mathcal{L}(\\theta) = \\mathbb{E}\\Big[\\big\\| D_\\theta\\big(x^\\tau_{t+1}, \\tau, x^0_{\\le t}, a_{\\le t}\\big) - x^0_{t+1} \\big\\|^2\\Big]$$\n\nTwo clocks run at once and the paper is careful to keep them apart. $t$ is environment time, stepping forward as the policy acts; $\\tau$ is diffusion time, running backwards from $T$ to $0$ inside every single step of $t$. Producing one frame means solving the reverse process in $\\tau$, and the clean result $x^0_t$ then joins the conditioning — together with the action the policy chose — for the next one. That is what makes imagination autoregressive.\n\n$D_\\theta$ is a 2D U-Net. The last $L$ observations are concatenated to the noisy frame channel-wise, and actions enter through adaptive group normalisation in the residual blocks, so pressing a different button reweights the features rather than adding a term to them."
+   },
+   {
+    "h": "Why the choice of diffusion framework decided everything",
+    "b": "DDPM was the obvious candidate and it does not work here. Under a noise-prediction objective, once $\\sigma \\gg \\sigma_{\\text{data}}$ the best thing the network can say is the input it was handed,\n\n$$\\xi_\\theta\\big(x^\\tau_{t+1}, y^\\tau_t\\big) \\to x^\\tau_{t+1}$$\n\nwhich is the identity function, and a useless estimate of the score at exactly the point where sampling begins. DIAMOND takes the EDM preconditioning instead, mixing the target adaptively with the noise level:\n\n$$D_\\theta\\big(x^\\tau_{t+1}, y^\\tau_t\\big) = c^\\tau_{\\text{skip}} x^\\tau_{t+1} + c^\\tau_{\\text{out}} F_\\theta\\big(c^\\tau_{\\text{in}} x^\\tau_{t+1}, y^\\tau_t\\big)$$\n\n$$c^\\tau_{\\text{skip}} = \\frac{\\sigma^2_{\\text{data}}}{\\sigma^2_{\\text{data}} + \\sigma^2(\\tau)}$$\n\nAt high noise $c_{\\text{skip}} \\to 0$ and $F_\\theta$ is trained to produce the clean frame; at low noise $c_{\\text{skip}} \\to 1$ and it predicts the noise that was added. The consequence is not subtle. Unrolled to $t = 1000$ frames, the DDPM world model drifts out of distribution, and the fewer denoising steps it is given the faster it goes; the EDM one stays stable **even at a single step**."
+   },
+   {
+    "h": "Three denoising steps, because one is an average",
+    "b": "One step would be cheapest, and for Breakout it is enough. The trouble is what a single-step prediction actually **is**: the score model is a denoising autoencoder under an $L^2$ loss, so its optimal output is the **expectation** over every reconstruction consistent with the noisy input. Where that posterior is multimodal, the expectation is a point no mode occupies.\n\nBoxing shows it exactly. The policy controls the white player, so his action is known to the model and he is rendered sharply; the black player is unpredictable, and single-step sampling paints him as a smear across the places he might be. An iterative solver commits to one of them.\n\nSo $n = 3$ everywhere, with Euler's method — a higher-order solver costs more network evaluations than it returns. Against IRIS, which needs **16** evaluations per frame at the same $64 \\times 64$, the comparison runs the opposite way to the usual one: here the diffusion model is the cheap one, with fewer parameters and a shorter training run."
+   },
+   {
+    "h": "What visual fidelity is worth on the scoreboard",
+    "b": "On Atari 100k — a hundred thousand actions, about two hours of play, against the fifty million steps an unconstrained agent is given — DIAMOND scores a mean human-normalised **1.46** with an IQM of **0.641**, beating humans on 11 of the 26 games and setting the best mean for an agent trained entirely inside a world model.\n\nThe margin sits where the thesis says it should: Asterix 3698 against STORM's 1028, Breakout 132.5 against IRIS's 83.7, Road Runner 20673 against 17564. Put the two world models on the same data and IRIS's rollouts flicker — in Asterix an enemy turns into a reward and back across four frames, in Breakout the score and the brick wall disagree between them. A few pixels, and an agent that is supposed to chase one and avoid the other.\n\nThe agent itself is deliberately unremarkable: an actor–critic over a shared CNN–LSTM, REINFORCE with a value baseline, $\\lambda$-returns for the critic, and a separate CNN–LSTM for reward and termination. Five seeds on 26 games came to **1.03 GPU-years**, roughly 2.9 days per game on one RTX 4090.\n\nScaled up on 87 hours of Counter-Strike the same world model becomes a playable Dust II at 10 Hz, and shows its limit while doing it. There is no state, only a buffer of recent frames, so walking up to a wall can make the model forget where it was standing — and it obligingly grants a second mid-air jump, because nothing in the recorded gameplay ever showed one being refused."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Diffusion for World Modeling: Visual Details Matter in Atari",
+    "y": 2024,
+    "url": "https://arxiv.org/abs/2405.12399"
+   },
+   {
+    "t": "Elucidating the Design Space of Diffusion-Based Generative Models",
+    "y": 2022,
+    "url": "https://arxiv.org/abs/2206.00364"
+   },
+   {
+    "t": "Transformers are Sample-Efficient World Models",
+    "y": 2023,
+    "url": "https://arxiv.org/abs/2209.00588"
+   }
+  ]
+ },
+ "genie": {
+  "lead": "A world model has always needed video together with the actions that produced it, which confines it to environments somebody has already instrumented — a simulator that logs its own inputs, or contractors paid to play with a recorder running. Genie is trained on 30,000 hours of platformer footage pulled off the internet with no actions attached to any of it, and comes out controllable frame by frame regardless: rather than being given an action vocabulary it infers one, eight codes wide, from what changes between consecutive frames.",
+  "blocks": [
+   {
+    "h": "Eight codes, and a decoder built to be thrown away",
+    "b": "The latent action model is an encoder and a decoder trained to predict a frame the encoder has already been shown. The encoder reads the history **and** the answer,\n\n$$\\tilde{a}_{1:t} = \\mathrm{enc}\\big(x_1, \\ldots, x_t,\\, x_{t+1}\\big)$$\n\nand the decoder must then reconstruct $\\hat{x}_{t+1}$ from the history and $\\tilde{a}_t$ alone. Everything depends on the channel between them being narrow. The codes are quantised by a VQ-VAE objective over a codebook of $|A| = 8$, so $\\tilde{a}_t$ cannot carry appearance — there is nowhere near the capacity — and the only thing worth spending eight symbols on is the part of $x_{t+1}$ that the past does not already imply. Which is what the player did.\n\nThe decoder is scaffolding. It exists to give the encoder a gradient, and at inference the whole latent action model is discarded except the codebook: the player picks an integer in $[0, 8)$ and it is looked up there. Nothing names the codes and nothing has to — the paper's own finding is that a code keeps its meaning across different prompt frames, so whatever 3 turns out to do, it goes on doing."
+   },
+   {
+    "h": "Space and time, attended to separately",
+    "b": "Sixteen frames of video is $O(10^4)$ tokens and full attention over that is quadratic in the frame count. All three components use an ST-transformer instead: $L$ blocks, each a spatial layer attending over the $1 \\times H \\times W$ tokens inside one time step, then a causally masked temporal layer attending over the $T \\times 1 \\times 1$ copies of one token through time, then a single feed-forward layer.\n\nThe dominant term — spatial attention — becomes **linear** in $T$ rather than quadratic, which is what makes a clip long enough to be interesting affordable to train on. One economy is worth naming because it is not standard practice: the block carries one feed-forward layer, not two. The post-spatial one is dropped and the parameters spent elsewhere, which the paper reports as a significant improvement rather than a wash."
+   },
+   {
+    "h": "A tokenizer that knows about time, and MaskGIT to run the clock",
+    "b": "The video tokenizer is a VQ-VAE, but built on the ST-transformer rather than encoding each frame alone, so every $z_t$ already carries something of $x_{1:t}$. Phenaki's C-ViViT is also temporal and uses full space–time attention; at matched parameter count it costs far more memory, tends to overfit, and comes out worse on both metrics.\n\nThe dynamics model is a decoder-only MaskGIT transformer. In training the tokens of $z_{2:T-1}$ are masked at a rate drawn uniformly from $[0.5, 1]$ and the loss is cross-entropy against the true tokens; at inference each frame takes 25 MaskGIT steps at temperature 2.\n\nThe latent action is **added** to the token embeddings rather than concatenated to them. Concatenation is what world models normally do, and switching to an additive embedding — in the dynamics model and the action model both — measurably improved how much the action actually governs the output."
+   },
+   {
+    "h": "Measuring control, and what eleven billion parameters bought",
+    "b": "Fidelity already had FVD. Controllability had nothing, so the paper defines a metric: generate the same frame twice, once from the latent actions inferred from ground truth and once from actions drawn at random, and take the difference in reconstruction quality.\n\n$$\\Delta_t\\mathrm{PSNR} = \\mathrm{PSNR}(x_t, \\hat{x}_t) - \\mathrm{PSNR}(x_t, \\hat{x}'_t)$$\n\nIf the actions were being ignored the two would agree and the quantity would be zero. Every design decision here is argued against it and against FVD together, which is the point — a video model can win on fidelity by disregarding its conditioning entirely.\n\nThe dynamics model was scaled from 40M to 2.7B with the loss falling smoothly the whole way, then trained at 10.1B — 10.7B including the tokenizer and action model, the eleven billion of the abstract. The corpus was filtered from 55M clips (244k hours) down to 6.8M (30k hours), and the curated set beats the raw one on FVD, so the filtering is not merely thrift. A separate 2.5B model trained on the RT-1 robot videos reaches an FVD of 82.7 and learns consistent latent actions for a real arm, with no text and no action labels anywhere in it.\n\nThe limits are stated plainly. It hallucinates futures, as autoregressive transformers do. It remembers **16 frames**. And it runs at roughly **one frame per second** — a world you can step into rather than one you can play."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Genie: Generative Interactive Environments",
+    "y": 2024,
+    "url": "https://arxiv.org/abs/2402.15391"
+   },
+   {
+    "t": "MaskGIT: Masked Generative Image Transformer",
+    "y": 2022,
+    "url": "https://arxiv.org/abs/2202.04200"
+   },
+   {
+    "t": "Neural Discrete Representation Learning",
+    "y": 2017,
+    "url": "https://arxiv.org/abs/1711.00937"
+   }
+  ]
+ },
+ "dreamer4": {
+  "lead": "Two lines of work each held half the answer. Dreamer-v3's recurrent state model is fast and accurate and cannot fit a distribution as broad as the real world; the controllable video models that can fit one — Genie, Oasis, Lucid — get object interactions wrong and want a rack of GPUs to run a single scene at speed. Dreamer-v4 is the claim that both are available at once, and the evidence is a diamond mined in Minecraft by an agent that never touched the game. The paper itself drops the version letter and writes it Dreamer 4.",
+  "blocks": [
+   {
+    "h": "Shortcut forcing, which is three ideas at once",
+    "b": "**Flow matching** trains a network to point from noise towards data — $x_\\tau = (1-\\tau)x_0 + \\tau x_1$, target $v = x_1 - x_0$ — and pays for that simplicity at sampling time, where $K$ Euler steps are needed and $K$ is typically 64. **Shortcut models** put the requested step size $d$ into the conditioning and train a large step to agree with two half-steps, so the same network can be asked for four steps instead of sixty-four. **Diffusion forcing** gives every time step of a sequence its own signal level, which is what lets one model denoise the current frame while serving as clean history for the next.\n\nShortcut forcing is all three, in latent space, over the interleaved sequence of actions and tokenizer representations:\n\n$$\\begin{aligned} \\tilde{z} &= (1-\\tau) z_0 + \\tau z_1 \\\\ \\hat{z}_1 &= f_\\theta(\\tilde{z}, \\tau, d, a) \\end{aligned}$$\n\nwith $\\tau, d \\in [0,1]^T$ — one signal level and one step size **per frame**, not one per sequence."
+   },
+   {
+    "h": "Predicting the frame, not the direction towards it",
+    "b": "Shortcut models predict velocities. Dreamer-v4 predicts the clean representation instead, for a reason particular to generating video one frame at a time: a $v$-prediction network is trained to emit high-frequency outputs, and high-frequency error compounds when each generated frame becomes the next frame's history. The bootstrap term still has to be formed in velocity space, so it is converted there and scaled back:\n\n$$\\begin{aligned} b' &= \\big(f_\\theta(\\tilde{z}, \\tau, 2d, a) - z_\\tau\\big)/(1-\\tau) \\\\ z' &= \\tilde{z} + b'\\,2d \\\\ b'' &= \\big(f_\\theta(z', \\tau{+}2d, 2d, a) - z'\\big)/(1{-}\\tau{-}2d) \\end{aligned}$$\n\n$$\\bar{b} = \\tfrac{1}{2}\\,\\mathrm{sg}\\big(b' + b''\\big)$$\n\n$$\\begin{aligned} d = d_{\\min}: \\;\\; \\mathcal{L} &= \\big\\|\\hat{z}_1 - z_1\\big\\|_2^2 \\\\ \\text{else}: \\;\\; \\mathcal{L} &= (1-\\tau)^2 \\Big\\|\\tfrac{\\hat{z}_1 - \\tilde{z}}{1-\\tau} - \\bar{b}\\Big\\|_2^2 \\end{aligned}$$\n\nThe $(1-\\tau)^2$ is not a tuning knob. The two spaces are related exactly by $\\|\\hat{x}_1 - x_1\\|_2^2 = (1-\\tau)^2\\|\\hat{v}_\\tau - v_\\tau\\|_2^2$, so the factor is what puts the bootstrap term on the same scale as the flow term. One weight **is** chosen, a ramp that spends capacity where there is signal to learn from:\n\n$$w(\\tau) = 0.9\\,\\tau + 0.1$$\n\nAt inference each frame costs $K = 4$ passes at $d = 1/4$, and the history is deliberately corrupted to $\\tau_{\\text{ctx}} = 0.1$ so the model is accustomed to its own small imperfections."
+   },
+   {
+    "h": "The transformer that has to keep up with the game",
+    "b": "Both halves of the world model — a causal tokenizer and the dynamics — are the same block-causal 2D transformer, masked so a time step sees itself and the past. The tokenizer is trained as a masked autoencoder, dropping input patches at a rate resampled per image from $U(0, 0.9)$, under\n\n$$\\mathcal{L}(\\theta) = \\mathcal{L}_{\\text{MSE}}(\\theta) + 0.2\\,\\mathcal{L}_{\\text{LPIPS}}(\\theta)$$\n\nwhich improved the spatial consistency of what the dynamics model later generates rather than the tokenizer's own reconstructions.\n\nThe speed is a stack of individually unremarkable decisions, and the ablation is the honest way to read it. From a diffusion-forcing transformer at 0.8 FPS and FVD 306: four sampling steps make it fast and ruin it (9.1 FPS, FVD 875); shortcut models recover the quality; $x$-prediction, the $x$-space loss and the ramp weight take FVD to 102; alternating short and long batches cut the training step from 9.8s to 1.5s; temporal attention only once every four layers, grouped-query attention and register tokens carry it past real time. The spare speed is then spent back on 256 spatial tokens. **21.4 FPS on one H100 at FVD 57**, from 0.8 and 306.\n\nAt 2B parameters — 400M tokenizer, 1.6B dynamics — a 192-frame context is **9.6 seconds** of Minecraft at the game's own 20 Hz tick. Six times the context of Oasis, Lucid or MineWorld, and faster than any of them that runs interactively at all."
+   },
+   {
+    "h": "Learning inside it, and the diamond",
+    "b": "Three phases: pretrain the world model on video and whatever actions exist, finetune it into an agent, then improve the policy by reinforcement learning on rollouts it generates for itself.\n\nThe second phase inserts agent tokens as a new modality, and the attention mask around them is the part that matters. They attend to everything; **nothing attends back**. Without that, the world model's prediction of the future could be influenced by which task had been requested — causal confusion, and an imagined world that helpfully rearranges itself around the goal. Policy and reward heads read those tokens, trained by multi-token prediction over the next $L = 8$ steps.\n\nThe third phase is on-policy reinforcement learning that never touches the environment. The critic learns $\\lambda$-returns at $\\gamma = 0.997$ through the symexp two-hot head inherited from Dreamer-v3. The actor abandons REINFORCE for PMPO, which reads only the **sign** of the advantage $A_t = R^\\lambda_t - v_t$:\n\n$$\\begin{aligned} \\mathcal{L}(\\theta) = \\tfrac{1-\\alpha}{|\\mathcal{D}^-|} &\\textstyle\\sum_{i \\in \\mathcal{D}^-} \\ln \\pi_\\theta(a_i \\mid s_i) \\\\ -\\; \\tfrac{\\alpha}{|\\mathcal{D}^+|} &\\textstyle\\sum_{i \\in \\mathcal{D}^+} \\ln \\pi_\\theta(a_i \\mid s_i) \\\\ +\\; \\tfrac{\\beta}{N} &\\textstyle\\sum_i \\mathrm{KL}\\big[\\pi_\\theta \\,\\|\\, \\pi_{\\text{prior}}\\big] \\end{aligned}$$\n\nDiscarding the magnitude removes the need to normalise returns or advantages, which is precisely the per-domain tuning Dreamer-v3 spent a paper eliminating. $\\alpha = 0.5$ weights the states that beat their value and those that missed it equally; $\\beta = 0.3$ holds the policy near a frozen copy of its behaviour-cloned self. Only the two heads move — the transformer stays frozen.\n\nOver 1000 sixty-minute episodes, starting with an empty inventory in a randomly generated world: over **90%** up to a stone pickaxe, **29%** for an iron pickaxe, and diamonds in **0.7%**. VPT, finetuned and trained on 100× more data, reaches sticks 53% of the time and never a diamond; a Gemma-3 vision-language policy manages 11% on the iron pickaxe. Imagination training helps more the harder the milestone, and it also reaches the easy ones faster.\n\nTwo further results belong beside that number. Given all 2541 hours of video but actions for only **100** of them, the model recovers 85% of the action-conditioning accuracy of one trained on every label — and when every action label comes from the Overworld, the conditioning still transfers to the Nether and the End, dimensions it has only ever watched. Then the ceiling, which the paper states itself: the world model remembers 9.6 seconds, its inventory rendering wanders, and 0.7% is a diamond rather than a strategy."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Training Agents Inside of Scalable World Models",
+    "y": 2025,
+    "url": "https://arxiv.org/abs/2509.24527"
+   },
+   {
+    "t": "One Step Diffusion via Shortcut Models",
+    "y": 2024,
+    "url": "https://arxiv.org/abs/2410.12557"
+   },
+   {
+    "t": "Diffusion Forcing: Next-token Prediction Meets Full-Sequence Diffusion",
+    "y": 2024,
+    "url": "https://arxiv.org/abs/2407.01392"
+   }
+  ]
  }
 }

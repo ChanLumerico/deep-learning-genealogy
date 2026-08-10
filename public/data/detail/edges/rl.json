@@ -1064,5 +1064,137 @@
     "y": 2021
    }
   ]
+ },
+ "worldmodels>genie": {
+  "lead": "Ha and Schmidhuber trained their model on rollouts from a simulator that recorded the action taken at every frame, and every world model for the next six years kept that requirement. It is a quiet restriction and a total one: you can model the environments somebody has already wired up to log their own inputs, and nothing else. Genie does not work around it. It removes it.",
+  "blocks": [
+   {
+    "h": "What the action label was actually for",
+    "b": "A world model is a conditional density, $p(x_{t+1} \\mid x_{\\le t}, a_{\\le t})$, and the conditioning is the whole difference between it and a video model. Take the action away and the best you can predict is what usually happens next; a model that cannot be steered is a recording.\n\nSo the label looked indispensable. Genie's observation is that the information has not gone anywhere — it is sitting in the part of $x_{t+1}$ that $x_{1:t}$ fails to explain — and that an inverse model can recover it, provided the inverse model is prevented from cheating."
+   },
+   {
+    "h": "The bottleneck is the entire method",
+    "b": "The latent action model is trained to reconstruct $x_{t+1}$ from the history plus a code inferred by looking at $x_{t+1}$ itself. Nothing in that objective favours learning an action. If the code were continuous, or quantised over a codebook of thousands, the encoder would simply carry the next frame across and the decoder would copy it out: perfect reconstruction, no action anywhere.\n\nA codebook of **eight** makes that impossible. Eight symbols cannot describe a frame, so the only thing worth spending one on is the largest change the history does not already imply — which is what the player did. The paper says the small vocabulary is there to permit human playability; the more load-bearing half of the sentence is that it enforces controllability."
+   },
+   {
+    "h": "What is gained, and what is left behind",
+    "b": "The scale changes out of recognition. A VAE and an MDN-RNN of a few million parameters on one racing game and one Doom level become 11B parameters on 30,000 hours of hundreds of platformers, promptable with a photograph, a text-to-image sample or a child's sketch.\n\nWhat does not carry over is the agent. World Models had a real environment behind it with a real reward, so the controller evolved in the dream could be dropped back into the game and scored. Genie has no reward, no environment and no ground-truth action, and its contribution to agents is one step further downstream: freeze the action model, use it to label expert video nobody annotated, and learn a policy over those latent codes — then map them to real controls with a small labelled set."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Genie: Generative Interactive Environments",
+    "y": 2024,
+    "url": "https://arxiv.org/abs/2402.15391"
+   },
+   {
+    "t": "Recurrent World Models Facilitate Policy Evolution",
+    "y": 2018
+   },
+   {
+    "t": "Video PreTraining (VPT): Learning to Act by Watching Unlabeled Online Videos",
+    "y": 2022
+   }
+  ]
+ },
+ "dreamer3>diamond": {
+  "lead": "Dreamer-v3's claim was that one configuration works everywhere, and the thirty-two categorical latents it inherited from v2 were part of why: discretising the state truncates error, so a long rollout does not drift. DIAMOND accepts the mechanism and disputes the price. Compression decides which pixels survive into the state, and in several Atari games the ones that do not are exactly the ones the policy needed.",
+  "blocks": [
+   {
+    "h": "Two ways to stop a rollout from drifting",
+    "b": "DreamerV2 introduced discrete latents for precisely this reason and DreamerV3 kept them. A state that snaps to one of $32 \\times 32$ codes cannot accumulate a small continuous error, because there is no small continuous direction for it to accumulate along.\n\nDIAMOND's alternative is to keep the image and make the per-step error small enough that nothing needs snapping. That is entirely a question of which diffusion parameterisation is used: with DDPM's noise-prediction objective the rollout diverges within a few hundred frames, and faster the fewer denoising steps it is given, while the EDM preconditioning stays stable **even at one step**. The stability that discretisation was buying turns out to be available without it."
+   },
+   {
+    "h": "What the compression was throwing away",
+    "b": "Trained on identical static datasets, IRIS and DIAMOND imagine visibly different Atari. IRIS's rollouts do not merely blur — they flip meanings. In Asterix an enemy becomes a reward in the second frame, reverts in the third and flips again in the fourth. In Breakout the brick wall and the score disagree from frame to frame. In Road Runner the rewards along the road render intermittently.\n\nEach is a handful of pixels, and each is the difference between something to chase and something to avoid. The scores follow: Asterix 3698 against STORM's 1028, Breakout 132.5 against IRIS's 83.7, Road Runner 20673 against 17564. Both models render at $64 \\times 64$, and DIAMOND uses 3 network evaluations per frame against IRIS's 16, so this is not compute talking."
+   },
+   {
+    "h": "And what was given up in exchange",
+    "b": "Dreamer-v3's recurrent state carries $h_t$ forward indefinitely; in principle it can remember anything. DIAMOND has no state at all — the conditioning is a fixed buffer of the last $L$ frames concatenated channel-wise. On Atari that costs almost nothing. Scaled to Counter-Strike it is the failure mode the paper names: approach a wall, lose sight of the room, and the model may quietly generate a different one.\n\nThe aggregate numbers deserve the same care. A mean human-normalised **1.46** is the best for an agent trained wholly inside a world model, but the IQM of **0.641** is merely on par with STORM. The gain lives in the tail — a few games where visual detail decides the policy — rather than in a uniform lift across the benchmark."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Diffusion for World Modeling: Visual Details Matter in Atari",
+    "y": 2024,
+    "url": "https://arxiv.org/abs/2405.12399"
+   },
+   {
+    "t": "Transformers are Sample-Efficient World Models",
+    "y": 2023,
+    "url": "https://arxiv.org/abs/2209.00588"
+   },
+   {
+    "t": "Elucidating the Design Space of Diffusion-Based Generative Models",
+    "y": 2022,
+    "url": "https://arxiv.org/abs/2206.00364"
+   }
+  ]
+ },
+ "dreamer3>dreamer4": {
+  "lead": "Dreamer-v3 removed the last per-domain switch and took more than 150 tasks with one configuration. What it could not do was grow. A GRU carrying a categorical latent is a narrow-environment machine — accurate where the distribution is small, and unable to represent one the size of Minecraft. Dreamer-v4 keeps the idea that behaviour should be learned inside a model, and replaces nearly every part that implemented it.",
+  "blocks": [
+   {
+    "h": "The recurrent state goes",
+    "b": "The RSSM predicts one step at a time: a deterministic $h_t$ from a GRU, a stochastic $z_t$ conditioned on it, and a posterior that folds in the observation. Sequential by construction, and sized for environments where the next frame is nearly determined.\n\nDreamer-v4 is a block-causal transformer over an interleaved sequence of actions, signal levels, step sizes and tokenizer representations, with a second transformer — a causal tokenizer trained as a masked autoencoder — producing those representations. Nothing recurs. Memory is the KV cache, so its length is a stated number, 192 frames, rather than something the optimiser is hoped to preserve."
+   },
+   {
+    "h": "The generative model goes with it",
+    "b": "Dreamer-v3 predicts the next latent in one step and trains it against the posterior through a balanced KL with free bits. Dreamer-v4 denoises: flow matching in representation space under a shortcut forcing objective, $K = 4$ passes per frame, with the loss written in $x$-space so that high-frequency error does not compound down a long rollout.\n\nTwo things survive intact, and they are the two that were about **scales** rather than about architecture: the symexp two-hot output on the reward and value heads, and $\\lambda$-returns. Dreamer-v3's contribution was making quantities of wildly different magnitude comparable, and that problem did not change when the backbone did."
+   },
+   {
+    "h": "And the actor objective goes too",
+    "b": "Dreamer-v3's actor is REINFORCE with returns normalised by a percentile range — a careful answer to the fact that advantages in one domain are a thousand times those in another. Dreamer-v4 sidesteps the question by reading only the **sign** of the advantage. PMPO averages the log-likelihood separately over the states that beat their value and those that missed, weights the two halves equally at $\\alpha = 0.5$, and holds the policy near a frozen behaviour-cloned prior with a reverse KL at $\\beta = 0.3$. With no magnitudes in the loss there is nothing left to normalise.\n\nOne more break with every previous Dreamer: imagination training updates the policy and value heads only. The transformer is frozen. Finetuning all of it helps a little and costs a lot, and would require carrying the dynamics, prior and reward losses along to stop the model being wrecked by the policy learning inside it."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Training Agents Inside of Scalable World Models",
+    "y": 2025,
+    "url": "https://arxiv.org/abs/2509.24527"
+   },
+   {
+    "t": "Mastering Diverse Domains through World Models",
+    "y": 2023
+   },
+   {
+    "t": "One Step Diffusion via Shortcut Models",
+    "y": 2024,
+    "url": "https://arxiv.org/abs/2410.12557"
+   }
+  ]
+ },
+ "genie>dreamer4": {
+  "lead": "Genie showed that a world model could be learned from unlabelled internet video and stepped into. It did not show that anything could be **done** inside one. Dreamer-v4's objection to that whole family — Genie, Oasis, Lucid, MineWorld — is specific rather than general: they render plausibly, they predict object interactions badly, and they are far too slow to practise in.",
+  "blocks": [
+   {
+    "h": "Plausible is not the same as correct",
+    "b": "The evaluation is a person, not a metric. Sixteen Minecraft tasks — build a wall three blocks square, dig a pit, chop a tree, place and ride a boat, use a crafting bench and a furnace, look away from something and back — each attempted by a human playing inside the model from the same start frame.\n\nLucid-v1 completes none. The large Oasis model completes 5, and its failure has a name: after a few blocks are placed it **autocompletes**, hallucinating a structure the player never built. Dreamer-v4 completes 14. No video-fidelity score sees any of this; FVD cannot tell a wall you built from a wall the model invented."
+   },
+   {
+    "h": "Speed is not a detail, it is the training loop",
+    "b": "Imagination training means the world model generates the data the policy learns from, so frames per second is a term in the cost of every gradient step. Genie runs at about **1 FPS**. MineWorld manages 2 and needs the action sequence in advance. Oasis's large model is around 5 on a single H100. Dreamer-v4 reaches **21**, above Minecraft's own 20 Hz tick, with 9.6 seconds of context against the 0.8–1.6 seconds of the others.\n\nThe arithmetic is what makes this structural. A diamond run is roughly 24,000 actions; generating one such trajectory at a frame a second takes about seven hours, and at 21 FPS about twenty minutes. One of those numbers admits a training loop and the other does not."
+   },
+   {
+    "h": "What it takes from them anyway",
+    "b": "The lesson Dreamer-v4 does accept is Genie's central one: most of what a world model knows can come from video nobody labelled. Its action-generalisation experiment is the quantitative version of that claim. Given all 2541 hours of Minecraft video but actions for only **100** of them, the model recovers 85% of the action-conditioning accuracy of one trained on every label — and where the labels come only from the Overworld, the conditioning still transfers to the Nether and the End, dimensions it has never seen anyone act in.\n\nSo the two give different answers to the same observation. Genie infers an action vocabulary where none exists; Dreamer-v4 assumes a small labelled set and measures how small it can be. The paper is also careful to say it cannot benchmark against Genie 3 at all: that model takes camera movements and one generic interact button, and Minecraft needs a keyboard and a mouse."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Training Agents Inside of Scalable World Models",
+    "y": 2025,
+    "url": "https://arxiv.org/abs/2509.24527"
+   },
+   {
+    "t": "Genie: Generative Interactive Environments",
+    "y": 2024,
+    "url": "https://arxiv.org/abs/2402.15391"
+   },
+   {
+    "t": "Video PreTraining (VPT): Learning to Act by Watching Unlabeled Online Videos",
+    "y": 2022
+   }
+  ]
  }
 }

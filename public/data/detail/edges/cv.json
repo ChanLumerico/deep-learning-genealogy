@@ -2276,5 +2276,33 @@
     "y": 2023
    }
   ]
+ },
+ "vit>genie": {
+  "lead": "ViT's argument was that a picture cut into patches is a sequence and attention over it is enough. Video is that sequence multiplied by time, and the multiplication is where it stops working: sixteen frames at any useful resolution is on the order of $10^4$ tokens, and dense attention over them is quadratic in the number of frames. Genie keeps the patches and factorises the attention.",
+  "blocks": [
+   {
+    "h": "One block, two attentions",
+    "b": "The ST-transformer is $L$ blocks, each of three parts. A spatial layer attends over the $1 \\times H \\times W$ tokens belonging to a single time step. A temporal layer attends over the $T \\times 1 \\times 1$ copies of one token through time, under a causal mask. Then a feed-forward layer.\n\nNothing attends over space and time together, which is the point: the dominant term, spatial attention, becomes **linear** in $T$ instead of quadratic. That is what makes a clip long enough to have dynamics in it affordable to train on, and it is applied identically in all three of Genie's components."
+   },
+   {
+    "h": "One feed-forward layer, not two",
+    "b": "A standard block puts a feed-forward layer after every attention, so the obvious spatiotemporal block would have two. Genie has one: the post-spatial layer is dropped and the parameters spent on making the rest of the model larger, which the paper reports as a significant improvement rather than a saving that broke even.\n\nIt is a small deviation from the ViT block and a deliberate one — evidence that at this token count the binding constraint is the attention budget, not the width of the MLP."
+   },
+   {
+    "h": "What the causal mask makes possible, and what it costs",
+    "b": "Because the temporal layer is masked, each token $z_t$ depends on $x_{1:t}$ and nothing later. Genie puts that to work in the tokenizer as well as the dynamics: unlike the spatial-only encoders used elsewhere, the video tokenizer is itself temporal, so a token already carries history. Against Phenaki's C-ViViT, which uses full space–time attention, it wins on both FVD and controllability at a fraction of the memory — C-ViViT overfits at matched parameter count and needs heavy regularisation.\n\nThe cost is the number in the limitation. Attention over $T$ frames is affordable, but only for the $T$ chosen: Genie sees **16** frames and no more, which is what keeps a generated world from staying consistent when you walk away and come back."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Genie: Generative Interactive Environments",
+    "y": 2024,
+    "url": "https://arxiv.org/abs/2402.15391"
+   },
+   {
+    "t": "An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale",
+    "y": 2021
+   }
+  ]
  }
 }

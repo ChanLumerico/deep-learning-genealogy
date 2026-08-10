@@ -1115,6 +1115,57 @@
   "hi": false
  },
  {
+  "f": "dreamer3",
+  "t": "diamond",
+  "k": "direct",
+  "l": "discrete latents lose detail → denoise the pixels",
+  "hi": false
+ },
+ {
+  "f": "scoresde",
+  "t": "diamond",
+  "k": "cross",
+  "l": "score matching for images → for the next frame"
+ },
+ {
+  "f": "worldmodels",
+  "t": "genie",
+  "k": "direct",
+  "l": "actions had to be recorded → eight are inferred",
+  "hi": false
+ },
+ {
+  "f": "vqvae",
+  "t": "genie",
+  "k": "cross",
+  "l": "a codebook for pictures → a codebook of actions"
+ },
+ {
+  "f": "vit",
+  "t": "genie",
+  "k": "cross",
+  "l": "attention over one image → space and time apart"
+ },
+ {
+  "f": "dreamer3",
+  "t": "dreamer4",
+  "k": "direct",
+  "l": "a recurrent state model → one scalable transformer",
+  "hi": false
+ },
+ {
+  "f": "flowmatch",
+  "t": "dreamer4",
+  "k": "cross",
+  "l": "sixty-four steps a frame → four, by shortcut forcing"
+ },
+ {
+  "f": "genie",
+  "t": "dreamer4",
+  "k": "cross",
+  "l": "worlds to play in → worlds precise enough to train in"
+ },
+ {
   "f": "sac",
   "t": "cql",
   "k": "direct",

@@ -150,6 +150,18 @@
     "title": "Learning the reward instead",
     "blurb": "When the reward is the thing you cannot write down, infer it from someone doing the task.",
     "nodes": ["apprentice", "maxentirl", "gail"]
+   },
+   {
+    "id": "imagine",
+    "title": "Practising inside a model of the world",
+    "blurb": "Learn what the environment does, then learn to act without touching it again. Each step here is what the previous model got wrong about its own dream.",
+    "nodes": ["worldmodels", "planet", "dreamer", "dreamer2", "dreamer3", "dreamer4"]
+   },
+   {
+    "id": "videoworld",
+    "title": "A world model with no actions in it",
+    "blurb": "Every world model needed video with the controls that produced it. Two papers on what happens once you stop requiring that.",
+    "nodes": ["worldmodels", "genie", "dreamer4"]
    }
   ]
  },
