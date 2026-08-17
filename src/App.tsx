@@ -833,7 +833,9 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
     if (!el) return
     const r = el.getBoundingClientRect()
     let x = ev.clientX - r.left + 16, y = ev.clientY - r.top + 14
-    if (x + 318 > r.width) x = r.width - 318
+    // clamp both ends: the right edge was handled, the left was not, so a
+    // narrow viewport pushed the card off the other side instead
+    if (x + 318 > r.width) x = Math.max(8, r.width - 318)
     if (y + 230 > r.height) y = Math.max(8, r.height - 236)
     setTip(id); setTipPos({ x, y })
   }, [])
@@ -849,6 +851,7 @@ export default function App({ hoverPreview = true, dimOpacity = 0.12, laneTint =
       background: '#0E1116', overflow: 'hidden',
     }}>
       <TopBar
+        span={graph?.span ?? ''}
         laneToggles={laneToggles} edgeToggles={edgeToggles} readFilters={readFilterToggles}
         query={query} onQuery={setQuery}
         onQuerySubmit={() => {

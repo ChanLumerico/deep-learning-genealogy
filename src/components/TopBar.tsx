@@ -20,6 +20,8 @@ function Toggles({ items, wrap }: { items: ToggleVM[]; wrap?: boolean }) {
 }
 
 export interface TopBarProps {
+  /** the years the graph covers, derived — never spell this out as a literal */
+  span: string
   laneToggles: ToggleVM[]
   edgeToggles: ToggleVM[]
   readFilters: ToggleVM[]
@@ -111,7 +113,7 @@ export function TopBar(p: TopBarProps) {
               fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase',
               color: '#8d8578', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
               overflow: 'hidden', textOverflow: 'ellipsis',
-            }}>1957 — 2025</div>
+            }}>{p.span}</div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 7, flex: 'none' }}>
           {p.account}
@@ -166,7 +168,7 @@ export function TopBar(p: TopBarProps) {
                 fontSize: 10.5, letterSpacing: '0.19em', textTransform: 'uppercase',
                 fontWeight: 400, color: '#8d8578', fontVariantNumeric: 'tabular-nums',
                 whiteSpace: 'nowrap',
-              }}>A Phylogeny of Architectures · 1957 — 2025</div>
+              }}>A Phylogeny of Architectures · {p.span}</div>
             </div>
           )}
 

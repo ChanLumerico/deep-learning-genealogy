@@ -128,7 +128,13 @@ export function SearchPalette({
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 9 }}>
-                  <span style={{ fontSize: 14, color: '#ece6da' }}>{h.entry.t}</span>
+                  {/* a lineage title runs to 41 characters — ~300px at this
+                      size — so it has to be allowed to shrink, or it pushes
+                      the count off the row */}
+                  <span style={{
+                    fontSize: 14, color: '#ece6da', minWidth: 0,
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}>{h.entry.t}</span>
                   <span style={{
                     ...CAP, color: accent, flex: 'none',
                   }}>{h.entry.k === 'n' ? 'model' : 'lineage'}</span>

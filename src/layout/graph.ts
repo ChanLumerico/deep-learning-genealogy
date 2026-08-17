@@ -28,6 +28,20 @@ export class Genealogy {
     })
   }
 
+  /**
+   * The years the sheet actually covers, as an em-dashed range.
+   *
+   * The bar used to spell this out as a literal. It said 1957 — 2025 for a
+   * while after 2026 arrived, because nothing connects a caption to the data
+   * it describes. Derived here so the only way to be wrong about it is to be
+   * wrong about the graph.
+   */
+  get span(): string {
+    let lo = Infinity, hi = -Infinity
+    this.nodes.forEach((n) => { if (n.year < lo) lo = n.year; if (n.year > hi) hi = n.year })
+    return lo === Infinity ? '' : `${lo} — ${hi}`
+  }
+
   /** every ancestor and descendant of `id`, following lineage edges only */
   lineage(id: string): Record<string, 1> {
     const set: Record<string, 1> = {}

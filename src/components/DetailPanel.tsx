@@ -159,7 +159,9 @@ export function DetailPanel({
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
-                  <div style={{ fontSize: 14, color: '#ece6da' }}>{it.name}</div>
+                  <div style={{
+                    fontSize: 14, color: '#ece6da', minWidth: 0, overflowWrap: 'anywhere',
+                  }}>{it.name}</div>
                   <div style={{
                     fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase',
                     color: it.c, whiteSpace: 'nowrap',
