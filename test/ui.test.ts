@@ -7,7 +7,8 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { buildLayout, loadGraphData } from './snapshot'
+import { Genealogy, NodeModel } from '../src/layout'
+import { loadGraphData } from './snapshot'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const COMPONENTS = join(ROOT, 'src', 'components')
@@ -15,11 +16,15 @@ const files = readdirSync(COMPONENTS).filter((f) => f.endsWith('.tsx'))
 const source = (f: string) => readFileSync(join(COMPONENTS, f), 'utf8')
 
 describe('the year range is derived, not written down', () => {
+  // `span` reads years and nothing else, so this builds a Genealogy directly
+  // rather than laying one out. Routing 301 edges took ~7s on CI and blew
+  // vitest's 5s default — a real failure, and the wrong work besides.
   it('spans exactly the years the graph holds', () => {
     const { nodes } = loadGraphData()
     const lo = Math.min(...nodes.map((n) => n.y))
     const hi = Math.max(...nodes.map((n) => n.y))
-    expect(buildLayout().span).toBe(`${lo} — ${hi}`)
+    const g = new Genealogy(nodes.map((n) => new NodeModel(n)), [])
+    expect(g.span).toBe(`${lo} — ${hi}`)
   })
 
   // The bar read "1957 — 2025" for as long as it took someone to notice, which
