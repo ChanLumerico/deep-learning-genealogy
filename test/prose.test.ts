@@ -45,6 +45,61 @@ describe('inline runs', () => {
     }])
   })
 
+  // Italic shipped in 50 places across the corpus before the grammar knew the
+  // construct, so every one of them rendered its asterisks to the reader.
+  it('reads a single asterisk as italic', () => {
+    expect(inlines('the question is *why*')).toEqual([
+      { t: 'text', v: 'the question is ' },
+      { t: 'em', kids: [{ t: 'text', v: 'why' }] },
+    ])
+  })
+
+  // Bold must win the alternation. Read the other way round, `**b**` is an
+  // empty italic followed by a stray asterisk.
+  it('still reads a double asterisk as bold, not as two italics', () => {
+    expect(inlines('**b**')).toEqual([{ t: 'bold', kids: [{ t: 'text', v: 'b' }] }])
+  })
+
+  it('nests the two, and keeps maths inside either', () => {
+    expect(inlines('**a *tiny $x$* one**')).toEqual([{
+      t: 'bold',
+      kids: [
+        { t: 'text', v: 'a ' },
+        { t: 'em', kids: [{ t: 'text', v: 'tiny ' }, { t: 'math', v: 'x' }] },
+        { t: 'text', v: ' one' },
+      ],
+    }])
+  })
+
+  // A formula inside italic still has to make the panel load KaTeX
+  it('finds maths nested inside italic', () => {
+    expect(mathIn('a *scale of $10^4$* tokens')).toEqual(['10^4'])
+  })
+
+  it('leaves a lone asterisk literal', () => {
+    // no closing partner on the line, so there is no emphasis to find
+    expect(inlines('roughly 2 * 3 things')).toEqual([
+      { t: 'text', v: 'roughly 2 * 3 things' },
+    ])
+  })
+
+  it('does not pair an asterisk across a line break', () => {
+    // `[^*\n]` is what stops one stray marker reaching into the next line
+    expect(inlines('an * asterisk\nand * another')).toEqual([
+      { t: 'text', v: 'an * asterisk\nand * another' },
+    ])
+  })
+
+  it('does not let italic reach inside maths', () => {
+    // this is the real corpus case: `\pi^{*}` is TeX, and the prose after it
+    // carries emphasis of its own
+    expect(inlines('$\\pi^{*}(y)$ then *cancels*')).toEqual([
+      { t: 'math', v: '\\pi^{*}(y)' },
+      { t: 'text', v: ' then ' },
+      { t: 'em', kids: [{ t: 'text', v: 'cancels' }] },
+    ])
+  })
+
   it('does not let bold reach inside maths', () => {
     // `**` here is TeX (a double superscript), not an emphasis marker
     expect(inlines('$a^{**}$ and **b**')).toEqual([

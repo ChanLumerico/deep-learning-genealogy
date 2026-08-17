@@ -123,10 +123,13 @@ describe('every essay is well formed', () => {
 // the reader as `$\EPSILON$`. Two headings shipped that way before anyone
 // noticed, because nothing failed; it merely looked like a typo.
 describe('block headings are prose, not markup', () => {
-  it('carries no maths or code, which a caption cannot render', () => {
+  // `*` joins the list now that italic is part of the grammar: a heading is
+  // still not run through the parser, so an asterisk there reaches the reader
+  // as an asterisk. There are no offenders — this is a guard, not a fix.
+  it('carries no maths, code or emphasis, which a caption cannot render', () => {
     const offenders = all.flatMap(([file, key, d]) =>
       (d.blocks ?? [])
-        .filter((b) => /[$`]/.test(b.h ?? ''))
+        .filter((b) => /[$`*]/.test(b.h ?? ''))
         .map((b) => `${file} · ${key} · ${b.h}`))
     expect(offenders).toEqual([])
   })

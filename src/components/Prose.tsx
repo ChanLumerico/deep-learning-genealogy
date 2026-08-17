@@ -83,6 +83,14 @@ function Run({ x, k }: { x: Inline; k: Katex | null }) {
           {x.kids.map((c, i) => <Run key={i} x={c} k={k} />)}
         </strong>
       )
+    // italic carries stress, not rank: no brightening, or every aside would
+    // compete with the numbers bold is reserved for
+    case 'em':
+      return (
+        <em style={{ fontStyle: 'italic' }}>
+          {x.kids.map((c, i) => <Run key={i} x={c} k={k} />)}
+        </em>
+      )
     case 'code':
       return (
         <code style={{
