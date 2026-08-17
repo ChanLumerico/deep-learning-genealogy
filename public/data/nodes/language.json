@@ -325,6 +325,19 @@
   "l": "Which positions attend globally is set by hand"
  },
  {
+  "id": "streamingllm",
+  "n": "StreamingLLM",
+  "y": 2024,
+  "org": "MIT · Meta",
+  "c": "an unbounded stream on a fixed cache",
+  "lane": "nlp",
+  "tr": "eff",
+  "s": "M",
+  "p": "A sliding window collapses when it drops token one",
+  "i": "Keep the first few keys as sinks, roll the rest",
+  "l": "What leaves the window is gone, not summarised"
+ },
+ {
   "id": "performer",
   "n": "Linformer / Performer",
   "y": 2020,

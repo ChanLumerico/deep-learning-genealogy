@@ -644,5 +644,33 @@
     "url": "https://arxiv.org/abs/2112.10752"
    }
   ]
+ },
+ "kd>dmd": {
+  "lead": "Distillation's original claim was that a small network can be trained on a large one's soft output and reach further than the labels alone would take it, because the teacher's probabilities carry information the hard label discards. DMD is that idea in a setting where the student is not smaller — it is the same size, asked to do in one step what the teacher does in fifty.",
+  "blocks": [
+   {
+    "h": "The axis changes from size to steps",
+    "b": "Hinton's students were compressions: fewer parameters, the same task. A diffusion student is usually the same network with the same weights to begin with, and what is being compressed is the **sampling procedure** — the number of times the network must be evaluated to produce one output.\n\nThat reframing is what makes distillation central to generative modelling rather than an efficiency footnote. A one-step generator is not a cheap approximation of the teacher; it is a different kind of object, and it is the only kind that can be put behind an interactive interface."
+   },
+   {
+    "h": "Soft targets become a score",
+    "b": "The mechanism has to change with the axis. There is no output distribution over classes to soften, so what the teacher provides is $s_{\\text{real}} = \\nabla_x \\log p_{\\text{real}}(x)$ — the gradient of a log-density, which is what a diffusion model estimates by construction.\n\nAnd the loss is not a divergence between two networks' outputs on the same input. It is a divergence between the two **distributions**, whose gradient needs a second estimate, $s_{\\text{fake}}$, trained online on the student's own samples. Classical distillation needs one teacher; this needs a teacher and a running model of the student."
+   },
+   {
+    "h": "What stays the same",
+    "b": "Two things carry over unchanged, and they are the reasons the family resemblance is real. The student cannot be trained without the teacher — there is no version of this that learns from data alone — so a distilled generator always inherits a lineage and whatever the teacher got wrong.\n\nAnd the student can exceed what a same-sized model trained directly would reach, for the same underlying reason: it is supervised by a richer signal than the data provides. The teacher's density gradient plays the part the teacher's soft logits played in 2015."
+   }
+  ],
+  "refs": [
+   {
+    "t": "One-step Diffusion with Distribution Matching Distillation",
+    "y": 2024,
+    "url": "https://arxiv.org/abs/2311.18828"
+   },
+   {
+    "t": "Distilling the Knowledge in a Neural Network",
+    "y": 2015
+   }
+  ]
  }
 }

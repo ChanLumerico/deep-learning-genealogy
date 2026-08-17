@@ -323,5 +323,33 @@
     "y": 2023
    }
   ]
+ },
+ "sora>wan": {
+  "lead": "Sora was announced as a technical report with no paper, no weights and no access, and it reset what a video model was assumed to be capable of. Wan is the other answer to the same question, arriving a year later with the same architectural family and a licence — and the two are marked here as rivals rather than as descent, because nothing of Sora's was available to inherit.",
+  "blocks": [
+   {
+    "h": "The same shape, independently",
+    "b": "Both are diffusion transformers over the latents of a learned video autoencoder, and both make the same central bet — that the productive axis is scale of a simple architecture rather than inductive bias about video. Wan cites DiT and flow matching for that; Sora's report describes spacetime patches in much the same spirit.\n\nWhich is the point of the comparison. The convergence is evidence that the recipe was in the air rather than proprietary, and it is why an open release could close most of the distance in a year."
+   },
+   {
+    "h": "What closed weights cost the field",
+    "b": "Sora appears in this graph with one outgoing lineage, to a latent-video-generation idea. Wan has three descendants in the immediate neighbourhood and its 1.3B model fits in **8.19 GB** of VRAM. That asymmetry is the whole content of this arrow.\n\nSora's most cited use in the papers here is telling: MotionStream evaluates motion transfer on twenty clips scraped from the Sora **webpage**, because that is the only way to interact with it. A model you can only watch is a demonstration; a model you can load is a substrate."
+   },
+   {
+    "h": "Why this is an alt edge",
+    "b": "There is no mechanism to trace. Wan's authors did not build on Sora because there was nothing published to build on, and the report reads as a parallel effort with independent choices — full spatio-temporal attention, a specific 3D causal VAE, umT5 for text.\n\nMarking it as a competing path rather than a lineage keeps the graph honest about that. The influence was real and it was of the kind a genealogy cannot draw: a demonstration that the thing was possible, which is a reason to try and not a component to reuse."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Wan: Open and Advanced Large-Scale Video Generative Models",
+    "y": 2025,
+    "url": "https://arxiv.org/abs/2503.20314"
+   },
+   {
+    "t": "Video generation models as world simulators",
+    "y": 2024
+   }
+  ]
  }
 }

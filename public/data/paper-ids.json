@@ -398,6 +398,10 @@
   "t": "Longformer: The Long-Document Transformer",
   "arxiv": "2004.05150"
  },
+ "streamingllm": {
+  "t": "Efficient Streaming Language Models with Attention Sinks",
+  "arxiv": "2309.17453"
+ },
  "performer": {
   "t": "Rethinking Attention with Performers",
   "arxiv": "2009.14794"
@@ -507,6 +511,14 @@
  "cyclegan": {
   "t": "Unpaired Image-to-Image Translation using Cycle-Consistent Adversarial Networks"
  },
+ "motionstream": {
+  "t": "MotionStream: Real-Time Video Generation with Interactive Motion Controls",
+  "arxiv": "2511.01266"
+ },
+ "versecrafter": {
+  "t": "VerseCrafter: Dynamic Realistic Video World Model with 4D Geometric Control",
+  "arxiv": "2601.05138"
+ },
  "pixelcnn": {
   "t": "Pixel Recurrent Neural Networks"
  },
@@ -552,11 +564,27 @@
  "ldm": {
   "t": "High-Resolution Image Synthesis with Latent Diffusion Models"
  },
+ "controlnet": {
+  "t": "Adding Conditional Control to Text-to-Image Diffusion Models",
+  "arxiv": "2302.05543"
+ },
  "dit": {
   "t": "Scalable Diffusion Models with Transformers"
  },
  "sd3": {
   "t": "Scaling Rectified Flow Transformers for High-Resolution Image Synthesis"
+ },
+ "dmd": {
+  "t": "One-step Diffusion with Distribution Matching Distillation",
+  "arxiv": "2311.18828"
+ },
+ "wan": {
+  "t": "Wan: Open and Advanced Large-Scale Video Generative Models",
+  "arxiv": "2503.20314"
+ },
+ "selfforce": {
+  "t": "Self Forcing: Bridging the Train-Test Gap in Autoregressive Video Diffusion",
+  "arxiv": "2506.08009"
  },
  "flux": {
   "t": "FLUX.1 model weights and card, Black Forest Labs"

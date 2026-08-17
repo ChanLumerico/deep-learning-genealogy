@@ -1666,5 +1666,107 @@
   "t": "flux",
   "k": "cross",
   "l": "transformer backbone carried into flow models"
+ },
+ {
+  "f": "ldm",
+  "t": "controlnet",
+  "k": "direct",
+  "l": "text says what → a map says where"
+ },
+ {
+  "f": "pix2pix",
+  "t": "controlnet",
+  "k": "cross",
+  "l": "paired translation, onto a frozen prior"
+ },
+ {
+  "f": "ddim",
+  "t": "dmd",
+  "k": "direct",
+  "l": "fifty steps → one"
+ },
+ {
+  "f": "kd",
+  "t": "dmd",
+  "k": "cross",
+  "l": "match the outputs → match the distributions"
+ },
+ {
+  "f": "scoresde",
+  "t": "dmd",
+  "k": "cross",
+  "l": "one score to sample → two scores to distil"
+ },
+ {
+  "f": "longformer",
+  "t": "streamingllm",
+  "k": "direct",
+  "l": "a window that drops token one → keep it"
+ },
+ {
+  "f": "dit",
+  "t": "wan",
+  "k": "direct",
+  "l": "images → video, on the same backbone"
+ },
+ {
+  "f": "flowmatch",
+  "t": "wan",
+  "k": "cross",
+  "l": "the objective it is trained with"
+ },
+ {
+  "f": "sora",
+  "t": "wan",
+  "k": "alt",
+  "l": "closed and unpublished → open weights"
+ },
+ {
+  "f": "dmd",
+  "t": "selfforce",
+  "k": "direct",
+  "l": "distil a clip → distil a rollout"
+ },
+ {
+  "f": "wan",
+  "t": "selfforce",
+  "k": "cross",
+  "l": "the bidirectional teacher it is distilled from"
+ },
+ {
+  "f": "selfforce",
+  "t": "motionstream",
+  "k": "direct",
+  "l": "drift past the horizon → sink and roll"
+ },
+ {
+  "f": "wan",
+  "t": "motionstream",
+  "k": "cross",
+  "l": "a teacher to distil, plus a track head"
+ },
+ {
+  "f": "streamingllm",
+  "t": "motionstream",
+  "k": "cross",
+  "l": "attention sinks, moved into video"
+ },
+ {
+  "f": "controlnet",
+  "t": "motionstream",
+  "k": "cross",
+  "l": "a duplicated branch → concatenated channels"
+ },
+ {
+  "f": "controlnet",
+  "t": "versecrafter",
+  "k": "direct",
+  "l": "an edge map → a 4D world state"
+ },
+ {
+  "f": "wan",
+  "t": "versecrafter",
+  "k": "cross",
+  "l": "a frozen backbone steered by geometry"
  }
 ]

@@ -126,6 +126,18 @@
     "nodes": ["ae", "vae", "nice", "realnvp", "glow", "nde", "ffjord", "flowmatch"]
    },
    {
+    "id": "realtime",
+    "title": "Waiting for a video, then not",
+    "blurb": "A clip took minutes and arrived all at once. Five papers on getting the same model to hand you a frame every fifty milliseconds while you steer it.",
+    "nodes": ["ldm", "dit", "wan", "selfforce", "motionstream"]
+   },
+   {
+    "id": "geometry",
+    "title": "Putting the control back in the world",
+    "blurb": "Every way of steering a video lived in the image plane, and broke when the camera moved. The line that ends by handing the model a 3D scene instead.",
+    "nodes": ["ldm", "controlnet", "versecrafter"]
+   },
+   {
     "id": "firststage",
     "title": "The autoencoder under Stable Diffusion",
     "blurb": "One question asked four times — how much can be thrown away before the model built on top stops working — and the compressor everything since has been trained inside.",

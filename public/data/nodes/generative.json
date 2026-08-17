@@ -208,6 +208,32 @@
   "l": "Struggles with geometry change and multi-modality"
  },
  {
+  "id": "motionstream",
+  "n": "MotionStream",
+  "y": 2026,
+  "org": "SNU · Adobe · CMU",
+  "c": "motion control at 29 frames a second",
+  "lane": "gen",
+  "tr": "cond",
+  "s": "M",
+  "p": "Motion-controlled video costs minutes per clip",
+  "i": "Distil the teacher causally, sink on the first frame",
+  "l": "Anchoring to frame one forbids a scene change"
+ },
+ {
+  "id": "versecrafter",
+  "n": "VerseCrafter",
+  "y": 2026,
+  "org": "Fudan · Tencent ARC",
+  "c": "camera and objects in one 4D state",
+  "lane": "gen",
+  "tr": "cond",
+  "s": "M",
+  "p": "2D control cues break under a viewpoint change",
+  "i": "A background point cloud plus 3D Gaussian object tracks",
+  "l": "The control has to be authored as 4D geometry"
+ },
+ {
   "id": "pixelcnn",
   "n": "PixelRNN / CNN",
   "y": 2016,
@@ -403,6 +429,19 @@
   "l": "Latent compression loss; U-Net scaling limits"
  },
  {
+  "id": "controlnet",
+  "n": "ControlNet",
+  "y": 2023,
+  "org": "Stanford",
+  "c": "spatial control for a frozen model",
+  "lane": "gen",
+  "tr": "diff",
+  "s": "M",
+  "p": "A text prompt cannot say where anything goes",
+  "i": "A trainable encoder copy joined by zero convolutions",
+  "l": "One trained branch per kind of control signal"
+ },
+ {
   "id": "dit",
   "n": "DiT",
   "y": 2023,
@@ -427,6 +466,45 @@
   "p": "Inefficient diffusion paths and weak text alignment",
   "i": "Rectified-flow objective with a dual-stream MM-DiT",
   "l": "Depends on vast data and compute"
+ },
+ {
+  "id": "dmd",
+  "n": "DMD",
+  "y": 2024,
+  "org": "MIT · Adobe",
+  "c": "diffusion in one step",
+  "lane": "gen",
+  "tr": "diff",
+  "s": "M",
+  "p": "Sampling still costs tens of network evaluations",
+  "i": "Match distributions with two scores, not trajectories",
+  "l": "Needs a teacher and a second network trained alongside"
+ },
+ {
+  "id": "wan",
+  "n": "Wan",
+  "y": 2025,
+  "org": "Alibaba",
+  "c": "open video diffusion at scale",
+  "lane": "gen",
+  "tr": "diff",
+  "s": "M",
+  "p": "Every strong video model was closed weights",
+  "i": "A DiT over a 3D causal VAE, trained by flow matching",
+  "l": "Fifty steps a clip, and attention over all of it"
+ },
+ {
+  "id": "selfforce",
+  "n": "Self Forcing",
+  "y": 2025,
+  "org": "Adobe · UT Austin",
+  "c": "train on your own output",
+  "lane": "gen",
+  "tr": "diff",
+  "s": "S",
+  "p": "Training on ground truth hides exposure bias",
+  "i": "Roll out with a KV cache, then a video-level loss",
+  "l": "Quality falls away past the training horizon"
  },
  {
   "id": "flux",

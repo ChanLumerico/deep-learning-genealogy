@@ -1611,5 +1611,62 @@
     "url": "https://arxiv.org/abs/1711.00937"
    }
   ]
+ },
+ "longformer>streamingllm": {
+  "lead": "Longformer's sliding window was the obvious way to make attention linear: let each token see a fixed span of neighbours and the cost stops growing. Used for inference on a stream rather than for encoding a document, the same window has a property nobody had priced — the moment it slides past the first token, the model does not degrade, it collapses.",
+  "blocks": [
+   {
+    "h": "The collapse, measured",
+    "b": "Llama-2-13B on the opening 65,000-token book of PG-19 makes the comparison stark. Dense attention costs $O(T^2)$ and reaches a perplexity of 5641 once the text exceeds its pretraining length. A sliding window costs $O(TL)$ and reaches 5158 — no better, and it is efficient rather than accurate.\n\nA sliding window that **rebuilds** its cache from the recent tokens for every new token reaches 5.43, which shows the window's contents are not the problem. That variant costs $O(TL^2)$ and is unusable. So the window was never wrong about which tokens matter; something else was breaking."
+   },
+   {
+    "h": "It is the eviction, not the span",
+    "b": "What breaks it is losing the first tokens' keys and values, and the reason is the softmax denominator:\n\n$$\\mathrm{softmax}(x)_i = \\frac{e^{x_i}}{e^{x_1} + \\sum_{j=2}^{N} e^{x_j}}, \\qquad x_1 \\gg x_j$$\n\nAttention weights must sum to one, so a head with nothing it needs still has to place its mass somewhere, and it learns to dump the surplus on tokens that are always visible — in a causal model, the first ones. Evict them and a dominant term leaves the denominator, every remaining weight inflates, and the distribution no longer resembles anything seen in training.\n\nThe fix is correspondingly small: keep the first few keys permanently, roll the rest. Perplexity **5.40** at $O(TL)$, up to **22.2×** faster than recomputation, stable to four million tokens, with no finetuning."
+   },
+   {
+    "h": "Why it is a slot and not a summary",
+    "b": "The tempting reading is that the opening tokens hold the topic. Replacing the first four with a linebreak character refutes it — the model attends to the linebreaks just as hard, and reintroducing them restores perplexity nearly to the original.\n\nSo the sink is positional, and that is what keeps this honest about what it is not. Longformer's window was an approximation of full attention over a document; this is a mechanism for running indefinitely on a bounded cache. Nothing that leaves the window is remembered, and the paper says outright that context is not extended. Four sinks are enough, one or two are not, and beyond four the returns fall away."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Efficient Streaming Language Models with Attention Sinks",
+    "y": 2024,
+    "url": "https://arxiv.org/abs/2309.17453"
+   },
+   {
+    "t": "Longformer: The Long-Document Transformer",
+    "y": 2020
+   }
+  ]
+ },
+ "streamingllm>motionstream": {
+  "lead": "The observation was made about language models: heads dump surplus attention on the first tokens, so evicting them wrecks the softmax and a sliding window collapses. MotionStream found the same thing in a video diffusion transformer, by the same method — looking at the attention maps — and the fix transfers with one substantive change.",
+  "blocks": [
+   {
+    "h": "The same phenomenon, in a different modality",
+    "b": "Visualising self-attention across bidirectional, fully causal and causal sliding-window variants shows heads throughout the network attending persistently to the tokens of the first frame, at every step of denoising rather than only at the start.\n\nThat is not an analogy. It is the same mechanism — a softmax that cannot output zeros, over a causal mask whose earliest positions are the only permanently visible ones — and it produces the same failure. Self Forcing's sliding window drifts once the first frame's tokens fall out, and drift in a video model looks like colour shift and dissolving structure rather than nonsense text."
+   },
+   {
+    "h": "One sink, not four",
+    "b": "StreamingLLM needs about four initial tokens: one or two do not restore the model. MotionStream's ablation lands on a **single** sink chunk and, more surprisingly, a single window chunk — extra sinks buy little and cost latency, and a longer window makes long generations worse.\n\nThe units differ, which explains part of it: a chunk of video latents is many tokens, so one chunk is not one token. But the window result is a genuine divergence. In language a longer window is more usable context; here it is more history in which drift can compound, and the paper's reading is that restricting attention to the immediate predecessor is itself part of the stabilisation."
+   },
+   {
+    "h": "And the sink is trained into the model, not bolted on",
+    "b": "StreamingLLM is an inference-time change requiring no finetuning — that is much of its appeal. MotionStream cannot take that option, because the model it is fixing is produced by distillation, and a train-test mismatch is precisely what Self Forcing exists to remove.\n\nSo the rolling cache and the sinks are simulated during training by self-rollout, with RoPE positions assigned by cache slot rather than absolute frame, so the discontinuity between sink and window is something the model has been trained through. StreamingLLM's other suggestion — a dedicated sink token learned during pretraining — is the same instinct arriving from the language side."
+   }
+  ],
+  "refs": [
+   {
+    "t": "MotionStream: Real-Time Video Generation with Interactive Motion Controls",
+    "y": 2026,
+    "url": "https://arxiv.org/abs/2511.01266"
+   },
+   {
+    "t": "Efficient Streaming Language Models with Attention Sinks",
+    "y": 2024,
+    "url": "https://arxiv.org/abs/2309.17453"
+   }
+  ]
  }
 }

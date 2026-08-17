@@ -1093,5 +1093,226 @@
     "y": 2018
    }
   ]
+ },
+ "controlnet": {
+  "lead": "Stable Diffusion could be told what to draw and had no vocabulary at all for where. A prompt is a bag of words; a pose, an outline, a depth map is a picture, and there was no way to hand the model one without retraining it — on paired data nobody has at the scale the model itself was trained on. ControlNet's answer is not to retrain it. The production model is frozen, a copy of its encoder is trained alongside, and the two are joined by convolutions initialised to zero, so that on the first step the addition changes nothing whatsoever.",
+  "blocks": [
+   {
+    "h": "The zero convolution",
+    "b": "Take a trained block $\\mathcal{F}(\\,\\cdot\\,;\\Theta)$. Freeze it, clone it to a trainable copy $\\Theta_c$ that receives the condition, and join the copy back with two $1\\times1$ convolutions whose weight **and** bias start at zero:\n\n$$y_c = \\mathcal{F}(x;\\Theta) + \\mathcal{Z}\\big(\\mathcal{F}(x + \\mathcal{Z}(c;\\Theta_{z1});\\Theta_c);\\Theta_{z2}\\big)$$\n\nAt the first step both $\\mathcal{Z}$ terms vanish and $y_c = y$ exactly. The control branch is a no-op, which is the entire safety argument: nothing random can be injected into a model trained on billions of images, so finetuning begins from the unharmed model rather than from a perturbation of it.\n\nThe obvious objection — a layer of zeros has zero gradient, so how does it ever move — has a one-line answer. The gradient with respect to a zero convolution's **weights** is its incoming feature, which is not zero. Only the gradient it passes back to its input vanishes, and only while its weights are still zero."
+   },
+   {
+    "h": "Reusing the encoder rather than learning one",
+    "b": "The trainable branch is a clone of the diffusion model's own encoder blocks, not a fresh network, so the control branch starts from a representation already trained on billions of images. That is why it works from a few tens of thousands of pairs: almost nothing about images has to be learned, only the mapping from this particular condition into a space that already exists.\n\nThe condition itself is brought down to latent resolution by a tiny encoder — four convolutions, $4\\times4$ kernels, stride two, 16 to 128 channels — trained jointly. Measured on a single 40 GB A100, adding ControlNet costs about **23%** more memory and **34%** more time per iteration than finetuning the base model alone, because no gradient flows through the frozen half at all."
+   },
+   {
+    "h": "Sudden convergence",
+    "b": "Because of the zero convolutions the samples are never bad. The model emits high-quality images from the first step and simply ignores the condition, and then at some point it abruptly starts obeying it — in the paper's own figure, somewhere between step 6100 and step 6133.\n\nIt is a useful diagnostic and a slightly unnerving one, since nothing in the loss curve announces the moment. Training is reported robust across the range that matters in practice, from under 50k pairs to over a million."
+   },
+   {
+    "h": "One branch per kind of control",
+    "b": "Canny edges, Hough lines, HED boundaries, scribbles, human pose, segmentation, depth, surface normals: each is a separately trained ControlNet, each the weight of a copy of the encoder. That is the cost of the design, and also why it spread — anyone with a set of pairs could add a control to a model they could not afford to touch, which is what turned a frozen checkpoint into a platform.\n\nWhere the control is not a picture, or has to be composed over time, the adapter survives and the per-signal branch does not. The video models three years later keep exactly this shape — frozen backbone, lightweight conditioned branch — and replace the edge map with a rendered geometric world state."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Adding Conditional Control to Text-to-Image Diffusion Models",
+    "y": 2023,
+    "url": "https://arxiv.org/abs/2302.05543"
+   },
+   {
+    "t": "High-Resolution Image Synthesis with Latent Diffusion Models",
+    "y": 2022
+   },
+   {
+    "t": "Image-to-Image Translation with Conditional Adversarial Networks",
+    "y": 2017
+   }
+  ]
+ },
+ "dmd": {
+  "lead": "DDIM had taken sampling from a thousand steps to fifty, and the remaining fifty were structural: each asks the network which way to go next along a curved path, and a larger step lands off it. Distillation comes at the problem from the other end. Rather than straightening the path, DMD trains a one-step generator whose **output distribution** matches the teacher's — and the gradient that does it turns out to be a difference of two scores.",
+  "blocks": [
+   {
+    "h": "Matching distributions, not trajectories",
+    "b": "The objective is a reverse KL between what the generator produces and what the data is:\n\n$$D_{\\mathrm{KL}}\\big(p_{\\text{fake}} \\,\\|\\, p_{\\text{real}}\\big) = \\mathbb{E}_{x \\sim p_{\\text{fake}}}\\Big[\\log \\tfrac{p_{\\text{fake}}(x)}{p_{\\text{real}}(x)}\\Big]$$\n\nNeither density is computable. The gradient is, and only the gradient is needed:\n\n$$\\nabla_\\theta D_{\\mathrm{KL}} = \\mathbb{E}\\Big[-\\big(s_{\\text{real}}(x) - s_{\\text{fake}}(x)\\big)\\tfrac{dG}{d\\theta}\\Big]$$\n\nA diffusion model **is** a score estimator, which is what makes this practical: $s_{\\text{real}}$ is the frozen teacher, and $s_{\\text{fake}}$ is a second diffusion model trained online on the generator's own output. The two terms pull opposite ways — $s_{\\text{real}}$ drags samples towards the modes of the data, $-s_{\\text{fake}}$ pushes them apart — and the fixed point is where the two distributions agree."
+   },
+   {
+    "h": "Why the noise is not optional",
+    "b": "An unperturbed real and fake distribution need not overlap. Where one has support the other's score may be undefined, so at the start of training there is no gradient anywhere useful.\n\nDiffusing both is what fixes it. Under enough noise the two overlap everywhere, the objective is well-defined across the whole space, and the loss is therefore evaluated over a range of noise levels rather than at the data itself. The noising process that diffusion needed for sampling is reused here purely as a smoother."
+   },
+   {
+    "h": "And why one loss is not enough",
+    "b": "A score is the gradient of a log-density, so it is invariant to rescaling that density. The objective consequently cannot see total mass, and a generator that piles all of it onto a subset of the modes goes unpunished.\n\nThe paper's two-mode figure makes the failure concrete: with the real score alone, every sample collapses to the nearest mode; with both scores, the samples spread out over that mode and miss the second one entirely. A plain regression loss against the teacher's own output for the same noise sample — on pairs generated in advance — is what recovers both."
+   },
+   {
+    "h": "What one step is worth",
+    "b": "ImageNet at $64\\times64$, in a single network evaluation: FID **2.62**, against an EDM teacher that needs 512. Zero-shot MS-COCO with Stable Diffusion's denoiser: **11.49**, comparable to the teacher while running roughly **30×** faster on a **100×** reduction in evaluations. And $512\\times512$ images at **20 FPS** in FP16, which is the number that turns a generator into something a person can interact with rather than wait for.\n\nThe costs are stated plainly. A teacher is required, so this cannot train a model from nothing. A second network — the fake score — trains alongside the generator and is discarded. And the regression pairs have to be sampled from the teacher in advance, which is a one-off but not a small one."
+   }
+  ],
+  "refs": [
+   {
+    "t": "One-step Diffusion with Distribution Matching Distillation",
+    "y": 2024,
+    "url": "https://arxiv.org/abs/2311.18828"
+   },
+   {
+    "t": "Elucidating the Design Space of Diffusion-Based Generative Models",
+    "y": 2022,
+    "url": "https://arxiv.org/abs/2206.00364"
+   },
+   {
+    "t": "Denoising Diffusion Implicit Models",
+    "y": 2021
+   }
+  ]
+ },
+ "wan": {
+  "lead": "By 2025 every video model worth using was behind an API. Sora had a blog post; weights for anything comparable did not exist. Wan is Alibaba's release at two sizes, and its importance to this graph is not a benchmark score but the plain fact of availability — both of the 2026 controllable-video papers here are a branch bolted onto a frozen Wan, and neither could have been written against a model nobody outside one company can run.",
+  "blocks": [
+   {
+    "h": "A diffusion transformer over a video autoencoder",
+    "b": "The recipe is assembled rather than invented, and the report says as much: a DiT denoiser in the manner of Peebles and Xie, trained with flow matching after Lipman et al., over the latents of Wan-VAE — a 3D causal autoencoder compressing space and time together. Text enters by cross-attention through umT5, and attention over the latent is full spatio-temporal rather than factorised.\n\nScale is the contribution: 14 billion parameters, trained on billions of images and videos amounting to on the order of a trillion tokens. The other number that mattered is at the small end — the 1.3B model runs in **8.19 GB** of VRAM, which put it on consumer cards, and is why a great deal of 2025 and 2026 research is built on this particular checkpoint."
+   },
+   {
+    "h": "Flow matching, in the seat DDPM used to occupy",
+    "b": "The forward process is a straight interpolation and the network predicts the velocity along it, exactly as SD3 had done for images the year before:\n\n$$z_\\tau = (1-\\tau)z_0 + \\tau z_1, \\qquad v = z_1 - z_0$$\n\nThat is simple to train and expensive to sample: on the order of fifty steps per clip. Combined with bidirectional attention — which requires the whole clip at once, so nothing can be shown until everything is finished — those two properties define the target that the next two years of work aims at, and they are the reason both papers downstream of this node are about not paying them."
+   },
+   {
+    "h": "What a frozen backbone is for",
+    "b": "The two descendants here treat it in opposite ways, which is a good illustration of what an open checkpoint is actually useful for.\n\nVerseCrafter never updates it. All 14B parameters stay frozen and a GeoAdapter branch is interleaved every fifth block, each new block initialised from the frozen block it is paired with; the backbone is a visual prior and nothing else. MotionStream instead retrains it into a motion-conditioned teacher and then distils that teacher into a causal student — so the same weights serve as a source of scores rather than as a prior. One wants what the model knows; the other wants what the model would say."
+   },
+   {
+    "h": "Where the version numbers show through",
+    "b": "Wan 2.1 came at 1.3B and 14B, Wan 2.2 at 5B, and papers choose by what they can afford to backpropagate through. MotionStream's 480P results are Wan 2.1-1.3B and its 720P results Wan 2.2-5B, because distillation means training the thing. VerseCrafter can use 14B precisely because it never has to.\n\nThat is the shape of an open ecosystem rather than a finding about video: the choice of backbone becomes a budget decision recorded in a table, and the same paper can report two of them."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Wan: Open and Advanced Large-Scale Video Generative Models",
+    "y": 2025,
+    "url": "https://arxiv.org/abs/2503.20314"
+   },
+   {
+    "t": "Scalable Diffusion Models with Transformers",
+    "y": 2023
+   },
+   {
+    "t": "Flow Matching for Generative Modeling",
+    "y": 2023
+   }
+  ]
+ },
+ "selfforce": {
+  "lead": "An autoregressive video model is trained by being shown the true previous frames and asked for the next one, then deployed by being shown its own previous frames. Those are not the same task, and the difference has a name in sequence modelling — exposure bias. Self Forcing closes it the only way that closes it: roll the model out on its own output during training, and put the loss on the video that comes out.",
+  "blocks": [
+   {
+    "h": "Teacher forcing, and the distribution it never visits",
+    "b": "The standard objective conditions frame $t$ on ground-truth frames before it. Every error the model makes at inference therefore places it somewhere no training step ever went, and the next frame is generated from that unfamiliar place, and so on. Compounding drift is not a bug in such a model; it is the training objective being answered correctly.\n\nDiffusion forcing softens this by giving each context frame its own noise level, so the model at least sees imperfect history. But the history is still real. Self Forcing generates it."
+   },
+   {
+    "h": "Making a rollout affordable inside a training step",
+    "b": "A full autoregressive rollout per step is expensive twice — the forward passes, and holding the graph for all of them. Three things make it tractable.\n\nThe student is a few-step diffusion model rather than a fifty-step one. A KV cache means each chunk is computed once rather than recomputed as context. And **stochastic gradient truncation**: of the $K$ denoising steps, one is sampled at random and its output taken as final, so gradients flow through that step alone while the cached context is detached. The rollout is long; the graph is short."
+   },
+   {
+    "h": "A loss on the video, not on the frame",
+    "b": "The payoff of rolling out is that the objective no longer has to be per-frame. What comes out of the rollout is a whole clip, so the loss can be a distribution-matching one over the sequence — DMD, applied to a rollout: the frozen bidirectional teacher supplies $s_{\\text{real}}$ for the finished video and a trained critic supplies $s_{\\text{fake}}$.\n\nWhat is being matched, then, is the distribution of videos the student **actually produces** under its own errors, rather than the distribution of single frames given a history it will never see."
+   },
+   {
+    "h": "What it bought, and the wall it stops at",
+    "b": "Five-second clips at $832\\times480$, **16 FPS** with sub-second latency on one GPU, roughly **150×** lower latency than the bidirectional models it distils from, at matching or better VBench scores. A rolling KV cache lets the run continue past the trained length.\n\nThe limit is structural and the paper is clear about it: the teacher was trained on 81 frames, so past that the student is extrapolating, and quality falls away. A rolling cache extends how long the model can run, not what the teacher knew. That gap is exactly where MotionStream starts."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Self Forcing: Bridging the Train-Test Gap in Autoregressive Video Diffusion",
+    "y": 2025,
+    "url": "https://arxiv.org/abs/2506.08009"
+   },
+   {
+    "t": "One-step Diffusion with Distribution Matching Distillation",
+    "y": 2024,
+    "url": "https://arxiv.org/abs/2311.18828"
+   },
+   {
+    "t": "Diffusion Forcing: Next-token Prediction Meets Full-Sequence Diffusion",
+    "y": 2024,
+    "url": "https://arxiv.org/abs/2407.01392"
+   }
+  ]
+ },
+ "motionstream": {
+  "lead": "Motion-controlled video generation had settled into a shape that cannot be interactive: a bidirectional diffusion model that needs the entire trajectory before it starts and returns a fixed-length clip some minutes later — twelve of them, for five seconds, in Motion Prompting's case. MotionStream is the same capability turned inside out. Twenty-nine frames a second, sub-second latency, one GPU, and no end to the video, so that dragging the mouse and seeing the result become one act rather than two.",
+  "blocks": [
+   {
+    "h": "A teacher first, and a track head instead of a branch",
+    "b": "Each of $N$ two-dimensional tracks is given a $d$-dimensional embedding $\\phi_n$, from a sinusoidal encoding of a randomly drawn id, and painted into a volume at its own spatially downsampled position:\n\n$$c_m\\Big(t, \\big\\lfloor \\tfrac{y^n_t}{s} \\big\\rfloor, \\big\\lfloor \\tfrac{x^n_t}{s} \\big\\rfloor\\Big) = v[t,n]\\cdot\\phi_n$$\n\nwhere $v[t,n]$ is visibility and $s$ the VAE's spatial rate. A ControlNet-style branch would duplicate the blocks and double the FLOPs, which a real-time budget cannot absorb; instead the track head is a $4\\times$ temporal compression and a $1\\times1\\times1$ convolution, and its output is concatenated to the video latents. The DiT is untouched apart from the channel count of its patchify layer. Against the alternative of drawing tracks as an RGB video and pushing it through the frozen VAE, this wins on every metric and encodes **40×** faster.\n\nOne awkward detail is worth recording because it is the kind of thing interaction exposes and benchmarks do not: an occluded track and an unspecified track are both zeros, so when the user lets go of the mouse the model cannot tell which it is, and objects appear or vanish. The fix is to train with random mid-sequence chunks blanked, at $p = 0.2$, after track-following is already learned."
+   },
+   {
+    "h": "Two guidances, because each alone is wrong",
+    "b": "Text guidance produces natural motion and drifts off the trajectory. Track guidance holds the trajectory and produces rigid planar sliding. So both are applied at once:\n\n$$\\hat v = v_{\\text{base}} + w_t\\big(v(c_t,c_m) - v(\\varnothing,c_m)\\big) + w_m\\big(v(c_t,c_m) - v(c_t,\\varnothing)\\big)$$\n\nat $w_t = 3.0$ and $w_m = 1.5$, with $v_{\\text{base}}$ a matching blend of the two single-condition velocities. In the teacher that is three network evaluations per denoising step rather than two.\n\nThe student pays none of it. Distillation defines the target score with the joint guidance already applied, so the multi-term guidance is **baked into** what the student is trained to match and disappears from inference — one evaluation, guidance included."
+   },
+   {
+    "h": "One sink chunk and one window chunk",
+    "b": "Self Forcing's sliding window drifts once generation passes the teacher's 81-frame horizon. The attention maps say why: heads throughout the network keep looking at the tokens of the very first frame — the same phenomenon StreamingLLM had found in language models, in a video diffusion transformer. So the context becomes a permanent sink plus a rolling window,\n\n$$C_i = \\{z^i_t\\} \\cup \\{z^j_0\\}_{j \\le S} \\cup \\{z^j_0\\}_{\\max(1,i-W) \\le j < i}$$\n\nwith RoPE positions assigned by cache slot rather than by absolute frame index, and — this is the part that matters — the whole mechanism simulated during training by self-rollout with the same rolling cache, so there is no train-test mismatch left for extrapolation to expose.\n\nThe surprising result is the size. The best configuration is **one** sink chunk and **one** window chunk: more sinks buy almost nothing and cost latency, and a **longer** window makes it worse. Restricting the context to the immediate predecessor is itself part of what stops error accumulating."
+   },
+   {
+    "h": "The numbers, and the wall the sink leaves behind",
+    "b": "Motion transfer against ground truth on DAVIS and a subset of the Sora demos: the bidirectional teacher at 0.79 FPS scores 16.61 PSNR at 5.35 end-point error; the distilled causal student at **16.7 FPS** scores 16.20 at 7.80. Two orders of magnitude faster for a small loss, and well ahead of ATI on Wan 2.1-14B (0.23 FPS, EPE 17.41) or Diffusion-as-Shader on CogVideoX (0.29 FPS).\n\nOn single-image novel view synthesis — a task it was not built for — it beats SEVA, ViewCrafter and DepthSplat on LLFF while running **more than 20×** faster, by turning camera poses into 2D tracks through an estimated depth map. A Tiny VAE decoder, trained to regress the original VAE's latent space with adversarial and LPIPS losses, then cuts decoding tenfold: **29.5 FPS at 0.39s latency**.\n\nThe limitation is the sink, and it is exact. Anchoring on the first frame is what makes an unbounded run stable and what forbids the scene from ever changing — hand it a trajectory that walks out of the room and it keeps the room. For a creative tool that costs almost nothing. For a world model it is the thing to fix, and the paper names dynamic re-anchoring as the way to fix it."
+   }
+  ],
+  "refs": [
+   {
+    "t": "MotionStream: Real-Time Video Generation with Interactive Motion Controls",
+    "y": 2026,
+    "url": "https://arxiv.org/abs/2511.01266"
+   },
+   {
+    "t": "Self Forcing: Bridging the Train-Test Gap in Autoregressive Video Diffusion",
+    "y": 2025,
+    "url": "https://arxiv.org/abs/2506.08009"
+   },
+   {
+    "t": "Motion Prompting: Controlling Video Generation with Motion Trajectories",
+    "y": 2025
+   }
+  ]
+ },
+ "versecrafter": {
+  "lead": "A video is a projection, and every control signal the field had settled on lived inside the projection: bounding boxes, masks, optical flow, 2D point tracks. Those are view-dependent by construction, so a large camera move breaks them — and a world model whose controls break when the camera moves is not modelling a world. VerseCrafter puts the control back into the world instead: a static background as a point cloud, each moving object as a sequence of 3D Gaussians, all in one shared coordinate frame, rendered into the maps a frozen Wan is conditioned on.",
+  "blocks": [
+   {
+    "h": "The world state, in two parts",
+    "b": "Everything starts from one input image. Monocular depth and intrinsics come from MoGe-2, object masks from Grounded-SAM2 with the objects chosen by text or by clicking, and the input view is taken as the world frame, so $\\mathbf{R}_1 = \\mathbf{I}$ and $\\mathbf{t}_1 = \\mathbf{0}$. Each pixel back-projects:\n\n$$\\mathbf{p}(\\mathbf{u}) = \\mathbf{R}_1^{\\top}\\big(D_1(\\mathbf{u})\\,\\mathbf{K}^{-1}\\mathbf{u} - \\mathbf{t}_1\\big)$$\n\nThe masks then split the result into per-object clouds and a static background $P^{\\text{bg}}$. That split is what earns the camera numbers: because the background is a fixed object in 3D, a change of viewpoint is **rendered** from it under the new pose, rather than hallucinated afresh each frame by a model guessing what is behind things."
+   },
+   {
+    "h": "An object as a moving Gaussian",
+    "b": "Each controlled object is a sequence of Gaussians in the world frame:\n\n$$\\{\\mathcal{G}^t_o\\}_{t=1}^{T}, \\qquad \\mathcal{G}^t_o(\\mathbf{x}) = \\mathcal{N}\\big(\\mathbf{x} \\mid \\boldsymbol{\\mu}^t_o, \\boldsymbol{\\Sigma}^t_o\\big)$$\n\nThe mean traces the path. The covariance carries the rest: its eigenvalues are extent, its eigenvectors orientation. So position, size and pose for one object at one instant are a handful of numbers, with no category attached anywhere — which is the argument. A 3D bounding box is rigid, and a parametric body model is a person and nothing else.\n\nThe ablation prices the choice rather than asserting it. Swap the Gaussians for oriented 3D boxes and object-motion error goes from **2.507** to 4.520; reduce them to bare centroid trajectories and it goes to **6.896** — worse than boxes, because a point specifies no extent for the model to fill and so leaves the object's size to invention."
+   },
+   {
+    "h": "GeoAdapter, and a backbone that is never updated",
+    "b": "Four rendered maps — background RGB and depth, trajectory RGB and depth — are encoded by Wan's own encoder, a soft merged mask is interpolated to latent resolution, and the lot is concatenated channel-wise into a geometry tensor.\n\nGeoAdapter is a DiT-style branch at the same hidden width as Wan-DiT but with far fewer layers, interleaved so that every fifth frozen block is paired with one, and each adapter block is initialised from the weights of the block it is paired with. Wan 2.1-14B itself is never touched. Training is 2,500 iterations at 480P and 2,500 more at 720P on sixteen GPUs — about **380 hours** in total, for a 14B-parameter video prior that somebody else paid to train.\n\nThe dataset had to be built as well: 35K samples of real video from Sekai-Real-HQ and SpatialVID-HQ, cut into 81-frame clips to match Wan's temporal length, captioned by Qwen2.5-VL-72B, and annotated with geometry by a pipeline of MegaSaM with its depth modules swapped for MoGe-2 and UniDepth V2."
+   },
+   {
+    "h": "What the geometry is worth",
+    "b": "Joint camera and object control on VerseControl4D: overall VBench-I2V **88.10** against Yume's 85.47 and Uni3C's 83.55, rotation error **0.890** against Uni3C's 1.361, translation error **3.103** against 7.731, object motion **2.507** against 5.883. The dynamic-degree score is the one to read alongside those: **86.26** against Yume's 72.24, so it is not buying control by generating less motion. On the static subset with camera control only, rotation error **0.650** against FlashWorld's 1.792.\n\nTwo honest notes. Depth is load-bearing rather than decorative — remove the depth channels and object error goes 2.507 to 4.929, with vertical structures like streetlights rendered in front of things they are behind, because a silhouette alone does not say which is nearer.\n\nAnd the input to all of this is a 4D scene authored in world coordinates. The paper's own interface is dragging and keyframing ellipsoids in Blender. That is a precise and editable control surface, and it is emphatically not a text prompt — the cost of putting the control in the world is that somebody has to build the world."
+   }
+  ],
+  "refs": [
+   {
+    "t": "VerseCrafter: Dynamic Realistic Video World Model with 4D Geometric Control",
+    "y": 2026,
+    "url": "https://arxiv.org/abs/2601.05138"
+   },
+   {
+    "t": "Wan: Open and Advanced Large-Scale Video Generative Models",
+    "y": 2025,
+    "url": "https://arxiv.org/abs/2503.20314"
+   },
+   {
+    "t": "3D Gaussian Splatting for Real-Time Radiance Field Rendering",
+    "y": 2023
+   }
+  ]
  }
 }

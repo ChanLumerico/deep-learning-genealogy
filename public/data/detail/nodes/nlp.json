@@ -1287,5 +1287,42 @@
     "url": "https://arxiv.org/abs/2402.03300"
    }
   ]
+ },
+ "streamingllm": {
+  "lead": "A transformer decoding an endless stream faces two problems that pull against each other. Cache every key and value and memory grows without bound. Keep a sliding window of the recent ones and the model does not degrade gracefully — it collapses: perplexity on a 65,000-token book goes from 5.4 to five thousand. StreamingLLM's finding is that what breaks it is losing the **first** tokens, and that those tokens matter for where they sit rather than for anything they say.",
+  "blocks": [
+   {
+    "h": "What the softmax does with its surplus",
+    "b": "Attention ends in a softmax, so the weights sum to one whether or not the query needs anything from anywhere:\n\n$$\\mathrm{softmax}(x)_i = \\frac{e^{x_i}}{e^{x_1} + \\sum_{j=2}^{N} e^{x_j}}, \\qquad x_1 \\gg x_j$$\n\nA head whose current embedding already suffices still cannot attend to nothing. It has to put its mass somewhere, so it dumps the surplus on a token that is always available — and in a causal model the tokens always available are the first ones.\n\nEvict them and a large term leaves the denominator. Every remaining weight is inflated, the attention distribution shifts away from anything seen in training, and the model's output stops meaning what it meant. The same effect had already been noticed from the other side, as the outliers that make quantisation hard."
+   },
+   {
+    "h": "Positional, not semantic",
+    "b": "The natural explanation is that the opening tokens carry the topic and the model is holding onto the subject of the document. The paper tests it directly: replace the first four tokens with a linebreak character, and the model attends to those linebreaks just as strongly — and reintroducing them restores perplexity nearly to where the real tokens had it.\n\nSo a sink is a slot at an absolute position rather than content. Four of them are enough; one or two do not fully restore the model, which shows it is not simply the first token being special, and beyond four the returns fall away."
+   },
+   {
+    "h": "Four keys and a rolling window",
+    "b": "The cache is then two pieces: the first few tokens' keys and values, held permanently, plus the most recent $L$, rolled. Llama-2-13B on the opening book of PG-19 sets the four options side by side — dense attention at $O(T^2)$ and perplexity 5641 once past its training length; window attention at $O(TL)$ and 5158; a sliding window that rebuilds its cache for every token, 5.43 but $O(TL^2)$; sinks plus a window, **5.40 at $O(TL)$**.\n\nThat is the whole result: the accuracy of recomputation at the cost of a window, up to **22.2×** faster, stable to four million tokens, and requiring no finetuning of the model at all."
+   },
+   {
+    "h": "What it is not",
+    "b": "Nothing is being remembered. A token that leaves the window is gone rather than summarised, and the paper is explicit that this does not extend context — it extends how long a model can **run**. A question about something said a million tokens ago is not answerable by any of this.\n\nIt also suggests the other direction: prepend a single learnable sink token during pretraining and one suffices afterwards, which is now ordinary practice in models designed for streaming. And the observation travelled further than language. A video diffusion transformer generating frame by frame has the same softmax and the same permanently visible opening tokens, which is where MotionStream found the anchor that lets it generate without end."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Efficient Streaming Language Models with Attention Sinks",
+    "y": 2024,
+    "url": "https://arxiv.org/abs/2309.17453"
+   },
+   {
+    "t": "Longformer: The Long-Document Transformer",
+    "y": 2020
+   },
+   {
+    "t": "MotionStream: Real-Time Video Generation with Interactive Motion Controls",
+    "y": 2026,
+    "url": "https://arxiv.org/abs/2511.01266"
+   }
+  ]
  }
 }

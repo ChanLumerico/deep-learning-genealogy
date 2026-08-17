@@ -1544,5 +1544,394 @@
     "y": 2021
    }
   ]
+ },
+ "ldm>controlnet": {
+  "lead": "Stable Diffusion arrived with one conditioning channel and it took words. Everything a person actually wants to specify about a picture that words are bad at — this pose, this outline, this depth — had no way in. Retraining the model with a new input was the obvious answer and the wrong one: the paired data does not exist at the scale that made the model good, and a bad finetune destroys a checkpoint that cost millions to produce.",
+  "blocks": [
+   {
+    "h": "Freezing the thing you cannot afford to break",
+    "b": "ControlNet's premise is that the base model is not a starting point to be improved but an asset to be preserved. Its parameters are locked; a clone of its encoder blocks is what learns.\n\nThat has a consequence beyond safety. The trainable branch begins with weights already trained on billions of images, so it is not learning what an image is — only how to route a new kind of input into a representation that already exists. Which is why tens of thousands of pairs suffice where a from-scratch conditional model would need orders of magnitude more."
+   },
+   {
+    "h": "Zero convolutions, so the first step is identity",
+    "b": "The join between branch and base is a $1\\times1$ convolution with weight and bias both initialised to zero:\n\n$$y_c = \\mathcal{F}(x;\\Theta) + \\mathcal{Z}\\big(\\mathcal{F}(x + \\mathcal{Z}(c;\\Theta_{z1});\\Theta_c);\\Theta_{z2}\\big)$$\n\nAt step one the second term is exactly zero and $y_c = y$. Training therefore starts from the undamaged model rather than from a random perturbation of it, which is the difference between finetuning and gambling. The branch still learns because the gradient with respect to a zero convolution's weights is its input feature, which is not zero."
+   },
+   {
+    "h": "What the arrangement costs and what it enabled",
+    "b": "On a 40 GB A100 the whole apparatus adds about **23%** memory and **34%** time per iteration over finetuning the base alone, since no gradient crosses into the frozen half. The visible oddity is that quality is never the thing that improves: samples look right from the first step and simply ignore the condition, until somewhere around step 6100 the model abruptly begins obeying it.\n\nThe larger effect is structural. Once a frozen checkpoint can be extended by a small trained branch, the base model becomes a platform rather than a product, and the unit of research becomes the adapter. Both video world models three years later are the same arrangement with a different signal plugged in."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Adding Conditional Control to Text-to-Image Diffusion Models",
+    "y": 2023,
+    "url": "https://arxiv.org/abs/2302.05543"
+   },
+   {
+    "t": "High-Resolution Image Synthesis with Latent Diffusion Models",
+    "y": 2022
+   }
+  ]
+ },
+ "pix2pix>controlnet": {
+  "lead": "pix2pix had already established the shape of the problem: given aligned pairs, learn a mapping from one image domain to another, with an adversarial term to keep the output from being an average. What it did not have was a prior. Every pix2pix model learns what a plausible photograph looks like from the pairs in front of it, which is why the outputs are recognisably of their dataset.",
+  "blocks": [
+   {
+    "h": "The same task, on top of something that already knows",
+    "b": "An edge map to a photograph is a pix2pix task, and ControlNet's canny model does exactly it. The difference is where the knowledge of photographs comes from — not from the paired set, but from a frozen text-to-image model behind it.\n\nThat reverses which part is scarce. pix2pix needs enough pairs to learn a domain; ControlNet needs only enough to learn a correspondence, because the domain is already there. It is the same move that pretraining made in language, arriving in conditional image synthesis several years later."
+   },
+   {
+    "h": "And a prompt on top of the map",
+    "b": "pix2pix is deterministic in intent: one input, one plausible output. Conditioning a text-to-image model instead leaves the text channel free, so the same outline can be rendered as an oil painting or a photograph or a diagram, and the spatial condition constrains only what it actually specifies.\n\nThat is a genuinely different interface rather than a better score — the control map says where, the prompt says what, and neither has to carry the other's job."
+   },
+   {
+    "h": "What did not carry over",
+    "b": "The adversarial term did not. pix2pix needs a discriminator because an $L^1$ loss against a single ground-truth image produces a blur; a diffusion model already models a distribution, so the sharpness comes for free and the conditioning branch is trained under the ordinary diffusion objective.\n\nWhat did carry over is the requirement that made pix2pix awkward in the first place, and it is the limitation on this node: aligned pairs, one dataset and one trained branch per kind of control."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Adding Conditional Control to Text-to-Image Diffusion Models",
+    "y": 2023,
+    "url": "https://arxiv.org/abs/2302.05543"
+   },
+   {
+    "t": "Image-to-Image Translation with Conditional Adversarial Networks",
+    "y": 2017
+   }
+  ]
+ },
+ "ddim>dmd": {
+  "lead": "DDIM turned sampling into a deterministic ODE and cut a thousand steps to fifty. The remaining fifty are not slack: each step asks the network which direction to move next, and because the path is curved, a step twice as large lands somewhere the path does not go. Straightening the path is one answer — rectified flow took it. DMD takes the other: stop integrating anything, and train a single jump.",
+  "blocks": [
+   {
+    "h": "Why fifty is a floor and not a habit",
+    "b": "DDIM's update is a first-order integration of a probability-flow ODE. Discretisation error is the cost of the step size, so the number of steps is bounded below by how curved the trajectory is, and no amount of scheduling makes a badly curved path traversable in one leap.\n\nProgressive distillation had already attacked this by halving the step count repeatedly, teaching a student to take one step where the teacher took two. That works and it inherits the framing — the student is still learning a trajectory."
+   },
+   {
+    "h": "Abandoning the trajectory entirely",
+    "b": "DMD does not ask the student to arrive where the teacher arrived from the same noise. It asks that the **set** of things the student produces match the set the teacher produces, which is a far weaker requirement and therefore a satisfiable one in a single step.\n\nThe objective is a reverse KL, and its gradient is a difference of two scores — the frozen teacher's, and a second diffusion model trained on the student's own output:\n\n$$\\nabla_\\theta D_{\\mathrm{KL}} = \\mathbb{E}\\Big[-\\big(s_{\\text{real}} - s_{\\text{fake}}\\big)\\tfrac{dG}{d\\theta}\\Big]$$\n\nNothing about the teacher's sampling path appears anywhere in that expression."
+   },
+   {
+    "h": "What is given up by not following the path",
+    "b": "A trajectory-matching student inherits the teacher's mapping from noise to image, so a given seed keeps producing a recognisable relative of what it produced before. Distribution matching gives that up: the correspondence between noise and output is whatever training arrives at.\n\nAnd matching a distribution can be done by covering part of it, since a score is blind to total mass — which is why the objective needs a regression term against the teacher's actual outputs to stop modes disappearing. The trajectory comes back, in other words, but only as a regulariser rather than as the goal."
+   }
+  ],
+  "refs": [
+   {
+    "t": "One-step Diffusion with Distribution Matching Distillation",
+    "y": 2024,
+    "url": "https://arxiv.org/abs/2311.18828"
+   },
+   {
+    "t": "Denoising Diffusion Implicit Models",
+    "y": 2021
+   },
+   {
+    "t": "Progressive Distillation for Fast Sampling of Diffusion Models",
+    "y": 2022
+   }
+  ]
+ },
+ "scoresde>dmd": {
+  "lead": "The score SDE established what a diffusion model is: an estimator of $\\nabla_x \\log p_\\tau(x)$, the gradient of a log-density, learned at every noise level. Sampling was the application. DMD is the observation that if you already have a network that reports the gradient of a log-density, you have the machinery for an objective that has nothing to do with sampling.",
+  "blocks": [
+   {
+    "h": "A score is a general-purpose tool, not a sampler part",
+    "b": "Write the KL between the generator's distribution and the data's, differentiate with respect to the generator's parameters, and what survives is exactly two score functions:\n\n$$\\nabla_\\theta D_{\\mathrm{KL}} = \\mathbb{E}\\Big[-\\big(s_{\\text{real}}(x) - s_{\\text{fake}}(x)\\big)\\tfrac{dG}{d\\theta}\\Big]$$\n\n$s_{\\text{real}}$ is a pretrained diffusion model, used as nothing but a density-gradient oracle. $s_{\\text{fake}}$ is a second diffusion model, trained continuously on whatever the generator is currently producing. The reason the two terms behave sensibly is geometric: $s_{\\text{real}}$ pulls samples uphill towards the data's modes and $-s_{\\text{fake}}$ pushes them off wherever the generator has piled up, so equilibrium is agreement."
+   },
+   {
+    "h": "The noising process, reused as a smoother",
+    "b": "Score SDE's forward process existed to define something to reverse. Here it does a different job. Two distributions on a high-dimensional space generally do not overlap, and where one has no support the other's score says nothing useful — so at initialisation the objective has no gradient to give.\n\nDiffusing both distributions makes them overlap everywhere, which makes the KL well-defined everywhere, which is why the loss is taken across noise levels rather than at the data. The noise is not part of generation in DMD at all; it is what makes the comparison possible."
+   },
+   {
+    "h": "Where this sits relative to a GAN",
+    "b": "The arrangement looks adversarial — a generator, and a second network updated against it, at a five-to-one ratio. It is not. The critic is not scoring realism, it is estimating the generator's own density, and the generator is not fooling it but moving to where the two densities agree.\n\nThat is what makes the training stable in a way GAN training is not, and it is a reasonable way to read the decade: the score function turned out to be the thing a discriminator had been approximating badly all along."
+   }
+  ],
+  "refs": [
+   {
+    "t": "One-step Diffusion with Distribution Matching Distillation",
+    "y": 2024,
+    "url": "https://arxiv.org/abs/2311.18828"
+   },
+   {
+    "t": "Score-Based Generative Modeling through Stochastic Differential Equations",
+    "y": 2021
+   }
+  ]
+ },
+ "dit>wan": {
+  "lead": "DiT settled the argument about diffusion backbones by showing that replacing the U-Net with a transformer produced a model whose quality tracked its compute predictably. That claim is only worth having if somebody spends the compute. Wan is a straightforward answer to what happens when a large lab does exactly that for video, and releases the result.",
+  "blocks": [
+   {
+    "h": "The same block, over a video latent",
+    "b": "Structurally very little changes. Patches become spatio-temporal patches, the autoencoder becomes a 3D causal one compressing time as well as space, and attention runs over the whole latent volume rather than a single frame's worth of tokens. Text enters by cross-attention.\n\nWhat DiT supplied was the confidence that scaling the block is the productive axis, so the report reads as an engineering account — a novel VAE, data curation, pretraining strategy, automated evaluation — rather than an architectural proposal."
+   },
+   {
+    "h": "Full attention, and the bill for it",
+    "b": "Wan keeps full spatio-temporal attention rather than factorising space and time, on the grounds that it captures complex dynamics better. Genie had factorised for exactly the opposite reason, and both are defensible; the difference is what each could afford.\n\nThe bill is what the next two years attack. Attention over the entire clip means the whole clip is generated at once, so nothing can be shown until everything is finished, and the flow-matching sampler wants tens of steps on top. Neither is a flaw in the model — both are what it means to be a bidirectional diffusion model — and both are fatal to interaction."
+   },
+   {
+    "h": "The part that mattered was the licence",
+    "b": "14B parameters trained on the order of a trillion tokens, and a 1.3B sibling that fits in **8.19 GB** of VRAM. The second number is the one with consequences: it put a competent video model on a consumer card, and the research that followed is visible in this graph as two nodes that would otherwise not exist.\n\nDiT is a paper about a scaling property. Wan is what happens when the scaled artefact is downloadable, and the distinction is why an engineering report earns a place in a genealogy of ideas."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Wan: Open and Advanced Large-Scale Video Generative Models",
+    "y": 2025,
+    "url": "https://arxiv.org/abs/2503.20314"
+   },
+   {
+    "t": "Scalable Diffusion Models with Transformers",
+    "y": 2023
+   }
+  ]
+ },
+ "flowmatch>wan": {
+  "lead": "Flow matching replaced the diffusion apparatus with a straight interpolation and a velocity target. By 2024 SD3 had shown it scaled for images; Wan is the same objective carrying a video model at 14 billion parameters, which is worth recording because the choice is now so standard that it reads as a default rather than as a decision.",
+  "blocks": [
+   {
+    "h": "The objective, unchanged",
+    "b": "$$z_\\tau = (1-\\tau)z_0 + \\tau z_1, \\qquad \\mathcal{L} = \\big\\|f_\\theta(z_\\tau,\\tau) - (z_1 - z_0)\\big\\|^2$$\n\nNothing is adapted for video. The interpolation runs between a Gaussian sample and a clip's latent exactly as it would between noise and an image, and the network predicts the velocity that points from one to the other.\n\nThat transferability is the point being made. A formulation with no noise schedule to tune and no parameterisation to choose is a formulation that survives being pointed at a new modality, which is most of why it displaced the DDPM framing rather than sitting beside it."
+   },
+   {
+    "h": "What it does not fix",
+    "b": "Flow matching makes training simple; it does not make sampling cheap. The network is only ever asked about an infinitesimal step, so a large Euler step off a curved path lands off the path, and Wan needs tens of evaluations per clip.\n\nThat is the gap the rest of this branch of the graph exists to close — first by distilling the sampler down to a few steps, then by making those few steps causal so a frame can be emitted before the clip is finished."
+   },
+   {
+    "h": "And what it makes possible downstream",
+    "b": "Choosing flow matching here is what lets MotionStream's shortcut-style machinery apply at all. A velocity field between noise and data is precisely the object that shortcut models condition on a step size, and that diffusion forcing assigns a per-frame noise level to.\n\nSo the objective is doing double duty: it trains the backbone, and it is the interface through which the backbone is later compressed into something real-time. A model trained with a bespoke schedule would have needed a bespoke distillation."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Wan: Open and Advanced Large-Scale Video Generative Models",
+    "y": 2025,
+    "url": "https://arxiv.org/abs/2503.20314"
+   },
+   {
+    "t": "Flow Matching for Generative Modeling",
+    "y": 2023
+   }
+  ]
+ },
+ "dmd>selfforce": {
+  "lead": "DMD matches the distribution of a student's output to a teacher's, in one step, for an image. A video generated causally is not one object — it is a sequence in which each element is conditioned on the student's own previous mistakes. Self Forcing is the observation that DMD's objective is the right one for that setting, provided you first let the student make the mistakes.",
+  "blocks": [
+   {
+    "h": "Distilling a rollout rather than a sample",
+    "b": "The mechanism is DMD's, unchanged: a frozen bidirectional teacher supplies $s_{\\text{real}}$, a trained critic supplies $s_{\\text{fake}}$, and the generator descends the difference.\n\nWhat changes is the argument. Instead of a single denoised sample, the object being scored is a whole clip produced by autoregressive rollout with a KV cache — each chunk generated conditioned on the chunks the student itself produced. So the distribution being matched is the distribution of videos the student actually emits under its own compounding error, which is the distribution that matters and the one a frame-wise objective never sees."
+   },
+   {
+    "h": "Making the graph short while the rollout stays long",
+    "b": "Rolling out inside a training step is expensive twice over — the forward passes, and holding the autograd graph for all of them. Two economies make it affordable, and both are borrowed from the distillation setting rather than invented.\n\nThe student is already a few-step model, so a chunk costs a handful of evaluations. And of those, **one denoising step is sampled at random** and its output taken as final, so gradients flow through that step alone while the cached context is detached. The rollout can be as long as it needs to be; what is differentiated is one step of one chunk."
+   },
+   {
+    "h": "Exposure bias was the target all along",
+    "b": "DMD's problem was speed. Self Forcing's is a different one that happens to be solved by the same tool: a model trained on ground-truth history is being asked at inference to condition on its own output, and every error takes it somewhere training never went.\n\nDiffusion forcing had addressed this by noising the context, which makes the history imperfect but keeps it real. Rolling out makes it the student's own, which is the only version of the fix that closes the gap rather than narrowing it — and it is available precisely because distillation had already made a few-step student cheap enough to run in the loop."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Self Forcing: Bridging the Train-Test Gap in Autoregressive Video Diffusion",
+    "y": 2025,
+    "url": "https://arxiv.org/abs/2506.08009"
+   },
+   {
+    "t": "One-step Diffusion with Distribution Matching Distillation",
+    "y": 2024,
+    "url": "https://arxiv.org/abs/2311.18828"
+   },
+   {
+    "t": "Diffusion Forcing: Next-token Prediction Meets Full-Sequence Diffusion",
+    "y": 2024,
+    "url": "https://arxiv.org/abs/2407.01392"
+   }
+  ]
+ },
+ "wan>selfforce": {
+  "lead": "A distillation method needs a teacher, and the teacher has to be good enough that matching it is worth the trouble. Self Forcing's teacher is Wan — which is to say the method exists in the form it does because a competent bidirectional video model had recently become something a research group could hold in memory and backpropagate against.",
+  "blocks": [
+   {
+    "h": "The teacher supplies scores, not weights",
+    "b": "The backbone plays two roles at once. The student is initialised from it and adapted to causal attention, so the architecture is inherited. And the frozen original stays resident to evaluate $s_{\\text{real}}$ on the student's rollouts, so it is also the objective.\n\nThat second role is why the size of the available checkpoint bounds the work: the teacher is queried on every training step, and a teacher that does not fit alongside the student and the critic is not a teacher."
+   },
+   {
+    "h": "Bidirectional attention as the thing being removed",
+    "b": "Wan attends over the whole clip, which is what makes it good and what makes it unusable for streaming — the future informs the past, so nothing can be emitted until everything is done. The student is the same model with the attention masked causally and the step count cut.\n\nSo the teacher is not merely a source of supervision, it is the specification of what the student should have been able to do had it been allowed to see the future. Distillation here is a way of asking a non-causal model to explain itself to a causal one."
+   },
+   {
+    "h": "And the horizon comes with it",
+    "b": "Wan's clips are 81 frames, so the teacher has never scored anything longer, and therefore neither has the student. Self Forcing's rolling KV cache lets generation continue past that length, but nothing in training ever supervised what happens there.\n\nThat is the honest reading of the limitation on this node: it is not a defect of the distillation, it is the teacher's horizon showing through. Removing it means either a teacher trained on longer clips, or — MotionStream's route — arranging for the extrapolated regime to be simulated during training so the student is never outside what it was trained on."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Self Forcing: Bridging the Train-Test Gap in Autoregressive Video Diffusion",
+    "y": 2025,
+    "url": "https://arxiv.org/abs/2506.08009"
+   },
+   {
+    "t": "Wan: Open and Advanced Large-Scale Video Generative Models",
+    "y": 2025,
+    "url": "https://arxiv.org/abs/2503.20314"
+   },
+   {
+    "t": "From Slow Bidirectional to Fast Autoregressive Video Diffusion Models",
+    "y": 2025
+   }
+  ]
+ },
+ "selfforce>motionstream": {
+  "lead": "Self Forcing produced a causal video model fast enough to stream and honest about where it stopped: the teacher knew 81 frames, so past 81 frames the student was guessing, and quality drifted. MotionStream is the fix for that specific failure, and the fix turns out to be a rearrangement of what the model is allowed to look at rather than a longer teacher.",
+  "blocks": [
+   {
+    "h": "Reading the attention maps first",
+    "b": "The diagnosis came from looking. Visualising self-attention across bidirectional, fully causal and sliding-window variants shows heads throughout the network — not only in early layers — persistently attending to the tokens of the very first frame, all the way through denoising.\n\nThat is the same phenomenon StreamingLLM had identified in language models, appearing in a video diffusion transformer. And it explains the drift exactly: a sliding window eventually evicts those tokens, the attention distribution shifts away from anything training produced, and the generation walks off."
+   },
+   {
+    "h": "A sink, a rolling window, and training that matches inference",
+    "b": "The context for chunk $i$ becomes its own noisy tokens, a fixed set of sink chunks, and a rolling window of recent ones:\n\n$$C_i = \\{z^i_t\\} \\cup \\{z^j_0\\}_{j \\le S} \\cup \\{z^j_0\\}_{\\max(1,i-W) \\le j < i}$$\n\nTwo details make this more than a caching trick. RoPE positions are assigned by **slot in the cache** rather than by absolute frame index, so positions never run past anything the model has seen. And the whole arrangement — rolling cache, sinks, the discontinuity between sink and window — is simulated during training by self-rollout, so the extrapolated regime is not extrapolation at all. Self Forcing closed the train-test gap for the context; this closes it for the positions."
+   },
+   {
+    "h": "The counterintuitive part",
+    "b": "One would expect more context to help. It does not. The best configuration is a **single** sink chunk and a **single** window chunk: additional sinks buy almost nothing and cost latency, and enlarging the window actively degrades long generations.\n\nThe paper's explanation is that restricting attention to the immediate predecessor is itself what prevents error accumulating — a longer window is more history in which drift can be reinforced. Self Forcing's own configuration attends to up to six previous chunks with no sink at all, which is precisely the arrangement that fails past the horizon.\n\nWhat is bought: constant latency and constant throughput regardless of length, because the cache never grows. What is left: the sink anchors the scene, so the scene cannot change."
+   }
+  ],
+  "refs": [
+   {
+    "t": "MotionStream: Real-Time Video Generation with Interactive Motion Controls",
+    "y": 2026,
+    "url": "https://arxiv.org/abs/2511.01266"
+   },
+   {
+    "t": "Self Forcing: Bridging the Train-Test Gap in Autoregressive Video Diffusion",
+    "y": 2025,
+    "url": "https://arxiv.org/abs/2506.08009"
+   },
+   {
+    "t": "Efficient Streaming Language Models with Attention Sinks",
+    "y": 2024,
+    "url": "https://arxiv.org/abs/2309.17453"
+   }
+  ]
+ },
+ "wan>motionstream": {
+  "lead": "MotionStream needs Wan twice and for different reasons. Once as an architecture to graft motion conditioning onto and retrain into a teacher, and once as the frozen source of scores that teaches the causal student. The first use is what makes the conditioning design interesting, because a real-time budget cannot absorb the standard way of adding a control signal.",
+  "blocks": [
+   {
+    "h": "Conditioning without duplicating the network",
+    "b": "The ControlNet pattern — clone the encoder, train the copy — doubles the FLOPs of the block it wraps. For an offline model that is a memory question. For a model that has to emit a frame every fifty milliseconds it is disqualifying.\n\nSo the tracks are encoded by a small head instead: a $4\\times$ temporal compression followed by a $1\\times1\\times1$ convolution, whose output is concatenated channel-wise to the video latents. The DiT is unchanged apart from the input channel count of its patchify layer, and the alternative of painting tracks as an RGB video through Wan's frozen VAE is beaten on every metric while being **40×** slower to encode."
+   },
+   {
+    "h": "The backbone chosen by what can be trained",
+    "b": "Because the teacher is retrained rather than frozen, the size of the backbone is a budget decision, and the paper reports two: Wan 2.1 at 1.3B for the 480P results and Wan 2.2 at 5B for 720P. Teachers are trained on OpenVid-1M plus synthetic clips from Wan's own text-to-video model, tracked on a $50\\times50$ grid with CoTracker3.\n\nThe dependence runs deeper than convenience. The distillation objective evaluates the frozen teacher on every step, so student, critic and teacher are resident together — which sets a ceiling on backbone size that has nothing to do with what the backbone could do."
+   },
+   {
+    "h": "Guidance paid once, at training time",
+    "b": "The teacher needs joint text and motion guidance to be any good — text alone drifts off the trajectory, motion alone produces rigid planar sliding — and that costs three network evaluations per denoising step.\n\nNone of it reaches inference. The target score for distillation is **defined** with the joint guidance already applied, so the student is trained to match a guided distribution and reproduces it in a single unguided evaluation. The expensive part of the teacher's sampling procedure is absorbed into what the student is, which is the general shape of why the distilled model is not merely faster but faster than the sum of its shortcuts."
+   }
+  ],
+  "refs": [
+   {
+    "t": "MotionStream: Real-Time Video Generation with Interactive Motion Controls",
+    "y": 2026,
+    "url": "https://arxiv.org/abs/2511.01266"
+   },
+   {
+    "t": "Wan: Open and Advanced Large-Scale Video Generative Models",
+    "y": 2025,
+    "url": "https://arxiv.org/abs/2503.20314"
+   }
+  ]
+ },
+ "controlnet>motionstream": {
+  "lead": "ControlNet is the reason anyone expects a frozen generative model to be steerable, and it is also the specific design MotionStream declines to use. The reason is arithmetic: a control branch that duplicates network blocks doubles the FLOPs of everything it wraps, and a model with a fifty-millisecond frame budget has no room for that.",
+  "blocks": [
+   {
+    "h": "What is kept",
+    "b": "The premise survives intact — a large pretrained generator plus a small trained path for a spatial signal, rather than a conditional model trained from nothing. Motion Prompting, the offline system MotionStream measures against, is a ControlNet-style architecture, and MotionStream's teacher is the same idea with the branch replaced.\n\nAlso kept is the notion that the condition should be brought to the latent's resolution by something cheap and learned, rather than pushed through the model's own encoder. ControlNet used four small convolutions; MotionStream uses a temporal compression and a $1\\times1\\times1$ convolution."
+   },
+   {
+    "h": "What is dropped, and what replaces it",
+    "b": "The duplicated encoder goes. Track embeddings are concatenated directly to the video latents, so the only architectural change is the channel count of the patchify layer and the core DiT is untouched.\n\nConcatenation instead of a parallel branch also means there is no separate path to keep in sync during distillation — the conditioning is simply part of the input, and the causal student inherits it without any extra machinery. A branch would have had to be distilled too."
+   },
+   {
+    "h": "A signal that is not a picture",
+    "b": "ControlNet's conditions are images: an edge map, a depth map, a pose rendering. Tracks are not. Each is an identity and a path, so it is encoded as a sinusoidal embedding of a random id painted at the track's position over time, with a visibility flag,\n\n$$c_m\\Big(t, \\big\\lfloor \\tfrac{y^n_t}{s} \\big\\rfloor, \\big\\lfloor \\tfrac{x^n_t}{s} \\big\\rfloor\\Big) = v[t,n]\\cdot\\phi_n$$\n\nwhich is a sparse volume rather than a picture. That difference produces a failure ControlNet never had: zero means both **occluded** and **unspecified**, so releasing the mouse is indistinguishable from an object going behind something, and things pop in and out. The remedy is to train with random mid-sequence chunks blanked at $p = 0.2$ — an artefact of interactivity, not of conditioning."
+   }
+  ],
+  "refs": [
+   {
+    "t": "MotionStream: Real-Time Video Generation with Interactive Motion Controls",
+    "y": 2026,
+    "url": "https://arxiv.org/abs/2511.01266"
+   },
+   {
+    "t": "Adding Conditional Control to Text-to-Image Diffusion Models",
+    "y": 2023,
+    "url": "https://arxiv.org/abs/2302.05543"
+   }
+  ]
+ },
+ "controlnet>versecrafter": {
+  "lead": "ControlNet established the arrangement: freeze a large generative model, train a light branch that injects a spatial condition, and get control without risking the checkpoint. VerseCrafter is that arrangement with the interesting question moved. The architecture is barely in dispute by 2026 — what is in dispute is what the condition should be, and VerseCrafter's answer is that it should not live in the image plane at all.",
+  "blocks": [
+   {
+    "h": "The adapter, adapted",
+    "b": "GeoAdapter is a DiT-style branch at the same hidden width as the frozen Wan-DiT but with far fewer layers, interleaved so every fifth frozen block is paired with one. Each adapter block is initialised from the weights of the block it pairs with, which is ControlNet's trick of starting the trainable path from the pretrained one rather than from noise.\n\nThe backbone — 14B parameters — is never updated. Total training is 2,500 iterations at 480P and 2,500 at 720P, about 380 hours on sixteen GPUs, which is the whole argument for the pattern: a frozen prior somebody else paid for, plus a fortnight."
+   },
+   {
+    "h": "A condition that is rendered, not drawn",
+    "b": "ControlNet's conditions are images in the output's frame — an edge map aligned to the picture it will produce. VerseCrafter's condition is a 3D scene: a static background point cloud and per-object 3D Gaussians in a shared world frame, which are **projected** into per-frame RGB and depth maps under the requested camera pose.\n\nSo the conditioning images the adapter receives are derived rather than authored, and consistency between frames is a property of the geometry instead of something the model has to be persuaded into. Where a 2D control has to be redrawn for every viewpoint and breaks when the camera moves far, a projected one simply projects."
+   },
+   {
+    "h": "Depth is not decoration",
+    "b": "Four maps go in per frame — background RGB and depth, trajectory RGB and depth — and the depth channels are the ones the ablation vindicates. Removing them takes object-motion error from **2.507** to 4.929 and produces exactly the error a silhouette invites: streetlights rendered in front of things they are behind.\n\nThat is worth reading as a general point about this pattern rather than a detail of this paper. A conditioning image constrains what it encodes and nothing else, so an adapter is only as unambiguous as its channels. ControlNet's depth model knew this from the other direction; VerseCrafter's contribution is that once the condition comes from a 3D state, depth is free to render."
+   }
+  ],
+  "refs": [
+   {
+    "t": "VerseCrafter: Dynamic Realistic Video World Model with 4D Geometric Control",
+    "y": 2026,
+    "url": "https://arxiv.org/abs/2601.05138"
+   },
+   {
+    "t": "Adding Conditional Control to Text-to-Image Diffusion Models",
+    "y": 2023,
+    "url": "https://arxiv.org/abs/2302.05543"
+   }
+  ]
+ },
+ "wan>versecrafter": {
+  "lead": "VerseCrafter takes Wan 2.1 at 14 billion parameters and does not change a weight of it. That is the strongest form of the frozen-backbone bargain in this part of the graph, and it is only available because the paper never needs a gradient to reach the backbone — which is what separates conditioning a model from distilling one.",
+  "blocks": [
+   {
+    "h": "A prior, used strictly as a prior",
+    "b": "Wan supplies three things and is asked for nothing else: an encoder that maps the rendered control maps into the same latent space as video, a denoiser that knows what real footage looks like, and a decoder. Its architecture and weights are untouched, and the paper describes it as a generic video prior.\n\nThe contrast with MotionStream is instructive, since both stand on the same checkpoint. MotionStream retrains it into a teacher and distils it, so it is bounded by what fits in memory during training and works at 1.3B and 5B. VerseCrafter backpropagates only into GeoAdapter and can therefore afford 14B."
+   },
+   {
+    "h": "What the backbone is not asked to know",
+    "b": "Because the background is a point cloud rendered under the requested pose, the model is not asked to imagine what lies behind an object when the camera moves — it is shown. Because objects are Gaussians projected into soft elliptical footprints with depth, it is not asked to infer occlusion ordering either.\n\nSo the division of labour is explicit: geometry handles everything that must be consistent across frames, and the frozen prior handles appearance, texture and plausibility. That is what lets a 35K-sample dataset train a controller for a model trained on a trillion tokens."
+   },
+   {
+    "h": "The 81 frames show through here too",
+    "b": "VerseControl4D's clips are 81 frames because that is Wan's temporal length, and the whole dataset pipeline — shot detection, sub-clip sampling, geometry annotation — is cut to that figure.\n\nIt is the same constraint that bounds Self Forcing's horizon, arriving by a different route: not as drift past a limit, but as the unit in which everything upstream must be prepared. A frozen backbone gives away a great deal for free and quietly fixes the shape of the work around it."
+   }
+  ],
+  "refs": [
+   {
+    "t": "VerseCrafter: Dynamic Realistic Video World Model with 4D Geometric Control",
+    "y": 2026,
+    "url": "https://arxiv.org/abs/2601.05138"
+   },
+   {
+    "t": "Wan: Open and Advanced Large-Scale Video Generative Models",
+    "y": 2025,
+    "url": "https://arxiv.org/abs/2503.20314"
+   }
+  ]
  }
 }
