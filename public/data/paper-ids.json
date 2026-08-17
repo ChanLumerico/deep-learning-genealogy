@@ -525,6 +525,10 @@
  "wavenet": {
   "t": "WaveNet: A Generative Model for Raw Audio"
  },
+ "maskgit": {
+  "t": "MaskGIT: Masked Generative Image Transformer",
+  "arxiv": "2202.04200"
+ },
  "nice": {
   "t": "NICE: Non-linear Independent Components Estimation"
  },
@@ -560,6 +564,10 @@
  },
  "ddim": {
   "t": "Denoising Diffusion Implicit Models"
+ },
+ "edm": {
+  "t": "Elucidating the Design Space of Diffusion-Based Generative Models",
+  "arxiv": "2206.00364"
  },
  "ldm": {
   "t": "High-Resolution Image Synthesis with Latent Diffusion Models"
@@ -741,6 +749,10 @@
  },
  "gpt4v": {
   "t": "GPT-4 Technical Report"
+ },
+ "svd": {
+  "t": "Stable Video Diffusion: Scaling Latent Video Diffusion Models to Large Datasets",
+  "arxiv": "2311.15127"
  },
  "sora": {
   "t": "Video generation models as world simulators"

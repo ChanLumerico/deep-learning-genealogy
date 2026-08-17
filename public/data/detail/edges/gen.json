@@ -1933,5 +1933,242 @@
     "url": "https://arxiv.org/abs/2503.20314"
    }
   ]
+ },
+ "scoresde>edm": {
+  "lead": "The score SDE's achievement was showing that DDPM and NCSN were one object seen from two sides — a stochastic differential equation with a probability-flow ODE beside it. What it did not do was clear away the two parents' accumulated choices. EDM keeps the continuous-time picture and treats everything hanging off it as an independent variable to be filled in by experiment.",
+  "blocks": [
+   {
+    "h": "What the unification left tangled",
+    "b": "Each lineage arrived with a schedule, a scaling, a parameterisation, a loss weighting, a sampler and a step sequence, and the paper that unified them expressed *both* sets rather than choosing between them. That is the right move for a paper making an equivalence and the wrong place to stop.\n\nEDM's contribution is to write one framework in which all of those are slots, and then fill each by measurement. Setting $\\sigma(t) = t$ and $s(t) = 1$ removes two of them outright by making the time variable *be* the noise level, which no longer leaves anything for a schedule to decide."
+   },
+   {
+    "h": "Sampling separated from training",
+    "b": "The sharpest consequence of the separation is that the sampler stops depending on how the network was trained, so it can be swapped onto a model somebody else trained.\n\nThe demonstration is unusually clean: an existing pretrained ImageNet-64 checkpoint goes from 2.07 to **1.55** FID with no retraining whatsoever — same weights, different solver, step schedule and preconditioning around them. Retraining under the whole recipe then reaches 1.36. Very few papers can show their contribution as an improvement to somebody else's finished artefact."
+   },
+   {
+    "h": "Why everything downstream cites this for a different reason",
+    "b": "DIAMOND wants the preconditioning, because a target that adapts with $\\sigma$ is what survives three denoising steps where noise prediction degenerates to the identity. DMD wants an EDM model as its teacher. Stable Video Diffusion wants the framework and then moves the noise distribution upward for high-resolution finetuning.\n\nNone of those is the result the paper leads with. A paper that isolates components gets cited component-wise, and that is a different and longer-lived kind of influence from a paper that reports a system."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Elucidating the Design Space of Diffusion-Based Generative Models",
+    "y": 2022,
+    "url": "https://arxiv.org/abs/2206.00364"
+   },
+   {
+    "t": "Score-Based Generative Modeling through Stochastic Differential Equations",
+    "y": 2021
+   }
+  ]
+ },
+ "edm>svd": {
+  "lead": "Choosing the EDM framework for a video model in late 2023 was not the default — most latent video diffusion still ran on DDPM-style discrete schedules. The reason it is here shows up in the third stage of training, where the model is finetuned at 576×1024 and the noise schedule has to move.",
+  "blocks": [
+   {
+    "h": "A continuous noise level is a dial rather than a decision",
+    "b": "EDM's parameterisation makes $\\sigma$ a continuous quantity with an explicit distribution at training time, instead of an index into a fixed thousand-step chain. Where the noise is concentrated becomes two numbers in a log-normal rather than a schedule to redesign.\n\nThat is the property SVD needs, because it changes its mind about where the noise should be halfway through training."
+   },
+   {
+    "h": "Why a larger image needs more noise",
+    "b": "Adding the same $\\sigma$ to a bigger picture destroys proportionally less of it — the signal is spread over more pixels and neighbouring pixels are correlated, so more of the original survives any given perturbation. A noise distribution tuned at 320×576 therefore leaves a 576×1024 model doing too little work at the destructive end of the range, and the high-resolution finetune underperforms for reasons that look like capacity and are not.\n\nSVD reports shifting the distribution towards higher noise as **essential** for that stage. The observation recurs in later high-resolution models, which is a sign it is about pixel counts rather than about this particular architecture."
+   },
+   {
+    "h": "One assembled part among several",
+    "b": "SVD is unusually plain about its architecture being put together from existing pieces: the temporal layers are Video LDM's, the micro-conditioning on frame rate follows SDXL's on size and crop, and the noise framework is EDM's. Its own claim is elsewhere, in the data.\n\nThat is worth noting on this arrow rather than treating it as a weakness. EDM was written to be taken apart and used piecemeal, and a paper picking up exactly the piece it needs — the noise framework, without the sampler discussion or the architecture — is the design working as intended."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Stable Video Diffusion: Scaling Latent Video Diffusion Models to Large Datasets",
+    "y": 2023,
+    "url": "https://arxiv.org/abs/2311.15127"
+   },
+   {
+    "t": "Elucidating the Design Space of Diffusion-Based Generative Models",
+    "y": 2022,
+    "url": "https://arxiv.org/abs/2206.00364"
+   },
+   {
+    "t": "Align your Latents: High-Resolution Video Synthesis with Latent Diffusion Models",
+    "y": 2023
+   }
+  ]
+ },
+ "edm>dmd": {
+  "lead": "Distribution matching needs a score for the real distribution, and it needs that score to be good, because the generator's gradient is a difference of two scores and systematic error in the real one goes straight into the student. DMD's ImageNet teacher is an EDM model, and the choice is not incidental.",
+  "blocks": [
+   {
+    "h": "The teacher as an oracle, not a trajectory",
+    "b": "None of EDM's sampling machinery survives distillation. The student takes one step; the 512 the teacher would have taken are never simulated, and Heun's method and the $\\rho = 7$ step schedule play no part.\n\nWhat is used is $s_{\\text{real}}$, evaluated wherever the objective asks. So the teacher's entire value here is the quality of its density gradient across noise levels — which is exactly what EDM's preconditioning and its $\\lambda(\\sigma) = 1/c_{\\text{out}}^2$ weighting were constructed to make uniform."
+   },
+   {
+    "h": "One step against five hundred and twelve",
+    "b": "FID **2.62** on ImageNet 64×64 in a single network evaluation, against the EDM teacher's own score at 512 steps. That comparison is the reason to name the teacher on this arrow: the student is not being measured against the field, it is being measured against the specific model it was distilled from.\n\nThe regression term is the teacher's too. Pairs of noise and the teacher's corresponding output are precomputed, so the student is anchored to what its teacher actually produces rather than only to where its density happens to be high — which is what stops modes disappearing."
+   },
+   {
+    "h": "What the pairing costs",
+    "b": "A distilled generator inherits its teacher's ceiling and its teacher's mistakes, and there is no version of this that learns from data alone.\n\nThat is the honest price of the whole family, and it is why the identity of the teacher belongs on the arrow rather than in a footnote. Change the teacher and you have changed the student's upper bound, whatever the distillation objective does."
+   }
+  ],
+  "refs": [
+   {
+    "t": "One-step Diffusion with Distribution Matching Distillation",
+    "y": 2024,
+    "url": "https://arxiv.org/abs/2311.18828"
+   },
+   {
+    "t": "Elucidating the Design Space of Diffusion-Based Generative Models",
+    "y": 2022,
+    "url": "https://arxiv.org/abs/2206.00364"
+   }
+  ]
+ },
+ "edm>diamond": {
+  "lead": "DIAMOND's world model is a diffusion model unrolled a thousand frames at three denoising steps each, and that regime is unforgiving in a way image generation is not. Its choice of EDM over DDPM is presented as a design decision and then demonstrated as the difference between a model that holds together and one that does not.",
+  "blocks": [
+   {
+    "h": "Where noise prediction fails",
+    "b": "Under an $\\varepsilon$-prediction objective, once $\\sigma \\gg \\sigma_{\\text{data}}$ the best thing the network can say is the input it was handed — the identity function, and a useless estimate of the score at exactly the point where sampling begins.\n\n$$c_{\\text{skip}}(\\sigma) = \\frac{\\sigma_{\\text{data}}^2}{\\sigma^2 + \\sigma_{\\text{data}}^2}$$\n\nEDM's skip term goes to zero there instead, so what the network is asked for at high noise is the clean frame — a target it can actually supply. In image generation, run for hundreds of steps, a poor first step is repaired by the ones after it. At three steps a frame, compounded across a thousand frames, nothing repairs it."
+   },
+   {
+    "h": "Measured rather than argued",
+    "b": "The two variants are trained with identical architecture on identical data, and the difference is visible without a metric: the DDPM-based world model drifts out of distribution within a few hundred autoregressive frames, and drifts faster the fewer denoising steps it is given. The EDM-based one is stable **even at a single step**.\n\nThat result is what licenses $n = 3$ rather than fifty, and $n = 3$ is in turn what makes training an agent inside the model affordable at all. A world model's step count is not an efficiency detail; it multiplies the length of every imagined rollout."
+   },
+   {
+    "h": "The part EDM did not supply",
+    "b": "Everything about conditioning. EDM is an unconditional image framework; a world model has to condition on a buffer of past observations and the actions taken, which DIAMOND does by concatenating past frames channel-wise and feeding actions through adaptive group normalisation in the residual blocks.\n\nSo the noise machinery transfers unchanged and the interface to an agent is entirely new — which is roughly the division of labour EDM was written to permit."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Diffusion for World Modeling: Visual Details Matter in Atari",
+    "y": 2024,
+    "url": "https://arxiv.org/abs/2405.12399"
+   },
+   {
+    "t": "Elucidating the Design Space of Diffusion-Based Generative Models",
+    "y": 2022,
+    "url": "https://arxiv.org/abs/2206.00364"
+   }
+  ]
+ },
+ "ldm>svd": {
+  "lead": "Latent diffusion made image generation cheap by moving the process into an autoencoder's latent space. A video is a stack of images that have to agree with one another, so the same move applies — and then raises a question the image case never had to answer, which is what the model should learn from when most video on the internet is stock footage with a watermark and a slow zoom.",
+  "blocks": [
+   {
+    "h": "The architecture is the settled part",
+    "b": "The first stage is LDM's autoencoder. The denoiser is LDM's U-Net with a temporal convolution and a temporal attention layer inserted after each spatial one, following Video LDM.\n\nSVD's departure there is small and deliberate: it finetunes the whole model rather than only the newly inserted temporal layers, which most contemporaneous work froze in order to preserve the image prior. The paper's position is that the image prior is a starting point rather than something to protect."
+   },
+   {
+    "h": "The data is the unsettled part",
+    "b": "577M raw clips reduced to 152M by cut detection, optical-flow motion filtering, OCR for text overlay, CLIP similarity and aesthetic scoring. Any paper can describe a pipeline; the reason this one counts is that it is ablated.\n\nAt a size where the experiment can actually be run, a four-times-smaller curated subset produces a model that human raters prefer to one trained on the full set. Volume was the wrong axis, and nobody had checked."
+   },
+   {
+    "h": "And a recipe rather than a training run",
+    "b": "LDM was a single objective on a single corpus. A video model of this period turns out to be a sequence of regimes — image pretraining, then video pretraining, then high-quality finetuning at higher resolution with the noise schedule shifted upward — each of which is ablated separately here.\n\nIdentifying that structure is most of what the paper is for, and it is why the limitation it leaves behind is not about quality. What it hands on is a strong open motion prior with no way to steer it, which is the gap every controllable-video paper downstream of this one is written into."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Stable Video Diffusion: Scaling Latent Video Diffusion Models to Large Datasets",
+    "y": 2023,
+    "url": "https://arxiv.org/abs/2311.15127"
+   },
+   {
+    "t": "High-Resolution Image Synthesis with Latent Diffusion Models",
+    "y": 2022
+   },
+   {
+    "t": "Align your Latents: High-Resolution Video Synthesis with Latent Diffusion Models",
+    "y": 2023
+   }
+  ]
+ },
+ "pixelcnn>maskgit": {
+  "lead": "PixelCNN's factorisation is a choice that has been presented as a necessity for so long that it stopped looking like one. A joint distribution over pixels can be written as a product of conditionals in *any* order; the raster order was picked because it is the one a causal mask expresses cheaply. Six years later MaskGIT points out what that convenience costs.",
+  "blocks": [
+   {
+    "h": "Order as an artefact",
+    "b": "$$p(x) = \\textstyle\\prod_i p\\big(x_i \\mid x_{<i}\\big)$$\n\nis exact under any permutation of the indices, and nothing about images recommends left-to-right, top-to-bottom. What the raster order buys is tractable training with a masked convolution. What it charges is sequential sampling, forever: one forward pass per token, so 256 for a $16\\times16$ grid and 1024 for $32\\times32$.\n\nIt charges something subtler too. A token emitted early cannot be revised when a later one contradicts it, because the model has already conditioned everything after it on that choice."
+   },
+   {
+    "h": "Predict everything, keep what you believe",
+    "b": "MaskGIT's transformer is bidirectional, so there is no order to respect and nothing to mask causally. Each iteration predicts a distribution for every masked position at once, samples them all, and retains only the most confident fraction — remasking the rest for the next round.\n\nEight iterations replace 256 passes. The fraction retained follows a cosine schedule, so the early rounds commit to very little and the late rounds fill in nearly everything, and no token is final until the last iteration."
+   },
+   {
+    "h": "What is gained besides speed",
+    "b": "An autoregressive model conditions only on what precedes, which makes filling a hole in the middle of an image a different problem from generating one. With attention in both directions it is the same problem: inpainting, outpainting and class-conditional generation are one procedure under different initial masks.\n\nThe autoregressive line kept the exact likelihood, which MaskGIT gives up — masked prediction is not a density model of the image. For a generator that was never the point, and the trade is why this branch and not PixelCNN's is what token-based image and video models are built on."
+   }
+  ],
+  "refs": [
+   {
+    "t": "MaskGIT: Masked Generative Image Transformer",
+    "y": 2022,
+    "url": "https://arxiv.org/abs/2202.04200"
+   },
+   {
+    "t": "Pixel Recurrent Neural Networks",
+    "y": 2016
+   }
+  ]
+ },
+ "vqgan>maskgit": {
+  "lead": "MaskGIT changes exactly one half of the two-stage recipe, and says so outright: it employs the same first stage as VQGAN and leaves improvements to tokenisation for future work. That restraint is what makes the result legible — same tokenizer, same codebook, same decoder, and a second stage that decodes in eight steps instead of 256.",
+  "blocks": [
+   {
+    "h": "Holding the tokenizer fixed is the experiment",
+    "b": "Because the first stage is untouched, the reconstruction ceiling is untouched, and any difference in sample quality is attributable to the prior rather than to the codes.\n\nThat matters because of what VQGAN had argued. Its case was that the codebook was the contribution — a perceptually rich vocabulary is what lets a transformer work at $f = 16$ — and it demonstrated this with reconstruction FID. MaskGIT's result is the complement: the prior over those same codes had been leaving a great deal on the table."
+   },
+   {
+    "h": "The numbers, at matched parameter count",
+    "b": "ImageNet 256×256 against a 227M-parameter VQGAN: FID 18.65 → **6.18**, Inception score 80.4 → 182.1, steps 256 → **8**. Against the 1.4B VQGAN it is 15.78 → 6.18, at a sixth of the parameters.\n\nAt 512×512 the gap widens because the sequence is longer and the autoregressive cost scales with it: 26.52 in 1024 steps becomes 7.32 in 12."
+   },
+   {
+    "h": "And where the tokenizer's limits reappear",
+    "b": "Nothing here raises the reconstruction ceiling. VQGAN's codes are what they were, so what MaskGIT recovers is the gap between the prior and that ceiling, not the ceiling itself — and once the gap is closed, the first stage is what remains.\n\nWhich is why the work that follows goes back to it. Better tokenizers, tokenizers that are temporal rather than per-frame, tokenizers with adversarial and perceptual losses tuned for video: all of that is precisely the job MaskGIT declined to do, and all of it is what the world models further along this branch had to do first."
+   }
+  ],
+  "refs": [
+   {
+    "t": "MaskGIT: Masked Generative Image Transformer",
+    "y": 2022,
+    "url": "https://arxiv.org/abs/2202.04200"
+   },
+   {
+    "t": "Taming Transformers for High-Resolution Image Synthesis",
+    "y": 2021,
+    "url": "https://arxiv.org/abs/2012.09841"
+   }
+  ]
+ },
+ "maskgit>genie": {
+  "lead": "Genie's dynamics model — the part that takes the tokens of the past and a latent action and produces the next frame — is a MaskGIT transformer, unchanged in kind. What Genie adds is a second thing to condition on. What it inherits is the reason a world model can be run at all: a frame costs a fixed handful of passes rather than one per token.",
+  "blocks": [
+   {
+    "h": "Parallel decoding, once per frame",
+    "b": "A video model generating tokens in raster order pays the token count for every frame, and a frame is a whole image. MaskGIT's decoding makes the cost a constant instead — 25 steps per frame at temperature 2, in Genie's configuration, whatever the spatial grid.\n\nThe training arrangement carries over with it: Genie masks its tokens at a rate drawn uniformly from $[0.5, 1]$, which is the same argument MaskGIT made against BERT's fixed 15%, made again one modality further out."
+   },
+   {
+    "h": "What Genie has to add",
+    "b": "The latent action. MaskGIT conditions on a class label at most; Genie must condition each frame on a code inferred from what changed between the last two, and it has to be a code the player can then supply by hand.\n\nThe action embedding is **added** to the token embeddings rather than concatenated to them — the reverse of standard world-model practice, and reported as a measurable improvement in how much the action actually governs the output. On a bidirectional model with no positional slot reserved for a condition, addition is also the option that costs no sequence length."
+   },
+   {
+    "h": "And the ceiling it inherits",
+    "b": "A MaskGIT prior is only as good as the tokenizer beneath it, and it is memoryless beyond whatever its context holds — sixteen frames, in Genie's case.\n\nNeither is MaskGIT's failing; both are properties of the arrangement it established. And both are exactly what the world models after Genie go after, either by replacing the tokenizer or by abandoning the discrete prior altogether for a diffusion one."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Genie: Generative Interactive Environments",
+    "y": 2024,
+    "url": "https://arxiv.org/abs/2402.15391"
+   },
+   {
+    "t": "MaskGIT: Masked Generative Image Transformer",
+    "y": 2022,
+    "url": "https://arxiv.org/abs/2202.04200"
+   }
+  ]
  }
 }

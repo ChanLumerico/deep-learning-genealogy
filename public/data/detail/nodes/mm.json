@@ -452,5 +452,42 @@
     "y": 2022
    }
   ]
+ },
+ "svd": {
+  "lead": "Latent diffusion for video existed before this, and so did a dozen ways of bolting temporal layers onto an image model. What did not exist was an account of what to train one on. Stable Video Diffusion's contribution is less its architecture — which it is candid about having assembled — than the admission that data was the variable nobody had controlled, and a curation pipeline ablated properly enough to show that a set four times smaller beats the one it was filtered out of.",
+  "blocks": [
+   {
+    "h": "Three regimes, separated so each can be measured",
+    "b": "The paper's organising claim is that training a video generator is not one run but three, and that they should be studied apart. **Stage I** is image pretraining — an ordinary 2D text-to-image diffusion model. **Stage II** is video pretraining on a large curated set at low resolution. **Stage III** is video finetuning on a small high-quality set at high resolution.\n\nEach is then ablated on its own rather than assumed. Image pretraining is not taken on faith: a model initialised from it is compared against one with randomly initialised spatial weights, and preferred. The temporal machinery follows Video LDM — a temporal convolution and a temporal attention layer inserted after every spatial one — with one deliberate departure from the works it builds on, in that the whole model is finetuned rather than only the newly added layers."
+   },
+   {
+    "h": "The curation result, which is the real one",
+    "b": "The raw collection, LVD, is **577M** clips — 212 years of video. Cut detection, optical-flow motion filtering, OCR to catch text overlay, CLIP similarity and aesthetic scoring reduce it to **152M**.\n\nThe experiment that earns the claim is run at a size where it can be run honestly. LVD-10M (9.8M clips) against LVD-10M-F (2.3M) — four times smaller, same model, same number of steps — and human raters prefer the model trained on the smaller, curated half. Volume was the wrong axis, which is a result about datasets dressed as a result about video."
+   },
+   {
+    "h": "EDM, with the schedule pushed upward",
+    "b": "The noise framework is EDM's, which was not the default for video models of this period and is load-bearing here: the paper reports that shifting the noise distribution **towards higher noise** is essential when finetuning at high resolution.\n\nThe reason is a property of images rather than of video. Adding the same $\\sigma$ to a larger picture destroys proportionally less of it, because neighbouring pixels are correlated and there are more of them, so a schedule tuned at 320×576 leaves a 576×1024 model doing too little work at the noisy end. Having a continuous $\\sigma$ with an explicit training distribution is what turns that from a retraining problem into two numbers. Micro-conditioning on frame rate is added in the same spirit as SDXL's on size and crop."
+   },
+   {
+    "h": "What was released, and what it cannot do",
+    "b": "Two models — one generating 14 frames and one 25 — at 576×1024, from a base trained at 320×576 and finetuned on roughly 1M high-quality samples. The base turns out to be a general motion prior rather than a text-to-video model only: finetuning it yields image-to-video, and at 576×576, multi-view synthesis around an object.\n\nThe limits are the shape of the thing, and each is a heading in the papers downstream of it here. It is a U-Net, so it does not scale the way DiT had already shown a transformer does. It is bidirectional, so nothing can be shown until the clip is finished. It is fourteen to twenty-five frames. And there is no control surface beyond a prompt and a first frame — no camera, no trajectory, no object you can point at."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Stable Video Diffusion: Scaling Latent Video Diffusion Models to Large Datasets",
+    "y": 2023,
+    "url": "https://arxiv.org/abs/2311.15127"
+   },
+   {
+    "t": "High-Resolution Image Synthesis with Latent Diffusion Models",
+    "y": 2022
+   },
+   {
+    "t": "Elucidating the Design Space of Diffusion-Based Generative Models",
+    "y": 2022,
+    "url": "https://arxiv.org/abs/2206.00364"
+   }
+  ]
  }
 }

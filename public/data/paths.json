@@ -138,6 +138,12 @@
     "nodes": ["ldm", "controlnet", "versecrafter"]
    },
    {
+    "id": "order",
+    "title": "Generating an image without an order",
+    "blurb": "A picture was read like a sentence, left to right, for six years — because a causal mask was convenient. Three papers on what happens once the order goes.",
+    "nodes": ["pixelcnn", "maskgit", "genie"]
+   },
+   {
     "id": "firststage",
     "title": "The autoencoder under Stable Diffusion",
     "blurb": "One question asked four times — how much can be thrown away before the model built on top stops working — and the compressor everything since has been trained inside.",

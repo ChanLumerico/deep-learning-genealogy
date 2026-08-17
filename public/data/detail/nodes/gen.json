@@ -1314,5 +1314,78 @@
     "y": 2023
    }
   ]
+ },
+ "edm": {
+  "lead": "By 2022 there were three good accounts of diffusion and they did not look like one another. DDPM had a discrete Markov chain of a thousand steps, NCSN had noise-conditional score matching, and the score SDE had shown these were one object in continuous time. What none of them had done was separate the parts. Each carried a schedule, a parameterisation, a loss weighting and a sampler inherited from whichever paper it descended from, and EDM's argument is that the tangle is not intrinsic — the components are independent, and once pulled apart most turn out to have been chosen badly.",
+  "blocks": [
+   {
+    "h": "Time is the noise level, and nothing else",
+    "b": "The general forward process carries a noise schedule $\\sigma(t)$ and a scaling $s(t)$, and the specific choices were historical: one lineage shrinks the signal as it noises, the other holds it fixed and lets the noise grow. EDM declines both.\n\n$$\\sigma(t) = t, \\qquad s(t) = 1$$\n\nThat is less a simplification than a refusal — there is no reason for the time variable to be anything other than the standard deviation of the noise added. Everything downstream is then written in $\\sigma$ directly, and comparing two methods becomes comparing numbers rather than reconciling notations. Two slots in the design space are eliminated by being answered."
+   },
+   {
+    "h": "Preconditioning, and what the network is really asked for",
+    "b": "Earlier methods train the network to predict the noise, rescaled to unit variance. At large $\\sigma$ that is a cruel request: the network must cancel the noise it was handed almost exactly, and whatever error it makes is then multiplied by $\\sigma$. EDM wraps the network in $\\sigma$-dependent scalings instead, with a skip connection that lets it report the clean signal where that is easier and the noise where that is:\n\n$$D_\\theta(x;\\sigma) = c_{\\text{skip}}\\,x + c_{\\text{out}}\\,F_\\theta\\big(c_{\\text{in}}\\,x;\\,c_{\\text{noise}}\\big)$$\n\n$$\\begin{aligned} c_{\\text{skip}} &= \\sigma_{\\text{data}}^2 \\big/ \\big(\\sigma^2 + \\sigma_{\\text{data}}^2\\big) \\\\ c_{\\text{out}} &= \\sigma\\,\\sigma_{\\text{data}} \\big/ \\sqrt{\\sigma^2 + \\sigma_{\\text{data}}^2} \\\\ c_{\\text{in}} &= 1 \\big/ \\sqrt{\\sigma^2 + \\sigma_{\\text{data}}^2} \\end{aligned}$$\n\nRewriting the loss around the raw output $F_\\theta$ then exposes an *effective* training target and an *effective* weight that were previously implicit. Setting the loss weighting to $\\lambda(\\sigma) = 1/c_{\\text{out}}(\\sigma)^2$ makes that effective weight uniform across noise levels — so no part of the schedule dominates the gradient by accident rather than by choice."
+   },
+   {
+    "h": "Sampling as an ODE somebody solves properly",
+    "b": "With time equal to noise level, sampling is an ordinary differential equation and the only questions are which solver and which steps. Euler is first order; EDM uses Heun's second-order method, which costs two evaluations per step and removes more truncation error than it costs. The steps themselves are warped by a power law so they crowd towards low noise:\n\n$$\\sigma_i = \\Big(\\sigma_{\\max}^{1/\\rho} + \\tfrac{i}{N-1}\\big(\\sigma_{\\min}^{1/\\rho} - \\sigma_{\\max}^{1/\\rho}\\big)\\Big)^{\\rho}$$\n\nwith $\\rho = 7$. Training draws its noise levels log-normally, $\\ln\\sigma \\sim \\mathcal{N}(-1.2,\\, 1.2^2)$, concentrating effort in the middle of the range where there is something to learn rather than at the ends where the task is trivial or hopeless."
+   },
+   {
+    "h": "The numbers, and why this is cited by things that are not image models",
+    "b": "CIFAR-10: FID **1.79** class-conditional and 1.97 unconditional, at **35** network evaluations. But the more telling result is the transfer. An existing pretrained ImageNet-64 model, its weights untouched, improves from 2.07 to **1.55** purely by changing how it is sampled — and retrained under the full recipe reaches **1.36**.\n\nThat separability is why EDM turns up far outside image generation. DIAMOND takes the preconditioning, because a target that adapts with $\\sigma$ is what stays stable at three denoising steps. DMD distils an EDM teacher. Stable Video Diffusion adopts the framework and then shifts the noise distribution upward for high resolution. A paper that isolates components gets cited component by component, which is a different kind of influence from a paper that reports a system."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Elucidating the Design Space of Diffusion-Based Generative Models",
+    "y": 2022,
+    "url": "https://arxiv.org/abs/2206.00364"
+   },
+   {
+    "t": "Score-Based Generative Modeling through Stochastic Differential Equations",
+    "y": 2021
+   },
+   {
+    "t": "Denoising Diffusion Probabilistic Models",
+    "y": 2020
+   }
+  ]
+ },
+ "maskgit": {
+  "lead": "VQGAN had got an image down to 256 tokens so a transformer could read it, and then read them the way a language model reads a sentence: left to right, top to bottom, one at a time, 256 forward passes for one picture. MaskGIT keeps the tokenizer and throws away the order. Its transformer is bidirectional, it predicts every masked token at once, and it keeps only the ones it is confident about — eight passes instead of 256.",
+  "blocks": [
+   {
+    "h": "Masked visual token modelling",
+    "b": "Training is BERT's objective pointed at image tokens: hide a subset, predict them from everything else. The difference is the one number BERT fixed. BERT masks 15%, which is the right training distribution for a model that will always be shown most of a sentence. A generator begins from a blank canvas and passes through every ratio on the way down, so it has to be trained across the whole range — a masking ratio is drawn per example, through a schedule $\\gamma$ used identically at training and inference time.\n\nBecause attention runs in both directions, a prediction sees tokens on every side rather than only those behind it. That is what makes the raster order unnecessary, and it is also why inpainting and outpainting are not separate capabilities here: they are the same procedure with a different initial mask."
+   },
+   {
+    "h": "Decoding by confidence",
+    "b": "Inference starts fully masked. Each of $T$ iterations predicts a distribution for every masked position in parallel, samples one token from each, scores it by its own predicted probability, and **keeps only the most confident** — remasking the rest to be reconsidered next round. The fraction kept is $\\gamma$ evaluated at the decoding progress, so it rises sharply as the rounds go by.\n\nThe early rounds therefore commit to a handful of tokens that everything else can be conditioned on, and the last rounds fill in most of the image at once. Nothing is irrevocable until the final iteration, which is precisely what a raster autoregressive model cannot offer: once it has emitted a token it must live with it for the remaining 255."
+   },
+   {
+    "h": "The schedule is the hyperparameter",
+    "b": "$\\gamma$ has to be continuous, bounded in $[0,1]$ and decreasing; within that the shape is free and it matters. Linear, concave (cosine, square) and convex (cubic, exponential) forms were compared, and **cosine** wins on both FID and Inception score, with square just behind.\n\n$T$ matters too, and *not* monotonically. The sweet spot is 8 to 12 iterations and beyond it the scores get worse — the paper's reading being that too many iterations make each round's decision too small to be informative, so the model keeps second-guessing instead of committing."
+   },
+   {
+    "h": "What eight steps buy",
+    "b": "ImageNet 256×256, at the same 227M parameters as its VQGAN baseline: FID **6.18** in **8** steps against 18.65 in 256, and Inception score 182.1 against 80.4. Against the 1.4B VQGAN it is 6.18 against 15.78 at a sixth of the parameters. At 512×512, 26.52 in 1024 steps becomes **7.32 in 12**. The paper puts the speedup at 30–64× depending on resolution.\n\nIt also beats BigGAN-deep's 6.95 while recording a recall of **0.51** against BigGAN's 0.28 — which is the trade a GAN makes and this does not, diversity given up for fidelity. The limitation is the one from the block above: this is not a knob that keeps turning. Past a dozen steps the numbers go back up."
+   }
+  ],
+  "refs": [
+   {
+    "t": "MaskGIT: Masked Generative Image Transformer",
+    "y": 2022,
+    "url": "https://arxiv.org/abs/2202.04200"
+   },
+   {
+    "t": "Taming Transformers for High-Resolution Image Synthesis",
+    "y": 2021,
+    "url": "https://arxiv.org/abs/2012.09841"
+   },
+   {
+    "t": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+    "y": 2019
+   }
+  ]
  }
 }

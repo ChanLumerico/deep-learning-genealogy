@@ -260,6 +260,19 @@
   "l": "One sample per forward pass — far slower than real time"
  },
  {
+  "id": "maskgit",
+  "n": "MaskGIT",
+  "y": 2022,
+  "org": "Google Research",
+  "c": "decode every token at once",
+  "lane": "gen",
+  "tr": "ar",
+  "s": "M",
+  "p": "Raster order makes an image 256 sequential steps",
+  "i": "Mask, predict in parallel, keep the confident ones",
+  "l": "Quality peaks around a dozen steps, then falls back"
+ },
+ {
   "id": "nice",
   "n": "NICE",
   "y": 2014,
@@ -414,6 +427,19 @@
   "p": "A thousand denoising steps for a single image",
   "i": "A non-Markovian path cuts step count sharply",
   "l": "Fewer steps cost fidelity; the trade is manual"
+ },
+ {
+  "id": "edm",
+  "n": "EDM",
+  "y": 2022,
+  "org": "NVIDIA",
+  "c": "one design space for diffusion",
+  "lane": "gen",
+  "tr": "diff",
+  "s": "M",
+  "p": "Every diffusion paper had its own formalism",
+  "i": "Separate sampler, schedule and preconditioning",
+  "l": "A recipe for images, retuned for every new domain"
  },
  {
   "id": "ldm",

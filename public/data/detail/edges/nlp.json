@@ -1668,5 +1668,33 @@
     "url": "https://arxiv.org/abs/2309.17453"
    }
   ]
+ },
+ "bert>maskgit": {
+  "lead": "BERT's masked language modelling was built for representation and not for generation: hide 15% of a sentence, predict it from both sides, keep the encoder and throw the head away. MaskGIT takes the objective and asks it to generate — which works, once the one number BERT fixed is allowed to vary across its whole range.",
+  "blocks": [
+   {
+    "h": "Fifteen per cent is the wrong ratio for a generator",
+    "b": "A fixed low ratio is the right training distribution for BERT's task, because at inference it will always be shown most of the sentence. A generator faces the opposite situation: decoding begins from an entirely blank canvas and passes through every ratio on the way down.\n\nA model trained only at 15% has therefore never seen the situation it starts in. MaskGIT samples the ratio per example through a schedule $\\gamma$, used identically in training and in decoding, so that every point on the trajectory it will actually walk is a point it was trained on."
+   },
+   {
+    "h": "Bidirectionality is the part that transplants",
+    "b": "The reason the objective moves across at all is that an image has no natural order. The property that made BERT unsuitable for generation in language — attending in both directions, so there is no next token to predict — costs nothing on a token grid, where left-to-right was an arbitrary convention in the first place.\n\nSo a liability for text is a plain advantage here, and it is what lets a single prediction see context on every side rather than only behind."
+   },
+   {
+    "h": "What generation needed that BERT did not have",
+    "b": "A decoding procedure. BERT predicts one fixed masked set, once, and stops. A generator has to get from fully masked to fully filled, and doing it in a single pass is inconsistent with how it was trained — every token would be predicted with no committed context at all.\n\nMaskGIT's iterative, confidence-ordered unmasking is the piece with no counterpart in BERT, and it is where the interesting hyperparameters live: the shape of $\\gamma$, which turns out to want to be a cosine, and the number of iterations, which turns out to peak at eight to twelve and get worse after."
+   }
+  ],
+  "refs": [
+   {
+    "t": "MaskGIT: Masked Generative Image Transformer",
+    "y": 2022,
+    "url": "https://arxiv.org/abs/2202.04200"
+   },
+   {
+    "t": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+    "y": 2019
+   }
+  ]
  }
 }

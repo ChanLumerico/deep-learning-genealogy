@@ -1768,5 +1768,59 @@
   "t": "versecrafter",
   "k": "cross",
   "l": "a frozen backbone steered by geometry"
+ },
+ {
+  "f": "scoresde",
+  "t": "edm",
+  "k": "direct",
+  "l": "three formalisms → one design space"
+ },
+ {
+  "f": "edm",
+  "t": "svd",
+  "k": "cross",
+  "l": "the framework, with the schedule shifted up"
+ },
+ {
+  "f": "edm",
+  "t": "dmd",
+  "k": "cross",
+  "l": "the teacher it distils on ImageNet"
+ },
+ {
+  "f": "edm",
+  "t": "diamond",
+  "k": "cross",
+  "l": "a parameterisation that survives three steps"
+ },
+ {
+  "f": "ldm",
+  "t": "svd",
+  "k": "direct",
+  "l": "one frame → a clip, in the same latent"
+ },
+ {
+  "f": "pixelcnn",
+  "t": "maskgit",
+  "k": "direct",
+  "l": "raster order → every token at once"
+ },
+ {
+  "f": "vqgan",
+  "t": "maskgit",
+  "k": "cross",
+  "l": "the same first stage, a new second"
+ },
+ {
+  "f": "bert",
+  "t": "maskgit",
+  "k": "cross",
+  "l": "masked prediction, moved onto image tokens"
+ },
+ {
+  "f": "maskgit",
+  "t": "genie",
+  "k": "cross",
+  "l": "the dynamics model Genie runs on"
  }
 ]
