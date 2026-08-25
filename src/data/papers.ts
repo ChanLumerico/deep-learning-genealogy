@@ -84,6 +84,8 @@ export const PAPERS: Record<string, string> = {
   diamond: 'Diffusion for World Modeling: Visual Details Matter in Atari',
   genie: 'Genie: Generative Interactive Environments',
   dreamer4: 'Training Agents Inside of Scalable World Models',
+  vid2world: 'Vid2World: Crafting Video Diffusion Models to Interactive World Models',
+  astra: 'Astra: General Interactive World Model with Autoregressive Denoising',
   dpo: 'Direct Preference Optimization: Your Language Model is Secretly a Reward Model',
   grpo: 'DeepSeekMath: Pushing the Limits of Mathematical Reasoning in Open Language Models',
   instructgpt: 'Training Language Models to Follow Instructions with Human Feedback',
@@ -93,6 +95,7 @@ export const PAPERS: Record<string, string> = {
   nde: 'Neural Ordinary Differential Equations',
   flowmatch: 'Flow Matching for Generative Modeling',
   rectflow: 'Flow Straight and Fast: Learning to Generate and Transfer Data with Rectified Flow',
+  meanflow: 'Mean Flows for One-step Generative Modeling',
 }
 
 // CSV model names that don't normalise onto a node name by themselves

@@ -1196,5 +1196,66 @@
     "y": 2022
    }
   ]
+ },
+ "diamond>vid2world": {
+  "lead": "DIAMOND made the case that a world model should stay in pixels and denoise its next frame, and trained one for Atari from nothing. Vid2World keeps the diffusion and rejects the *from nothing*: training in-domain is what caps the fidelity, and the way past it is to start from a model that has already watched the internet.",
+  "blocks": [
+   {
+    "h": "The pyramid, and which layer is being used",
+    "b": "A DIAMOND-style world model relies on in-domain action-labelled data — video of this environment, with the controls that produced it, gathered deliberately. Recent work moved one layer down and pre-trained on *cross-domain* action-labelled data, which improves data efficiency and does not solve the problem, because the cost of acquiring any action label at all persists and the predictions stay coarse.\n\nBelow both sits the layer nothing was using: internet-scale action-free video. Abundant, cheap, diverse, and carrying the physical priors a world model spends its whole training budget trying to acquire. Vid2World's argument is that the shift needed is not more action labels but a change of level — from exploiting the data to transferring the *model* trained on it."
+   },
+   {
+    "h": "What has to change before that model can be a world model",
+    "b": "DIAMOND's denoiser is causal because it was built that way; a video diffusion model is not, because bidirectional context is what makes a clip coherent. So the transfer is surgery in three places. Causal masks on temporal attention, which costs no parameters. Extrapolative weight transfer on temporal convolutions, which redistributes the future-facing kernel weights onto the past so that the layer's output is approximately preserved. And Diffusion Forcing's independent per-frame noise levels $k_t \\sim \\mathcal{U}(0,K)$, so the model has been trained on the noise pattern a rollout actually presents — a clean history and one frame in progress — rather than on the uniform schedule it would otherwise never leave.\n\nThen the action, which DIAMOND simply has and a video model does not: a per-frame embedding added at the matching temporal position, and classifier-free guidance on the most recent one."
+   },
+   {
+    "h": "What each of them can afford",
+    "b": "DIAMOND's memory is a short frame buffer rather than a state, and it denoises in three EDM steps — fast enough that an agent can be trained inside it, which is the point of a world model. Vid2World's fidelity is in a different class and so is its cost: at 50-step DDIM with ten frames of history, **20 seconds per frame** on an A100.\n\nSo the downstream experiment is Real2Sim policy *evaluation* on RT-1 rather than reinforcement learning, and the paper says why without hedging: RL is sample-inefficient, the compute was not available, and no lab is doing it at this scale either — Genie 3, V-JEPA 2 and PAN all skip it. The fidelity that internet pre-training buys and the speed that training an agent requires are, for now, the two ends of the same trade."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Vid2World: Crafting Video Diffusion Models to Interactive World Models",
+    "y": 2026,
+    "url": "https://arxiv.org/abs/2505.14357"
+   },
+   {
+    "t": "Diffusion for World Modeling: Visual Details Matter in Atari",
+    "y": 2024
+   },
+   {
+    "t": "Diffusion Forcing: Next-token Prediction Meets Full-Sequence Diffusion",
+    "y": 2024
+   }
+  ]
+ },
+ "vid2world>astra": {
+  "lead": "The same starting material, the same goal, and a disagreement about the history. Vid2World conditions on a clean past and guides on the most recent action. Astra reports that arrangement as the failure mode: the more past you give the model, the less the action matters.",
+  "blocks": [
+   {
+    "h": "Visual inertia",
+    "b": "Astra trains itself at increasing history lengths with the fix withheld, and watches action-following fall as context grows. Longer context improves the video and degrades the steering, and the cause is in the training distribution rather than the architecture — real-world footage is overwhelmingly smooth motion, so a model that bets on continuity is right almost always. The sparse action token is asking it to be wrong on purpose.\n\nThe countermeasure is asymmetric because the problem is: dense clean pixels against a handful of action numbers. Rather than shorten the history, Astra corrupts it — random noise injected into the conditioning frames during training, independent of the diffusion noise, so inference still sees clean frames. There is nothing left to copy forward, and the action becomes the only source of the information the model needs. Removing it costs **0.669 → 0.359** on instruction following, the largest single ablation in the paper."
+   },
+   {
+    "h": "Two guidances, pointed at different things",
+    "b": "Vid2World drops each action independently at probability $p$ and guides on the last one, and proves what the composition samples from: a history-consistent prior times an implicit classifier $p(a_{t-1}\\mid x_t, H_t)^{\\omega}$. The guidance sharpens the *conditional*.\n\nAstra drops the action condition wholesale and guides towards it in the same algebraic shape, but the substantive difference is that it also weakened the other side. Guidance amplifies the difference between conditioned and unconditioned predictions; if the visual history already determines the frame, that difference is small no matter how large the scale. Corrupting the memory is what gives the guidance room to act — which is why the two mechanisms are reported separately (0.545 without guidance, 0.359 without noise) and why the second matters more."
+   },
+   {
+    "h": "One modality against several, and the thing neither has",
+    "b": "Vid2World transfers to a domain at a time — robot manipulation, a 3D shooter, open-world navigation — each with its own action space and its own run. Astra routes camera pose, robot pose and keyboard-and-mouse commands to modality-specialised experts and trains one checkpoint across all five of its datasets, roughly 360 hours.\n\nWhat neither has is speed. Vid2World records 20 seconds per frame; Astra records that multiple denoising steps per frame put real-time deployment out of reach and proposes distillation as the way out. Both are describing the same wall, and both point at the line — one-step generative models, student-teacher compression — that Self Forcing and MotionStream had already walked for video with no actions in it."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Astra: General Interactive World Model with Autoregressive Denoising",
+    "y": 2026,
+    "url": "https://arxiv.org/abs/2512.08931"
+   },
+   {
+    "t": "Vid2World: Crafting Video Diffusion Models to Interactive World Models",
+    "y": 2026,
+    "url": "https://arxiv.org/abs/2505.14357"
+   }
+  ]
  }
 }

@@ -544,5 +544,18 @@
   "p": "Flow matching had no open model to show for it",
   "i": "A rectified-flow transformer with parallel attention blocks",
   "l": "Distilled variants trade diversity for speed"
+ },
+ {
+  "id": "meanflow",
+  "n": "MeanFlow",
+  "y": 2025,
+  "org": "CMU · MIT",
+  "c": "one step, trained from scratch",
+  "lane": "gen",
+  "tr": "flow",
+  "s": "M",
+  "p": "One-step samplers need a teacher or a curriculum",
+  "i": "Model average velocity, not the instantaneous one",
+  "l": "3.43 FID at one step still trails a 250-step sampler"
  }
 ]

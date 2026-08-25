@@ -479,5 +479,31 @@
   "p": "PPO needs a value network as large as the policy",
   "i": "Score a group of sampled answers and normalise within the group",
   "l": "Group size drives cost, reward noise remains"
+ },
+ {
+  "id": "vid2world",
+  "n": "Vid2World",
+  "y": 2026,
+  "org": "Tsinghua · Chongqing",
+  "c": "a video model made causal",
+  "lane": "rl",
+  "tr": "plan",
+  "s": "M",
+  "p": "A world model needs action-labelled video to train on",
+  "i": "Causalize a pretrained video model, guide on each action",
+  "l": "Twenty seconds of A100 time per generated frame"
+ },
+ {
+  "id": "astra",
+  "n": "Astra",
+  "y": 2026,
+  "org": "Tsinghua · Kuaishou",
+  "c": "one world model, many action types",
+  "lane": "rl",
+  "tr": "plan",
+  "s": "M",
+  "p": "Long history wins consistency and loses the controls",
+  "i": "Blur the remembered frames so the action has to be read",
+  "l": "Fifty denoising steps a chunk, so not yet real time"
  }
 ]

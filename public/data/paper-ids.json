@@ -597,6 +597,10 @@
  "flux": {
   "t": "FLUX.1 model weights and card, Black Forest Labs"
  },
+ "meanflow": {
+  "t": "Mean Flows for One-step Generative Modeling",
+  "arxiv": "2505.13447"
+ },
  "bellman": {
   "t": "Dynamic Programming"
  },
@@ -710,6 +714,14 @@
  },
  "grpo": {
   "t": "DeepSeekMath: Pushing the Limits of Mathematical Reasoning in Open Language Models"
+ },
+ "vid2world": {
+  "t": "Vid2World: Crafting Video Diffusion Models to Interactive World Models",
+  "arxiv": "2505.14357"
+ },
+ "astra": {
+  "t": "Astra: General Interactive World Model with Autoregressive Denoising",
+  "arxiv": "2512.08931"
  },
  "showtell": {
   "t": "Show and Tell: A Neural Image Caption Generator"

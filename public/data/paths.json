@@ -9,19 +9,32 @@
     "id": "credit",
     "title": "Assigning blame to a hidden unit",
     "blurb": "A machine that could not learn XOR, and the chain rule that made depth trainable at all.",
-    "nodes": ["perceptron", "mlp", "elman", "lstm"]
+    "nodes": [
+     "perceptron",
+     "mlp",
+     "elman",
+     "lstm"
+    ]
    },
    {
     "id": "energy",
     "title": "The energy-based detour",
     "blurb": "For twenty years the way to train a deep net was to pretrain it one layer at a time. AlexNet ended that, but the ideas did not go away.",
-    "nodes": ["boltzmann", "rbm", "dbn"]
+    "nodes": [
+     "boltzmann",
+     "rbm",
+     "dbn"
+    ]
    },
    {
     "id": "optim",
     "title": "Making the optimiser cooperate",
     "blurb": "Backpropagation gives a gradient. Everything after is about the step you take with it.",
-    "nodes": ["perceptron", "mlp", "adam"]
+    "nodes": [
+     "perceptron",
+     "mlp",
+     "adam"
+    ]
    }
   ]
  },
@@ -35,31 +48,72 @@
     "id": "depth",
     "title": "Making networks deep enough to matter",
     "blurb": "Each step is a reason the previous stack stopped training, and what somebody did about it.",
-    "nodes": ["neocog", "lenet", "alexnet", "zfnet", "vgg", "resnet"]
+    "nodes": [
+     "neocog",
+     "lenet",
+     "alexnet",
+     "zfnet",
+     "vgg",
+     "resnet"
+    ]
    },
    {
     "id": "efficient",
     "title": "The same accuracy on a phone",
     "blurb": "Separable convolutions, then a search over architectures, then a rule for scaling one.",
-    "nodes": ["neocog", "lenet", "alexnet", "zfnet", "vgg", "googlenet", "xception", "mobilenet", "mbv2", "mbv3", "mbv4"]
+    "nodes": [
+     "neocog",
+     "lenet",
+     "alexnet",
+     "zfnet",
+     "vgg",
+     "googlenet",
+     "xception",
+     "mobilenet",
+     "mbv2",
+     "mbv3",
+     "mbv4"
+    ]
    },
    {
     "id": "detect",
     "title": "From classifying to locating",
     "blurb": "Region proposals, then sharing the convolutions, then removing the hand-built post-processing entirely.",
-    "nodes": ["neocog", "lenet", "alexnet", "rcnn", "fastrcnn", "fasterrcnn", "detr"]
+    "nodes": [
+     "neocog",
+     "lenet",
+     "alexnet",
+     "rcnn",
+     "fastrcnn",
+     "fasterrcnn",
+     "detr"
+    ]
    },
    {
     "id": "segment",
     "title": "Labelling every pixel",
     "blurb": "Classification throws away where. Segmentation is the line of work that puts it back.",
-    "nodes": ["neocog", "lenet", "alexnet", "zfnet", "vgg", "fcn", "unet", "sam"]
+    "nodes": [
+     "neocog",
+     "lenet",
+     "alexnet",
+     "zfnet",
+     "vgg",
+     "fcn",
+     "unet",
+     "sam"
+    ]
    },
    {
     "id": "crossover",
     "title": "An architecture crosses domains",
     "blurb": "Attention was built for translation. Cutting an image into patches let the same block read pictures.",
-    "nodes": ["bahdanau", "transformer", "vit", "swin"]
+    "nodes": [
+     "bahdanau",
+     "transformer",
+     "vit",
+     "swin"
+    ]
    }
   ]
  },
@@ -73,25 +127,52 @@
     "id": "transformer",
     "title": "The road to the Transformer",
     "blurb": "Sixty years from a machine that could not learn XOR to one that reads a sentence in a single parallel step.",
-    "nodes": ["perceptron", "mlp", "elman", "lstm", "seq2seq", "bahdanau", "transformer"]
+    "nodes": [
+     "perceptron",
+     "mlp",
+     "elman",
+     "lstm",
+     "seq2seq",
+     "bahdanau",
+     "transformer"
+    ]
    },
    {
     "id": "pretrain",
     "title": "Pre-train once, use everywhere",
     "blurb": "Transfer stopped meaning word vectors and started meaning the whole model.",
-    "nodes": ["transformer", "gpt1", "gpt2", "gpt3"]
+    "nodes": [
+     "transformer",
+     "gpt1",
+     "gpt2",
+     "gpt3"
+    ]
    },
    {
     "id": "alignment",
     "title": "Teaching a model what was wanted",
     "blurb": "Predicting the next token is not the same as being useful — and the last step does it without a reward model at all.",
-    "nodes": ["transformer", "gpt1", "gpt2", "gpt3", "instructgpt", "dpo"]
+    "nodes": [
+     "transformer",
+     "gpt1",
+     "gpt2",
+     "gpt3",
+     "instructgpt",
+     "dpo"
+    ]
    },
    {
     "id": "openweights",
     "title": "The open-weight line",
     "blurb": "The same recipe, trained longer on more tokens, and released so anyone could build on it.",
-    "nodes": ["transformer", "gpt1", "gpt2", "gpt3", "llama", "llama2"]
+    "nodes": [
+     "transformer",
+     "gpt1",
+     "gpt2",
+     "gpt3",
+     "llama",
+     "llama2"
+    ]
    }
   ]
  },
@@ -105,49 +186,96 @@
     "id": "latent",
     "title": "Compress, then sample",
     "blurb": "An autoencoder only reconstructs. Making its middle a distribution is what turns it into a generator.",
-    "nodes": ["ae", "vae", "vqvae", "vqvae2"]
+    "nodes": [
+     "ae",
+     "vae",
+     "vqvae",
+     "vqvae2"
+    ]
    },
    {
     "id": "adversarial",
     "title": "Training against a critic",
     "blurb": "Sharp images and an optimisation that would not sit still. Six years of trying to stabilise it.",
-    "nodes": ["gan", "dcgan", "wgan", "wgangp", "pggan", "stylegan"]
+    "nodes": [
+     "gan",
+     "dcgan",
+     "wgan",
+     "wgangp",
+     "pggan",
+     "stylegan"
+    ]
    },
    {
     "id": "diffusion",
     "title": "How diffusion overtook GANs",
     "blurb": "Score matching gave a likelihood and a slow sampler. The line that won made it fast.",
-    "nodes": ["ncsn", "scoresde", "ddim", "ldm"]
+    "nodes": [
+     "ncsn",
+     "scoresde",
+     "ddim",
+     "ldm"
+    ]
    },
    {
     "id": "flow",
     "title": "Keeping the likelihood exact",
-    "blurb": "Invertible maps with a tractable Jacobian, all the way to a continuous-time version of the same idea.",
-    "nodes": ["ae", "vae", "nice", "realnvp", "glow", "nde", "ffjord", "flowmatch"]
+    "blurb": "Invertible maps with a tractable Jacobian, then a continuous-time version of the same idea, and finally a field you can integrate in a single step.",
+    "nodes": [
+     "ae",
+     "vae",
+     "nice",
+     "realnvp",
+     "glow",
+     "nde",
+     "ffjord",
+     "flowmatch",
+     "meanflow"
+    ]
    },
    {
     "id": "realtime",
     "title": "Waiting for a video, then not",
     "blurb": "A clip took minutes and arrived all at once. Five papers on getting the same model to hand you a frame every fifty milliseconds while you steer it.",
-    "nodes": ["ldm", "dit", "wan", "selfforce", "motionstream"]
+    "nodes": [
+     "ldm",
+     "dit",
+     "wan",
+     "selfforce",
+     "motionstream"
+    ]
    },
    {
     "id": "geometry",
     "title": "Putting the control back in the world",
     "blurb": "Every way of steering a video lived in the image plane, and broke when the camera moved. The line that ends by handing the model a 3D scene instead.",
-    "nodes": ["ldm", "controlnet", "versecrafter"]
+    "nodes": [
+     "ldm",
+     "controlnet",
+     "versecrafter"
+    ]
    },
    {
     "id": "order",
     "title": "Generating an image without an order",
     "blurb": "A picture was read like a sentence, left to right, for six years — because a causal mask was convenient. Three papers on what happens once the order goes.",
-    "nodes": ["pixelcnn", "maskgit", "genie"]
+    "nodes": [
+     "pixelcnn",
+     "maskgit",
+     "genie"
+    ]
    },
    {
     "id": "firststage",
     "title": "The autoencoder under Stable Diffusion",
     "blurb": "One question asked four times — how much can be thrown away before the model built on top stops working — and the compressor everything since has been trained inside.",
-    "nodes": ["ae", "vae", "vqvae", "vqgan", "ldm"]
+    "nodes": [
+     "ae",
+     "vae",
+     "vqvae",
+     "vqgan",
+     "ldm"
+    ]
    }
   ]
  },
@@ -161,31 +289,70 @@
     "id": "value",
     "title": "From a table to a network",
     "blurb": "Dynamic programming needs the whole model. Everything here is about not having it.",
-    "nodes": ["bellman", "td", "qlearn", "dqn", "alphago", "agz", "alphazero"]
+    "nodes": [
+     "bellman",
+     "td",
+     "qlearn",
+     "dqn",
+     "alphago",
+     "agz",
+     "alphazero"
+    ]
    },
    {
     "id": "policy",
     "title": "Optimising the policy directly",
     "blurb": "High-variance gradients, then a trust region, then the clipped objective that made it practical.",
-    "nodes": ["reinforce", "ac", "trpo", "ppo"]
+    "nodes": [
+     "reinforce",
+     "ac",
+     "trpo",
+     "ppo"
+    ]
    },
    {
     "id": "imitate",
     "title": "Learning the reward instead",
     "blurb": "When the reward is the thing you cannot write down, infer it from someone doing the task.",
-    "nodes": ["apprentice", "maxentirl", "gail"]
+    "nodes": [
+     "apprentice",
+     "maxentirl",
+     "gail"
+    ]
    },
    {
     "id": "imagine",
     "title": "Practising inside a model of the world",
     "blurb": "Learn what the environment does, then learn to act without touching it again. Each step here is what the previous model got wrong about its own dream.",
-    "nodes": ["worldmodels", "planet", "dreamer", "dreamer2", "dreamer3", "dreamer4"]
+    "nodes": [
+     "worldmodels",
+     "planet",
+     "dreamer",
+     "dreamer2",
+     "dreamer3",
+     "dreamer4"
+    ]
    },
    {
     "id": "videoworld",
     "title": "A world model with no actions in it",
     "blurb": "Every world model needed video with the controls that produced it. Two papers on what happens once you stop requiring that.",
-    "nodes": ["worldmodels", "genie", "dreamer4"]
+    "nodes": [
+     "worldmodels",
+     "genie",
+     "dreamer4"
+    ]
+   },
+   {
+    "id": "interactive",
+    "title": "Turning a film into a simulator",
+    "blurb": "A video model hands you a clip to watch. Two things stop it being a world you can act in — it sees the whole clip at once, and nobody ever told it what you did. This is the line that removes both.",
+    "nodes": [
+     "ldm",
+     "svd",
+     "vid2world",
+     "astra"
+    ]
    }
   ]
  },
@@ -199,13 +366,27 @@
     "id": "caption",
     "title": "Describing what is in the picture",
     "blurb": "A vision encoder and a language decoder, joined first by a vector and then by attention.",
-    "nodes": ["showtell", "showattend", "vilbert", "clip"]
+    "nodes": [
+     "showtell",
+     "showattend",
+     "vilbert",
+     "clip"
+    ]
    },
    {
     "id": "assistant",
     "title": "One space for both",
     "blurb": "Once images and text share coordinates, a language model can be handed an image and simply carry on.",
-    "nodes": ["showtell", "showattend", "vilbert", "clip", "flamingo", "blip2", "llava", "gpt4v"]
+    "nodes": [
+     "showtell",
+     "showattend",
+     "vilbert",
+     "clip",
+     "flamingo",
+     "blip2",
+     "llava",
+     "gpt4v"
+    ]
    }
   ]
  }

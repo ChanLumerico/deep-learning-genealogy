@@ -1822,5 +1822,47 @@
   "t": "genie",
   "k": "cross",
   "l": "the dynamics model Genie runs on"
+ },
+ {
+  "f": "flowmatch",
+  "t": "meanflow",
+  "k": "direct",
+  "l": "instantaneous velocity → the average over an interval"
+ },
+ {
+  "f": "dmd",
+  "t": "meanflow",
+  "k": "alt",
+  "l": "distil a teacher → derive the target from a definition"
+ },
+ {
+  "f": "diamond",
+  "t": "vid2world",
+  "k": "direct",
+  "l": "trained in-domain → an internet prior transferred"
+ },
+ {
+  "f": "svd",
+  "t": "vid2world",
+  "k": "cross",
+  "l": "one bidirectional pass → a causal rollout"
+ },
+ {
+  "f": "wan",
+  "t": "astra",
+  "k": "direct",
+  "l": "a frozen backbone, opened at its attention layers"
+ },
+ {
+  "f": "vid2world",
+  "t": "astra",
+  "k": "cross",
+  "l": "a clean history drowns the action → blur it"
+ },
+ {
+  "f": "moe",
+  "t": "astra",
+  "k": "cross",
+  "l": "routed experts for tokens → for action modalities"
  }
 ]

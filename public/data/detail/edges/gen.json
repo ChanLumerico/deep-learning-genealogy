@@ -2170,5 +2170,93 @@
     "url": "https://arxiv.org/abs/2202.04200"
    }
   ]
+ },
+ "flowmatch>meanflow": {
+  "lead": "MeanFlow is flow matching with the regression target changed, and the paper says so outright: hold $r = t$ and the algorithm reduces exactly to it. What the change buys is that the quantity being modelled is the whole path between two times rather than the tangent at one.",
+  "blocks": [
+   {
+    "h": "What flow matching leaves for the sampler",
+    "b": "Flow matching learns the marginal velocity $v(z_t,t) \\triangleq \\mathbb{E}_{p_t(v_t\\mid z_t)}[v_t]$ by regressing on the *conditional* velocity instead, since minimising the conditional loss provably minimises the marginal one. That substitution is what made the objective simulation-free and is the reason the method spread.\n\nGeneration is then whatever an ODE solver makes of $\\tfrac{d}{dt}z_t = v(z_t,t)$. Each step is a network evaluation and the error of a coarse step is the price of taking few of them. Nothing in the objective knows about this; the sampler is a separate concern bolted on afterwards, and one-step sampling is asking that concern to disappear."
+   },
+   {
+    "h": "Why straightening the paths is not the answer",
+    "b": "This is the observation that stops MeanFlow being merely a better solver, and it is easy to read past. Even when the conditional flows are built straight — rectified, $z_t = (1-t)x + t\\epsilon$ with $v_t = \\epsilon - x$ — the *marginal* field generally induces a curved trajectory. A given $z_t$ can arise from many $(x, \\epsilon)$ pairs, and the marginal velocity is the expectation over all of them, which need not point along any one of their straight lines.\n\nThe paper is explicit that this curvature is not an artefact of neural approximation but a property of the ground-truth field. So a straighter path is a mitigation and never a solution: coarse discretisation of a curved trajectory is inaccurate by construction, however well the network fits."
+   },
+   {
+    "h": "One term, and it is the whole difference",
+    "b": "$$u_{\\text{tgt}} = \\underbrace{v_t}_{\\text{flow matching}} - \\;(t-r)\\big(v_t\\,\\partial_z u_\\theta + \\partial_t u_\\theta\\big)$$\n\nThe first term is flow matching's target verbatim. The second converts an instantaneous velocity into an average one over $[r,t]$, and costs a single JVP against the tangent $(v, 0, 1)$ — one extra backward pass, under 20% of training time.\n\nThe network changes in one respect: it conditions on two times rather than one. Every embedding tried gives a usable one-step model — $(t,r)$ at 61.75, $(t, t-r)$ best at 61.06, the interval $t-r$ alone still at 63.13 — which is the paper's evidence that the framework, and not a particular parameterisation, is what is doing the work. The rest is the same network, the same conditional velocity, the same loss shape."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Mean Flows for One-step Generative Modeling",
+    "y": 2025,
+    "url": "https://arxiv.org/abs/2505.13447"
+   },
+   {
+    "t": "Flow Matching for Generative Modeling",
+    "y": 2023
+   }
+  ]
+ },
+ "dmd>meanflow": {
+  "lead": "Both papers hand you a single-evaluation sampler, and they disagree about where such a thing may come from. DMD distils: a teacher already exists, a second network is trained alongside it, and the student learns to match the teacher's output distribution. MeanFlow derives: a ground-truth field exists whether or not anyone trains a network, and the loss is nothing but the statement that the network satisfies the identity defining it.",
+  "blocks": [
+   {
+    "h": "A target that belongs to the data rather than to a teacher",
+    "b": "DMD's gradient is a difference of two scores — the teacher's, and a second network tracking the student's own output distribution — so the target is defined relative to a model that had to be trained first, and a second model that has to be kept current throughout.\n\nMeanFlow's target is $v_t - (t-r)\\frac{d}{dt}u_\\theta$, and $v_t = \\epsilon - x$ is the same conditional velocity flow matching regresses on: available from the data alone, at every step, for free. The optimum is fixed by the field, which is why the paper can claim the solution is *in principle independent of the specific network*. Nothing has to exist beforehand."
+   },
+   {
+    "h": "Where the consistency models sit between them",
+    "b": "Consistency models are the other standalone answer, and they are the one MeanFlow is really arguing with. They need no teacher either, but their constraint is imposed on the network's *behaviour*: outputs at different points along one path should agree. Nothing there says what the correct value is, only that two of them should match — which is why training is unstable and why a discretisation curriculum, progressively tightening the time domain, is part of the method rather than an implementation detail.\n\nIn MeanFlow's coordinates a consistency model is the special case $r \\equiv 0$ for every $t$: anchored at the data end, conditioned on a single time variable. Shortcut models and IMM condition on two, as MeanFlow does, and reach them through additional self-consistency constraints rather than through a definition. That is the distinction the paper claims — the identity is derived, not imposed, and needs no extra assumption."
+   },
+   {
+    "h": "What each one costs",
+    "b": "DMD needs a teacher, a second network trained alongside, and — as its own entry here records — a plain regression loss against paired teacher samples, without which the generator collapses onto a subset of the modes. In exchange the teacher's quality is inherited rather than re-earned.\n\nMeanFlow needs none of that and pays elsewhere: the ratio of samples with $r \\neq t$ is a hyperparameter that matters (25% best, 0% is flow matching and yields 328.91 FID, 100% still works at 67.32), a two-time embedding, a logit-normal sampler, an adaptive loss weight. From scratch, no pre-training, it reaches **3.43 FID at one evaluation** on ImageNet 256×256. The graph marks this arrow as a rivalry rather than a descent because that is what it is: the same problem, and two incompatible accounts of what a one-step model should be regressing towards."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Mean Flows for One-step Generative Modeling",
+    "y": 2025,
+    "url": "https://arxiv.org/abs/2505.13447"
+   },
+   {
+    "t": "One-step Diffusion with Distribution Matching Distillation",
+    "y": 2024
+   },
+   {
+    "t": "Consistency Models",
+    "y": 2023
+   }
+  ]
+ },
+ "wan>astra": {
+  "lead": "Astra is Wan 2.1 with its self-attention layers unfrozen, one identity-initialised linear layer inserted after each of them, and an action stream added into the latents at every block. The design is mostly a set of decisions about what to leave alone: 366.8M parameters move out of 1.3B.",
+  "blocks": [
+   {
+    "h": "What moves, and what is protected",
+    "b": "Freezing the flow transformer except its self-attention layers is the first half. The second is that the adapter after each of those blocks is a single linear layer initialised to the identity matrix — so on step one the network computes exactly what Wan computed, and the action-aware transformation is learned as a departure from a working model rather than towards one.\n\nThe action itself does not arrive by cross-attention, which is how Wan takes its text conditioning. Cross-attention aligns a video latent with a sentence; an action is a shift in that latent, closer in spirit to optical flow than to a caption. So an action encoder projects into the latent space and the result is **added element-wise** at every block. The paper reports this beating Matrix-Game's cross-attention adapter, at a fraction of its trainable parameters — 366.8M against 1.8B, or against Yume's full tuning of a 14B backbone."
+   },
+   {
+    "h": "The objective survives intact",
+    "b": "Wan is trained by flow matching over a 3D causal VAE, and Astra keeps the objective rather than converting the model to something else:\n\n$$z^i_t = (1-t)z^i_0 + t\\,\\epsilon, \\qquad \\mathcal{L}(\\theta) = \\mathbb{E}\\big\\|v_\\theta(z^i_t, t \\mid z^{<i}) - v^{*}\\big\\|_2^2$$\n\nwith the previous chunks concatenated along the temporal dimension as part of the conditioning. Keeping the loss is what makes the frozen backbone coherent: the network is being asked for the same kind of quantity it was pre-trained to produce, on inputs that now include a history and an action.\n\nAction-free guidance then borrows CFG's shape with the action as the dropped condition, $v_{\\text{guided}} = v_\\theta(z_t,t,\\varnothing) + s\\,(v_\\theta(z_t,t,a) - v_\\theta(z_t,t,\\varnothing))$. Removing it costs 0.669 → 0.545 on instruction following."
+   },
+   {
+    "h": "From a clip to a rollout",
+    "b": "Wan's limitation in this graph is *fifty steps a clip, and attention over all of it*. Astra keeps the fifty steps and changes what they are spent on: one chunk at a time, conditioned on every chunk before it through temporal causal attention, so the output streams instead of arriving whole. That is what makes the model interactive and it is also what makes the fifty steps expensive, because they now recur per chunk for as long as the rollout continues.\n\nThe horizon reaches 8–10 seconds, against the few seconds a text-to-video model can hold. And the measurement that shows why the conversion is not cosmetic is Wan 2.1's own instruction-following score on Astra-Bench: **0.061**. A model that generates beautiful video and does not respond to an action at all is the starting point, not a weak baseline."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Astra: General Interactive World Model with Autoregressive Denoising",
+    "y": 2026,
+    "url": "https://arxiv.org/abs/2512.08931"
+   },
+   {
+    "t": "Wan: Open and Advanced Large-Scale Video Generative Models",
+    "y": 2025
+   }
+  ]
  }
 }

@@ -351,5 +351,37 @@
     "y": 2024
    }
   ]
+ },
+ "svd>vid2world": {
+  "lead": "What Vid2World transplants is exactly what Stable Video Diffusion established: a latent diffusion model trained on a large curated video corpus, and therefore in possession of a working prior about how things move. The specific checkpoint is DynamiCrafter — 1.4B parameters, image-to-video, fine-tuned from VideoCrafter — of that family and built the same way. What has to be removed first is the property that made it good at clips.",
+  "blocks": [
+   {
+    "h": "Bidirectional by design, which is the problem",
+    "b": "SVD's limitation in this graph reads *fourteen frames of U-Net, and no way to steer it*, and the second clause is the harder one. A full-sequence video diffusion model denoises every frame together with bidirectional temporal context, so frame three is shaped by frame eleven. For a clip that is not a flaw but the mechanism — it is how the ending and the beginning come to agree.\n\nFor a rollout it is incoherent. The future cannot condition the past because the future has not been generated yet, and a model whose every layer assumes otherwise cannot be run one frame at a time however it is prompted. Interactivity is not a feature missing from these models; it is ruled out by the shape of the computation."
+   },
+   {
+    "h": "The surgery, and what it is careful about",
+    "b": "Attention causalises for free — a mask, no parameters touched, because a dot product is indifferent to how many keys it is given.\n\nConvolution does not. A symmetric temporal kernel reads the future by construction, and the three ways to fix it differ in what they are trying to preserve. Shifting the kernel keeps every weight and misaligns all of them. Masking the future half keeps causality and discards what those weights knew. The paper's extrapolative transfer starts instead from the criterion that the layer's **output** should be preserved, assumes the future feature is locally linear in the past $p$ features, and folds the future weights back onto the past ones accordingly. It is a small distinction with the whole point inside it: what was expensive about the pre-training is the function, not the parameters."
+   },
+   {
+    "h": "Non-causal first, because it is the easier thing to learn",
+    "b": "The transfer runs in this direction on principle, not merely for the availability of checkpoints. Vid2World's argument is that non-causal generative modelling may be inherently easier than its causal counterpart, so the sensible division of labour is to learn the physics without the causal constraint at internet scale, and impose the constraint afterwards on a small in-domain set.\n\nThe arithmetic supports it. Four A100s, 100k gradient steps, seven days, 37GB — to convert a model whose own pre-training was of a different order entirely. SVD's contribution was that curation is what a video model learns from; Vid2World's is that whatever was learned that way survives being made causal."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Vid2World: Crafting Video Diffusion Models to Interactive World Models",
+    "y": 2026,
+    "url": "https://arxiv.org/abs/2505.14357"
+   },
+   {
+    "t": "Stable Video Diffusion: Scaling Latent Video Diffusion Models to Large Datasets",
+    "y": 2023
+   },
+   {
+    "t": "DynamiCrafter: Animating Open-domain Images with Video Diffusion Priors",
+    "y": 2024
+   }
+  ]
  }
 }

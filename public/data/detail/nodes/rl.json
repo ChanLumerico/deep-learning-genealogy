@@ -1210,5 +1210,77 @@
     "url": "https://arxiv.org/abs/2407.01392"
    }
   ]
+ },
+ "vid2world": {
+  "lead": "A world model has always been trained on the thing it models: video of an environment together with the actions that produced it, collected on purpose and never cheaply. Video diffusion models are trained on the internet, know far more about how the world moves, and are useless as world models for two structural reasons — they see the whole clip at once, and nothing tells them what the agent did. Vid2World is the surgery that removes both, performed on a 1.4B pre-trained model and checked on robot manipulation, a 3D shooter and open-world navigation.",
+  "blocks": [
+   {
+    "h": "Causalising a convolution without discarding what it knew",
+    "b": "Temporal attention is the easy half. Apply a causal mask and stop. A dot product does not care how long the sequence is, so restricting the receptive field to the past changes nothing about how the surviving query-key relations are computed, and no parameter moves.\n\nTemporal convolution is the hard half, because a symmetric kernel $\\{w_t\\}_{t=-m}^{m}$ reads the future by construction. Three transfers are compared:\n\n**Shift** moves the whole kernel $m$ steps into the past. Every weight survives and every one is misaligned — position $i$ now aggregates timestep $i-m$, with no guarantee the representation resembles the old one.\n\n**Masked** keeps $\\{w_t\\}_{t=-m}^{0}$ and zeroes the rest, a hard causal mask applied at initialisation. Causal, and it throws away whatever the future-facing weights had learned.\n\n**Extrapolative**, the paper's, starts from the observation that a future feature is locally close to a linear function of the past $p$ features, $z_{t+k} \\approx \\sum_{j} \\gamma_{k,j} z_{t-j} + \\beta_k$, and redistributes the future weights onto the past ones accordingly:\n\n$$w'_j = \\mathbb{1}_{[j\\ge -m]}\\,w_j + \\mathbb{1}_{[-p+1\\le j\\le 0]}\\sum_{i=1}^{m}\\gamma_{i,-j}\\,w_i$$\n\n$$b' = b + \\sum_{i=1}^{m} w_i\\,\\beta_i$$\n\nThe criterion it is derived from is worth stating, because it is the whole difference from the other two: preserve the layer's **output**, $\\sum_i w_i z_{t+i} + b = \\sum_j w'_j z_{t+j} + b'$, rather than preserve its weights."
+   },
+   {
+    "h": "Independent noise per frame is what makes the rollout possible",
+    "b": "Architecture alone does not get there. At inference the noise levels along the sequence are $(0, 0, \\dots, 0, k)$: a fully denoised history and one frame in progress. A model trained the conventional way — one noise level shared by every frame — has never once seen that combination, and it is the only combination that ever occurs during a rollout.\n\nSo training samples $k_t \\sim \\mathcal{U}(0,K)$ independently for every frame, which is Diffusion Forcing. That exposes the model to the entire space of level combinations rather than the diagonal of it, and the causal rollout becomes something the model has practised instead of something it is asked to improvise."
+   },
+   {
+    "h": "Action guidance, and what it is guidance towards",
+    "b": "Conditioning first: the embedding of $a_{t-1}$ passes through a small MLP and is added to the latent at temporal position $t$, so each frame is conditioned on the action that preceded it and on no later one. Video-level action embeddings — the whole sequence squeezed into one vector, in the manner of a text prompt — cannot do this, and cannot accept actions arriving one at a time either.\n\nThen guidance. Each action is dropped independently with probability $p$ during training, which teaches the model the score both with and without the most recent action, and inference composes them:\n\n$$\\epsilon_{\\text{guided}} = (1+\\lambda)\\,\\epsilon_{\\text{cond}} - \\lambda\\,\\epsilon_{\\text{ucond}}$$\n\nThe paper's theorem says what that composition actually samples from. Writing $H_t$ for the history excluding the current action,\n\n$$\\tilde p(x_t \\mid a_{t-1}, H_t) \\;\\propto\\; \\underbrace{p(x_t \\mid H_t)}_{\\text{history-consistent prior}} \\cdot \\underbrace{p(a_{t-1}\\mid x_t, H_t)^{\\omega}}_{\\text{action alignment}}$$\n\n— a prior that respects the past times an implicit classifier that asks whether the frame looks like the consequence of the action. $\\lambda$ is then a dial for responsiveness at test time, which is the property a world model is judged on: not average behaviour, but what happens *because of this action*."
+   },
+   {
+    "h": "What it buys, and the twenty seconds",
+    "b": "The backbone is DynamiCrafter, 1.4B parameters, itself fine-tuned from VideoCrafter — an image-to-video latent diffusion model, not a world model of any kind. Transferred, it beats both the existing transfer recipes and the state-of-the-art domain-specific world models on RT-1 robot manipulation, Counter-Strike game simulation and RECON open-world navigation. Training is four A100s, 100k steps, seven days, 37GB.\n\nThe cost is recorded rather than buried. One A100, ten history frames, 50-step DDIM, batch of two: **20.0 seconds per generated frame**. The paper lists the ways out — fewer steps, shorter history, JIT compilation, a rolling KV cache — and its own discussion section points at one-step generative models as the structural fix, citing MeanFlow among them.\n\nTwo failure modes are shown rather than described, and both are the same shape. The arm moves in the right direction and the gripper's control of the green bag is not predicted; the movement is right and the grasped object is quietly swapped for a more familiar one. A model that has watched the internet knows what usually happens, which is exactly the prior that has to be overruled when the question is what happens *this* time."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Vid2World: Crafting Video Diffusion Models to Interactive World Models",
+    "y": 2026,
+    "url": "https://arxiv.org/abs/2505.14357"
+   },
+   {
+    "t": "Diffusion Forcing: Next-token Prediction Meets Full-Sequence Diffusion",
+    "y": 2024
+   },
+   {
+    "t": "DynamiCrafter: Animating Open-domain Images with Video Diffusion Priors",
+    "y": 2024
+   }
+  ]
+ },
+ "astra": {
+  "lead": "Astra and Vid2World start from the same observation and arrive somewhere different. Both take a pre-trained video diffusion model and make it answer to actions. What Astra contributes is what it found on the way: conditioning on more history makes the video more coherent and makes the model stop listening. It names that **visual inertia**, and the fix is to blur the memory on purpose.",
+  "blocks": [
+   {
+    "h": "Chunk-wise autoregressive denoising on a backbone that mostly does not move",
+    "b": "The factorisation is the ordinary one, over chunks rather than frames:\n\n$$p(z^{1:N}) = \\prod_{i=1}^{N} p\\big(z^{i} \\mid z^{<i}\\big)$$\n\nand each chunk is produced by flow matching, with the history concatenated along the temporal dimension before the transformer reads it:\n\n$$z^i_t = (1-t)z^i_0 + t\\,\\epsilon, \\qquad \\mathcal{L}(\\theta) = \\mathbb{E}\\big\\|v_\\theta(z^i_t, t \\mid z^{<i}) - v^{*}\\big\\|_2^2$$\n\nThe backbone is Wan 2.1 at 1.3B and almost all of it is frozen — only the self-attention layers train. Actions enter through the **ACT-Adapter**: an encoder projects them into the video latent space and the result is added element-wise at every block, with a single linear layer initialised to the identity inserted after each self-attention block, so the first optimisation step changes nothing and the pre-trained function is the starting point rather than a casualty. **366.8M trainable parameters**, against Yume's full tuning of Wan2.1-14B and Matrix-Game's 1.8B.\n\nThen guidance, in CFG's shape with the action as the dropped condition:\n\n$$v_{\\text{guided}} = v_\\theta(z_t,t,\\varnothing) + s\\big(v_\\theta(z_t,t,a) - v_\\theta(z_t,t,\\varnothing)\\big)$$"
+   },
+   {
+    "h": "Visual inertia, and noise used as a mask",
+    "b": "The trade-off is measured, not assumed. Train Astra at increasing history lengths with the fix removed and the action-following score falls as context grows. The cause is in the data rather than the architecture: real video is overwhelmingly smooth motion, so continuity is almost always the better bet, and a dense clean visual context out-votes a sparse action signal. A model that has learned this is not broken — it is correct on average and useless to steer.\n\nYume masks visual tokens. Astra injects random noise into the conditioning frames instead — **noise as mask** — which needs no architectural change and no new parameters, and which stops the model copying clean frames forward because there are no clean frames to copy. The corruption noise is independent of the diffusion noise, so inference still runs on a clean history. The horizon is then extended by FramePack's compression: keep the first frame, squeeze the middle into compact tokens.\n\nThe ablation is the strongest number in the paper and it has a wrinkle worth stating. Removing the noise takes instruction following from **0.669 to 0.359** — by far the largest single drop, larger than removing action-free guidance (0.545), the adapter (0.642) or the expert routing (0.651). The wrinkle is that the consistency metrics do not improve when it is removed either: subject consistency falls 0.939 → 0.903, background 0.945 → 0.927. The trade-off it was introduced to break shows up against *history length*, not against this switch."
+   },
+   {
+    "h": "A mixture of experts, where the tokens are actions",
+    "b": "Camera pose, robot pose and keyboard-and-mouse commands differ in dimension, in scale and in what they mean. Each modality gets its own projector into a shared space, $\\tilde a^i = R_m(a^i_m)$; a router scores the result and selects the top $K$ experts, each an MLP; the outputs are combined by gate weight.\n\n$$g^i = \\mathrm{Router}(\\tilde a^i), \\qquad e^i = \\sum_{k=1}^{K} g^i_k\\, E_k(\\tilde a^i)$$\n\nA binary flag is appended marking whether the entry is a past action or the current one. This is what lets a single checkpoint train across roughly **397K clips — 360 hours** — of nuScenes, Sekai, SpatialVID, RT-1 and Multi-Cam Video, whose action formats have nothing in common. The ablation without it had to be trained on camera-action data alone, *since it cannot process other modalities*, which is the point made as an experimental constraint.\n\nThe paper is candid about the price: joint training on heterogeneous data slightly reduces performance on any single scenario, and buys cross-domain generalisation with it."
+   },
+   {
+    "h": "The scores, and the latency",
+    "b": "Astra-Bench holds out 20 samples from each dataset; everything is generated at 480×832, 20 FPS, 96 frames, 50 steps. Instruction following **0.669**, against Yume's 0.652, Matrix-Game's 0.268 and Wan-2.1's 0.061 — the last of which is the honest measure of how much a text-to-video model responds to an action, which is barely at all. Subject consistency, background consistency, motion smoothness and aesthetic quality all lead as well. Imaging quality is the one column it does not win: 0.747 against Matrix-Game's 0.748. Instruction following is scored by human raters rather than by pose estimation, because MegaSaM's camera-motion predictions are not accurate enough to grade with.\n\nTrained on 8 GPUs of 80GB for 30 epochs, about 24 hours. The interaction horizon is 8–10 seconds, matching Yume and well past Wan-2.1's few seconds.\n\nThe limitation is stated in the paper's own words and it is the same one Vid2World has: diffusion plus autoregressive rollout means several denoising steps per frame, real-time deployment is out of reach, and with it the latency-sensitive uses — online control, interactive robotics — that a world model exists to serve. The route it proposes is distillation, which is the road Self Forcing and MotionStream had already taken for video without actions."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Astra: General Interactive World Model with Autoregressive Denoising",
+    "y": 2026,
+    "url": "https://arxiv.org/abs/2512.08931"
+   },
+   {
+    "t": "Wan: Open and Advanced Large-Scale Video Generative Models",
+    "y": 2025
+   },
+   {
+    "t": "Packing Input Frame Context in Next-Frame Prediction Models for Video Generation",
+    "y": 2025
+   }
+  ]
  }
 }

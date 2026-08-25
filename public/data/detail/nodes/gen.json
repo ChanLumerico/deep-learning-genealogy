@@ -1387,5 +1387,41 @@
     "y": 2019
    }
   ]
+ },
+ "meanflow": {
+  "lead": "Flow matching gives you a velocity at an instant. To get from noise to data you integrate it, and that integral is the many-step sampler — every step a network evaluation, every coarse step a discretisation error. The attempts to reach one step had all gone through the *network*: a consistency constraint on its outputs, a distillation target from a teacher. MeanFlow asks a different question — if a one-step model predicts something, what is the something? — and the answer is the one a schoolchild would give. Displacement over elapsed time.",
+  "blocks": [
+   {
+    "h": "The average velocity, and the identity that makes it trainable",
+    "b": "Define the average velocity as the displacement across an interval divided by the interval:\n\n$$u(z_t, r, t) \\triangleq \\frac{1}{t-r}\\int_r^t v(z_\\tau, \\tau)\\,d\\tau$$\n\nThis is a functional of the instantaneous field $v$ and of nothing else — there is no neural network in it, exactly as $v$ itself is the ground truth flow matching regresses towards. Sampling becomes one line, $z_r = z_t - (t-r)\\,u(z_t,r,t)$, and one-step generation is $z_0 = z_1 - u(z_1, 0, 1)$ with $z_1$ drawn from the prior.\n\nTwo properties come free. As $r \\to t$, $u \\to v$. And taking one step over $[r,t]$ agrees with two steps over $[r,s]$ and $[s,t]$, because $(t-r)u(z_t,r,t) = (s-r)u(z_s,r,s) + (t-s)u(z_t,s,t)$ follows from the additivity of the integral — a network that fits $u$ satisfies consistency without being told to.\n\nTraining on the definition is impossible, since it holds an integral. So multiply through, differentiate with respect to $t$ holding $r$ fixed, and use the product rule on the left and the fundamental theorem on the right:\n\n$$u(z_t,r,t) = \\underbrace{v(z_t,t)}_{\\text{instantaneous}} - (t-r)\\,\\frac{d}{dt}u(z_t,r,t)$$\n\nThe **MeanFlow Identity**. No integral, and still no network — it is a relation the true field must satisfy."
+   },
+   {
+    "h": "One Jacobian-vector product, and a target that is not a heuristic",
+    "b": "The remaining derivative is total, so expand it. With $dz_t/dt = v$, $dr/dt = 0$ and $dt/dt = 1$:\n\n$$\\frac{d}{dt}u(z_t,r,t) = v(z_t,t)\\,\\partial_z u + \\partial_t u$$\n\nwhich is the Jacobian of $u$ against the tangent $(v, 0, 1)$ — one JVP call, which every autodiff library exposes directly. The loss regresses the network onto the identity's right-hand side, with the marginal velocity replaced by the conditional one exactly as flow matching does it:\n\n$$\\mathcal{L}(\\theta) = \\mathbb{E}\\,\\big\\|u_\\theta(z_t,r,t) - \\mathrm{sg}(u_{\\text{tgt}})\\big\\|_2^2$$\n\n$$u_{\\text{tgt}} = v_t - (t-r)\\big(v_t\\,\\partial_z u_\\theta + \\partial_t u_\\theta\\big), \\qquad v_t = \\epsilon - x$$\n\nThe stop-gradient is there to avoid differentiating through the JVP, so the whole thing is one extra backward pass — **under 20% of training time** in the authors' JAX implementation. Set $r = t$ and the second term vanishes and this *is* flow matching, which is how the paper frames it: same algorithm, modified target.\n\nThe ablation that shows the identity is load-bearing is the destructive one. With the correct tangent $(v,0,1)$, 61.06 FID; with $(v,0,0)$, 268.06; with $(v,1,0)$, 329.22. The $\\partial_r$ and $\\partial_t$ components are one-dimensional against a $32\\times32\\times4$ data tangent and they decide the field. And sampling $r \\neq t$ at 0% of the time — i.e. plain flow matching — gives 328.91 at one step. The optimum is 25%."
+   },
+   {
+    "h": "Guidance folded into the ground truth, not applied at the end",
+    "b": "Classifier-free guidance at sampling time evaluates the network twice, which would cost exactly the thing this paper is about. So CFG is made a property of the field instead. Define a new ground truth,\n\n$$v^{\\text{cfg}}(z_t,t \\mid c) \\triangleq \\omega\\, v(z_t,t\\mid c) + (1-\\omega)\\, v(z_t,t)$$\n\nand learn *its* average velocity. The identity carries over verbatim; the only change in the loss is the substituted velocity,\n\n$$\\tilde v_t \\triangleq \\omega\\, v_t + (1-\\omega)\\, u^{\\text{cfg}}_\\theta(z_t,t,t)$$\n\nusing the observation that $v^{\\text{cfg}}(z_t,t) = v(z_t,t)$ when marginalised over classes, so the unconditional half can be read off the network at $r = t$. The class is dropped 10% of the time in the usual way. At $\\omega = 1$ the loss degenerates to the plain one. Since $u^{\\text{cfg}}_\\theta$ already models the guided field, no combination happens at sampling and the single evaluation survives: 61.06 at $\\omega = 1$, 20.15 at 2.0, **15.53 at 3.0**, and back up to 20.75 at 5.0."
+   },
+   {
+    "h": "The numbers, and the one they do not reach",
+    "b": "ImageNet 256×256, class-conditional, one function evaluation, trained from scratch: **3.43 FID** at XL/2 with 676M parameters. Against Shortcut-XL/2's 10.60 and iCT-XL/2's 34.24 — nearly 70% relative improvement over the previous 1-NFE state of the art, and better than half of IMM's 7.77 one-step result, which itself spends two evaluations on guidance. At two evaluations MeanFlow reaches 2.20, level with DiT-XL/2's 2.27 and with SiT-XL/2 on the same backbone, both of which spend $250\\times2$.\n\nOn unconditional CIFAR-10 it is 2.92 at one step, competitive with iCT's 2.83 and sCT's 2.97 — and the interesting column there is the one labelled preconditioning, where every competitor uses EDM's and MeanFlow uses none.\n\nWhat it does not reach: 1.42, which SiT-XL/2 with REPA gets from 500 evaluations. The paper says so and notes REPA is orthogonal and left for future work. The rest of the cost is small and real — a second time variable to embed, a ratio of $r \\neq t$ to choose, a logit-normal time sampler, an adaptive loss weight $w = 1/(\\|\\Delta\\|_2^2 + c)^p$ at $p = 1$. What is *not* on the list is the thing every other entry in this class needed: no pre-training, no teacher, no distillation, no discretisation curriculum."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Mean Flows for One-step Generative Modeling",
+    "y": 2025,
+    "url": "https://arxiv.org/abs/2505.13447"
+   },
+   {
+    "t": "Flow Matching for Generative Modeling",
+    "y": 2023
+   },
+   {
+    "t": "Consistency Models",
+    "y": 2023
+   }
+  ]
  }
 }

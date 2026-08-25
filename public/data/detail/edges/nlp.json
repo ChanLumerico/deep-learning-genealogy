@@ -1696,5 +1696,33 @@
     "y": 2019
    }
   ]
+ },
+ "moe>astra": {
+  "lead": "The Mixture of Action Experts is a sparsely-gated mixture of experts with action modalities standing where tokens used to. Astra does not cite the line — the mechanism arrives under a name that announces its ancestry and with no reference attached — but the parts are the parts: projectors into a shared space, a router, top-$K$ experts as MLPs, a gated sum.",
+  "blocks": [
+   {
+    "h": "The same three pieces",
+    "b": "A sparse mixture-of-experts layer scores every expert against the current input, keeps the highest few, and returns their weighted sum, so capacity grows without the arithmetic growing with it. Astra's version:\n\n$$g^i = \\mathrm{Router}(\\tilde a^i), \\qquad e^i = \\sum_{k=1}^{K} g^i_k\\, E_k(\\tilde a^i)$$\n\nwith $\\tilde a^i = R_m(a^i_m)$ the modality-specific projection, $E_k$ independent MLPs, and top-$K$ selection on the gate scores. Structurally identical, one level up the stack — the routed object is a whole conditioning signal rather than a token in a sequence."
+   },
+   {
+    "h": "What differs when the inputs are modalities",
+    "b": "In language the router discovers its specialisation. Which expert handles which tokens is not designed and not always interpretable, and the literature's central difficulty is keeping the load balanced so that experts neither collapse onto one another nor starve.\n\nIn Astra the specialisation is known before training starts. There are three action types — camera pose at 7 or 12 dimensions, robot pose at 7, discrete keyboard and mouse commands — and each has its own projector before the router ever runs. So the routing is less a discovery of structure than permission to *keep* structure that a single shared encoder would have to average away. The load-balancing apparatus does not appear, and does not need to: the modality count is small, known, and already separated upstream.\n\nThe motivations diverge accordingly. Sparse MoE exists for conditional computation — parameters without proportional FLOPs. MoAE exists for heterogeneity — one checkpoint that can read five datasets whose action formats have nothing in common."
+   },
+   {
+    "h": "What it buys, and what it costs",
+    "b": "The ablation is the clearest statement of the point, and it is phrased as an experimental constraint rather than a result: the model without MoAE had to be trained on camera-action data alone, *since it cannot process other modalities*. With it, one model trains across roughly 397K clips and 360 hours of nuScenes, Sekai, SpatialVID, RT-1 and Multi-Cam Video, and instruction following goes 0.651 → 0.669.\n\nThe cost is stated plainly. Joint training on heterogeneous datasets slightly reduces performance on any single scenario, and buys cross-domain generalisation with it — which is the same trade the MoE literature has always made, arriving here through a different door."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Astra: General Interactive World Model with Autoregressive Denoising",
+    "y": 2026,
+    "url": "https://arxiv.org/abs/2512.08931"
+   },
+   {
+    "t": "Outrageously Large Neural Networks: The Sparsely-Gated Mixture-of-Experts Layer",
+    "y": 2017
+   }
+  ]
  }
 }
