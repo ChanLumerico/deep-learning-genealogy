@@ -13,7 +13,10 @@ import type {
   SizeKey,
 } from './types'
 
-export const CANVAS = { w: 6160, h: 5880 }
+// w must clear the rightmost node body, not just the last year anchor: three 2026
+// nodes in one track de-collide 198px apart from 5700, so the third ends at 6304.
+// test/layout.test.ts asserts every node and route point falls inside this.
+export const CANVAS = { w: 6400, h: 5880 }
 
 export const YEAR_X: Array<[number, number]> = [
   [1957, 150], [1958, 196], [1980, 560], [1985, 660], [1986, 720], [1988, 790],

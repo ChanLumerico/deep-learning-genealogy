@@ -14,6 +14,7 @@
 // to be checked here — and is supposed to leave the golden master untouched.
 
 import { describe, expect, it } from 'vitest'
+import { CANVAS } from '../src/layout/spec'
 import { buildGoldenLayout, buildLayout, loadGolden, loadGraphData, snapshot } from './snapshot'
 
 const golden = loadGolden()
@@ -118,5 +119,29 @@ describe('the live graph lays out cleanly', () => {
     expect(live.audit.tightChannels).toBeLessThanOrEqual(2)
     expect(live.audit.worstTightExtent).toBeLessThanOrEqual(42)
     expect(live.audit.fallbacks).toBeLessThanOrEqual(3)
+  })
+
+  // The lane bands are drawn `width={CANVAS.w}`, so anything past that sits on bare
+  // page outside the sheet. Nothing checked it, and Olaf-World shipped 144px over
+  // the right edge: three 2026 nodes in rl/plan de-collide 198px apart from the
+  // 2026 anchor at 5700, and the third lands at 6132..6304 against a 6160 canvas.
+  //
+  // The audit measures how the sheet is drawn, not where it ends, which is why it
+  // stayed green. Both bounds are asserted here instead. A failure means CANVAS in
+  // spec.ts needs widening, not that the assertion needs relaxing — the year axis
+  // grows to the right and the canvas has to be told.
+  it('keeps every node inside the canvas', () => {
+    const outside = live.nodes
+      .filter((n) => n.x < 0 || n.y < 0 || n.x + n.w > CANVAS.w || n.y + n.h > CANVAS.h)
+      .map((n) => `${n.id} (${Math.round(n.x)}..${Math.round(n.x + n.w)} of ${CANVAS.w})`)
+    expect(outside, 'nodes drawn beyond the sheet').toEqual([])
+  })
+
+  it('keeps every route point inside the canvas', () => {
+    const outside = live.edges
+      .filter((e) => (e.route ?? []).some(
+        ([x, y]) => x < 0 || y < 0 || x > CANVAS.w || y > CANVAS.h))
+      .map((e) => `${e.from.id}→${e.to.id}`)
+    expect(outside, 'edges routed beyond the sheet').toEqual([])
   })
 })
