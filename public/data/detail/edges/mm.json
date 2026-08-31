@@ -383,5 +383,33 @@
     "y": 2024
    }
   ]
+ },
+ "svd>adaworld": {
+  "lead": "AdaWorld's latent action autoencoder already contains a decoder that predicts the next frame, and reusing it as the world model is the obvious economy. It does not work: one forward pass makes a coarse prediction, and the error compounds visibly within a few interactions. So the world model is a separate diffusion model, and it is Stable Video Diffusion — with one structural change that turns a clip generator into something an agent can act in.",
+  "blocks": [
+   {
+    "h": "One frame, not a clip",
+    "b": "SVD denoises a whole sequence at once. That is right for generation, where the clip is the product, and wrong for a world model, where the action arrives one step at a time and the next observation depends on it. AdaWorld denoises exactly one noisy frame per call.\n\nThe consequence is control granularity. Conditioning a clip on an action gives an agent one decision per clip; conditioning a frame gives it one per frame, and rollout is repeating the call with the prediction appended to memory. Every interactive property the paper demonstrates — MPC planning, transferring a twenty-step action sequence, composing an action mid-rollout — needs that granularity and none of them survive at clip resolution.\n\n$$\\mathcal{L}_{\\text{pretrain}} = \\mathbb{E}_{x_0,\\epsilon,t}\\left[\\left\\| x_0 - \\hat x_0(x_t, t, c) \\right\\|^2\\right]$$\n\nwhich is SVD's own EDM parameterisation, unchanged. What changed is the shape of $c$."
+   },
+   {
+    "h": "Where the action is injected, and where the past goes",
+    "b": "SVD arrives with two conditioning channels already built and AdaWorld uses both rather than adding a third. The latent action is concatenated onto the timestep embedding *and* onto the CLIP image embedding, so it reaches the network at every point the pretrained model was already accustomed to being steered from.\n\nMemory is handled with the same borrowed machinery. The most recent frame becomes SVD's conditioning image — the role it was trained for. Up to six earlier frames are encoded with SVD's own image encoder and concatenated onto the noise latent of the frame being predicted. The number of history frames is sampled at random during training and the count is passed in as a condition, so a short memory at inference is a case the model has practised rather than an out-of-distribution surprise at the start of every episode.\n\nHistorical frames are corrupted with noise augmentation during training and left clean at inference, which is the standard defence against drift accumulating over a long rollout. Astra would later push the same instinct much harder and for an entirely different reason — not to prevent drift but to stop a clean history from drowning out the action — which is a nice illustration of how differently one mechanism can be motivated."
+   },
+   {
+    "h": "A generation prior doing world-model work",
+    "b": "The pattern is by now familiar in this track and AdaWorld is an early instance of it: the expensive knowledge about how things move already exists, in models trained to make video for people to watch. SVD contributes a latent space, an image encoder, a temporal prior and an EDM schedule, none of which anyone had to pay for again.\n\nWhat it does not contribute is any notion of an agent. SVD has never been conditioned on an action, and the entire adaptation is about supplying one — which is why the useful comparison is against AdaWorld's own action-agnostic baseline, the same architecture pretrained with zeros in the action slot. That baseline plans no better than random on Procgen, 26.00% against 26.17%. The video prior alone is worth nothing for control; it is worth a great deal once something tells it what was done."
+   }
+  ],
+  "refs": [
+   {
+    "t": "AdaWorld: Learning Adaptable World Models with Latent Actions",
+    "y": 2025,
+    "url": "https://arxiv.org/abs/2503.18938"
+   },
+   {
+    "t": "Stable Video Diffusion: Scaling Latent Video Diffusion Models to Large Datasets",
+    "y": 2023
+   }
+  ]
  }
 }

@@ -86,6 +86,8 @@ export const PAPERS: Record<string, string> = {
   dreamer4: 'Training Agents Inside of Scalable World Models',
   vid2world: 'Vid2World: Crafting Video Diffusion Models to Interactive World Models',
   astra: 'Astra: General Interactive World Model with Autoregressive Denoising',
+  adaworld: 'AdaWorld: Learning Adaptable World Models with Latent Actions',
+  olafworld: 'Olaf-World: Orienting Latent Actions for Video World Modeling',
   dpo: 'Direct Preference Optimization: Your Language Model is Secretly a Reward Model',
   grpo: 'DeepSeekMath: Pushing the Limits of Mathematical Reasoning in Open Language Models',
   instructgpt: 'Training Language Models to Follow Instructions with Human Feedback',

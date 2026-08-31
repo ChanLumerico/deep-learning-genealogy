@@ -353,6 +353,17 @@
      "vid2world",
      "astra"
     ]
+   },
+   {
+    "id": "latentact",
+    "title": "Learning the controls nobody wrote down",
+    "blurb": "A world model needs to know what the agent did, and that pairing has to be logged by an instrumented environment. This line manufactures it instead — infer the action from the video, then argue about whether the inferred action means the same thing twice.",
+    "nodes": [
+     "worldmodels",
+     "genie",
+     "adaworld",
+     "olafworld"
+    ]
    }
   ]
  },

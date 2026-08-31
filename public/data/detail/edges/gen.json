@@ -2258,5 +2258,69 @@
     "y": 2025
    }
   ]
+ },
+ "vae>adaworld": {
+  "lead": "The VAE's objective was written to compress an observation: encode $x$ to a latent, decode it back, and pay a KL penalty for how far the posterior strays from the prior. AdaWorld runs the same objective over a *pair* of frames and decodes only the second, which turns the latent from a summary of what is there into a description of what changed. Everything the method claims follows from that substitution and from one hyperparameter.",
+  "blocks": [
+   {
+    "h": "A reconstruction objective that cannot reconstruct",
+    "b": "The encoder sees $f_t$ and $f_{t+1}$ and produces a posterior over a latent $\\tilde a$. The decoder sees $\\tilde a$ and $f_t$ — not $f_{t+1}$ — and must produce $f_{t+1}$:\n\n$$\\mathcal{L}^{\\text{pred}}_{\\theta,\\phi}(f_{t+1}) = \\mathbb{E}_{q_\\phi(\\tilde a \\mid f_{t:t+1})} \\log p_\\theta(f_{t+1} \\mid \\tilde a, f_t) - \\beta\\, D_{\\mathrm{KL}}\\!\\left(q_\\phi(\\tilde a \\mid f_{t:t+1}) \\,\\|\\, p(\\tilde a)\\right)$$\n\nRead as an autoencoder this is degenerate: the target is not the input, and the only new information reaching the decoder is a vector far too small to hold a frame. That is the design. Everything about $f_{t+1}$ that is already implied by $f_t$ costs nothing to leave out, so the latent has no incentive to carry it. What is left is the residual — the part of the next frame the previous one does not determine — and in an interactive scene the dominant term of that residual is what the agent did.\n\nThe assumption is stated rather than assumed away, and it is where the method can fail: this works because agents' actions drive the dominant variation in most interactive footage. In footage where something else does, the bottleneck faithfully recovers that something else."
+   },
+   {
+    "h": "Beta as a dial between two things you want",
+    "b": "The plain ELBO fixes the KL weight at one and AdaWorld reports it as too strong — the posterior is constrained hard enough that the latents cannot express the variety of transitions that occur. Removing the penalty entirely goes the other way and costs the disentanglement that the penalty was providing. So $\\beta$ becomes an explicit dial, and the paper is unusually clear that both ends are bad.\n\nThe evidence for where to set it is a UMAP of latents collected from Habitat, Minecraft and DMLab — three environments with nothing visually in common. At $\\beta = 2\\times 10^{-4}$ the same action taken in all three lands in the same cluster. At a lower $\\beta$ the latents separate more sharply *within* each environment and the clusters stop overlapping *between* them, which reads as an improvement on any within-domain metric and destroys the only property that matters here.\n\nThe residual scatter in those clusters is explained rather than excused: an action input that cannot be executed in the current state — walking forward into a wall — produces no characteristic change, so there is nothing for the encoder to recover."
+   },
+   {
+    "h": "What the prior turns into",
+    "b": "In a generative VAE the prior $p(\\tilde a) = \\mathcal{N}(0, I)$ is there so you can sample from it. Nothing in AdaWorld ever samples an action from the prior. Its function is entirely as a shared destination: it is the reason latents from a thousand unrelated environments occupy one space with comparable geometry, rather than each environment's encoder finding its own arrangement.\n\nThat is what makes the downstream arithmetic legitimate. Averaging a hundred latents of the same real action gives a prototype worth initialising from; the midpoint of two actions composes them; a two-layer MLP suffices to map real-valued control inputs onto the interface. All three are operations on a metric space, and the KL term is what supplies one.\n\nOlaf-World's later objection is precisely that the prior supplies *less* of a shared space than it appears to. A Gaussian prior constrains each posterior toward the origin but says nothing about orientation, so two environments can satisfy it perfectly while disagreeing about which direction means turn left — a gap the bottleneck cannot close because it is not a question about how much information the latent carries."
+   }
+  ],
+  "refs": [
+   {
+    "t": "AdaWorld: Learning Adaptable World Models with Latent Actions",
+    "y": 2025,
+    "url": "https://arxiv.org/abs/2503.18938"
+   },
+   {
+    "t": "Auto-Encoding Variational Bayes",
+    "y": 2014
+   },
+   {
+    "t": "beta-VAE: Learning Basic Visual Concepts with a Constrained Variational Framework",
+    "y": 2017
+   }
+  ]
+ },
+ "wan>olafworld": {
+  "lead": "Olaf-World's world model is a pretrained SkyReels-V2-1.3B image-to-video DiT, which takes its core architecture from Wan 2.1. The interesting thing about that choice is that it is uninteresting on purpose. The paper's claim is about a loss term on the latent action model, and a claim of that shape is only testable if everything downstream of it is held still — so the backbone is standard, the objective is standard, and both baselines get the same ones.",
+  "blocks": [
+   {
+    "h": "What arrives already built",
+    "b": "Three inheritances do real work. The 3D video VAE compresses time by a factor of $r = 4$, so a 97-frame clip at 540p becomes 25 latent frames and the model is training on sequences short enough to be affordable. The flow-matching objective is the one Wan is trained with and is kept unchanged. And the DiT stack brings AdaLN-Zero modulation — a conditioning path already wired into every block, which is where the action will go.\n\nThe temporal compression forces one accommodation. Actions occur per frame; the model works in latent time. So every four consecutive per-step latent actions are grouped into a single conditioning vector. This is a real loss of resolution and it is worth naming next to AdaWorld, which went the opposite way — denoising one frame at a time on an SVD backbone specifically to get per-step control. Olaf-World accepts coarser control in latent time and buys a stronger, cheaper backbone with it."
+   },
+   {
+    "h": "How an action becomes a condition",
+    "b": "The latent action for each latent timestep is linearly projected and **added to the diffusion timestep embedding**. The fused vector is then mapped to per-block AdaLN-Zero modulation parameters, so the action modulates every DiT block through the path the architecture already uses for the noise level.\n\nTwo things recommend it. Nothing structural is added, so the pretrained weights meet an input shaped like one they already understand — the same reasoning behind AdaWorld concatenating its latent action onto SVD's timestep and CLIP embeddings rather than adding a new channel. And the conditioning is per-latent-frame rather than per-clip, which is the minimum required for a rollout to be steerable at all; a single prompt-like vector for the whole clip would be a caption, not a control.\n\nAdaptation to a real control scheme is then small: an action adapter $A_\\eta$ mapping environment actions to latent actions — an embedding table for a discrete action set, initialised with class-wise prototypes averaged from the frozen latent action model — plus a rank-16 LoRA on the backbone, trained with the same flow-matching loss. Roughly one minute of labelled video is enough to be worth measuring."
+   },
+   {
+    "h": "Held fixed on purpose",
+    "b": "The backbone is the experiment's control rather than its contribution, and the paper is explicit: AdaWorld is re-run with the same video model, the same data and the same adaptation capacity, keeping only its own latent-action training. Every difference in the results is therefore attributable to the objective, which is the only way a claim about a loss term can be established.\n\nThe rank sweep confirms the same discipline. Holding the data budget at fifty videos and varying LoRA rank from 16 through 256 to full finetuning improves action accuracy steadily — rotational error 0.3785 down to 0.2980 — while video quality stays flat throughout. Rank 16 is used everywhere in the main results as an efficient default, and the sweep exists to show the conclusions do not depend on that choice.\n\nIt also draws the honest boundary around what the backbone contributes. Under a fixed rank-16 budget, conditioning directly on ground-truth actions is *less* controllable than latent-action pretraining, and the paper says plainly that it expects the gap to narrow with more adaptation capacity. The video prior is not what makes the model controllable; it is what makes it worth controlling."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Olaf-World: Orienting Latent Actions for Video World Modeling",
+    "y": 2026,
+    "url": "https://arxiv.org/abs/2602.10104"
+   },
+   {
+    "t": "SkyReels-V2: Infinite-length Film Generative Model",
+    "y": 2025
+   },
+   {
+    "t": "Wan: Open and Advanced Large-Scale Video Generative Models",
+    "y": 2025
+   }
+  ]
  }
 }

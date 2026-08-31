@@ -1864,5 +1864,35 @@
   "t": "astra",
   "k": "cross",
   "l": "routed experts for tokens → for action modalities"
+ },
+ {
+  "f": "genie",
+  "t": "adaworld",
+  "k": "direct",
+  "l": "eight discrete codes → a continuous space that transfers"
+ },
+ {
+  "f": "svd",
+  "t": "adaworld",
+  "k": "cross",
+  "l": "a clip at a time → one frame, so control lands per step"
+ },
+ {
+  "f": "vae",
+  "t": "adaworld",
+  "k": "cross",
+  "l": "an ELBO for images → a bottleneck sized to hold one action"
+ },
+ {
+  "f": "adaworld",
+  "t": "olafworld",
+  "k": "direct",
+  "l": "each clip trained alone → one coordinate system for all"
+ },
+ {
+  "f": "wan",
+  "t": "olafworld",
+  "k": "cross",
+  "l": "an open video backbone → steered by inferred actions"
  }
 ]

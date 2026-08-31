@@ -505,5 +505,31 @@
   "p": "Long history wins consistency and loses the controls",
   "i": "Blur the remembered frames so the action has to be read",
   "l": "Fifty denoising steps a chunk, so not yet real time"
+ },
+ {
+  "id": "adaworld",
+  "n": "AdaWorld",
+  "y": 2025,
+  "org": "HKUST · Harvard · UMass",
+  "c": "adapts to a new environment in 800 steps",
+  "lane": "rl",
+  "tr": "plan",
+  "s": "M",
+  "p": "Every new environment brings its own action labels",
+  "i": "Read the action off the video, as a continuous latent",
+  "l": "Not real time, and it cannot invent past the first scene"
+ },
+ {
+  "id": "olafworld",
+  "n": "Olaf-World",
+  "y": 2026,
+  "org": "NUS · A*STAR",
+  "c": "latent actions that survive a new scene",
+  "lane": "rl",
+  "tr": "plan",
+  "s": "M",
+  "p": "Latent actions learned clip by clip do not transfer",
+  "i": "Anchor each action to the visual change it causes",
+  "l": "The control gets sharper; the picture does not"
  }
 ]

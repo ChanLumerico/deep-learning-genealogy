@@ -1257,5 +1257,61 @@
     "url": "https://arxiv.org/abs/2505.14357"
    }
   ]
+ },
+ "genie>adaworld": {
+  "lead": "Genie established that a control interface can be recovered from video nobody annotated: train an inverse model to explain each transition and a forward model to use the explanation, and what survives the bottleneck behaves like the action. It quantised that interface to eight discrete codes. AdaWorld keeps the whole construction and undoes the quantisation, and the two papers together make the case that the choice was load-bearing rather than incidental.",
+  "blocks": [
+   {
+    "h": "What the codebook was for",
+    "b": "Discretising had reasons. Eight codes make an interface a person can operate — a game controller has buttons, and Genie's demonstration was a *playable* world. It bounds what the latent can smuggle: a code carries at most three bits, so context cannot leak through it however expressive the decoder becomes. And it matches the tokenised machinery on either side, a dynamics model over discrete tokens taking a discrete action as one more token.\n\nThe cost is that eight codes have to partition every transition in the training distribution, and the partition is learned from whatever material was to hand. Two motions that differ in a way no code distinguishes become the same action; a motion that falls between codes becomes the nearest one. Within a single domain that quantisation error is tolerable, because the same eight distinctions keep being the relevant ones."
+   },
+   {
+    "h": "The measurement, with everything else held fixed",
+    "b": "AdaWorld's second baseline is exactly Genie's parameterisation — a VQ codebook of eight codes in place of the continuous posterior, with the same encoder architecture, the same data, the same world model and the same training budget. That control is what makes the comparison a claim about the codebook.\n\nThe task is transfer: pull a latent action sequence from a demonstration video and apply it to the opening frame of a different video of the same labelled action. On LIBERO, where the two videos differ only in how the objects are arranged on the table, human judges see the demonstrated action arrive **3.5%** of the time from the discrete variant and **70.5%** from the continuous one. On Something-Something v2, where the contexts differ far more, it is 21.5% against 61.5%.\n\nThe direction of that gap is the opposite of what the bottleneck argument would predict — the discrete code is the *tighter* bottleneck, and it is the one that fails to transfer. Which suggests the problem was never how much information the latent carried but whether the same quantity meant the same thing in a scene the codebook was not fitted on."
+   },
+   {
+    "h": "Three things arithmetic buys",
+    "b": "Once the space is continuous, operations on it become available that a codebook has no analogue for, and AdaWorld's whole adaptation story rests on the first of them.\n\n**Averaging.** Collect a hundred clips labelled with the same real action, infer a latent for each, take the mean. That prototype is a usable initialisation for the corresponding action embedding in a new environment — which is why adapting takes 800 steps rather than a training run, and why the model beats a finetuned action-agnostic baseline on Procgen planning with no weight updates at all.\n\n**Interpolation.** The midpoint of the latents for right and jump generates jumping to the right. The space is semantically continuous in the meaning of the actions, not merely dense.\n\n**Continuous control.** An environment whose actions are real-valued — nuScenes trajectories rather than button presses — has no finite set to enumerate. A two-layer MLP maps raw displacements into the latent action interface and is fitted in under thirty seconds on one GPU. There is nothing to do here with eight codes except round."
+   }
+  ],
+  "refs": [
+   {
+    "t": "AdaWorld: Learning Adaptable World Models with Latent Actions",
+    "y": 2025,
+    "url": "https://arxiv.org/abs/2503.18938"
+   },
+   {
+    "t": "Genie: Generative Interactive Environments",
+    "y": 2024
+   }
+  ]
+ },
+ "adaworld>olafworld": {
+  "lead": "AdaWorld's latent actions transfer, and its own transfer table is the evidence — 70.5% of demonstrated actions arriving in a new context against a discrete variant's 3.5%. Olaf-World's argument is that this understates how narrow the guarantee is. Nothing in the training objective ever compared a latent from one video against a latent from another, so nothing ever required them to agree; what AdaWorld demonstrates is that agreement often emerges anyway, and what Olaf-World demonstrates is how far it falls short once the camera rig changes.",
+  "blocks": [
+   {
+    "h": "The failure the bottleneck cannot reach",
+    "b": "AdaWorld's defence against context leakage is the information bottleneck, tuned by $\\beta$: make the latent too small to carry the scene and it must carry the change. That is a real defence and it addresses a real failure — the posterior sees $x_{i+1}$, so an expressive decoder would happily encode whatever correlates with the next frame.\n\nIt does not address the second one. The step-wise objective is a sum of per-transition terms, each evaluated inside a single clip. Apply any rotation you like to the latent space in one video and any other rotation in a second video, and the loss is unchanged, because no term of it ever puts the two in the same expression. The coordinate system is unconstrained, and *unconstrained* here is not a euphemism for poorly constrained: there is a continuum of assignments with identical training loss, and the optimiser has no reason to prefer the one where turn left points the same way in both.\n\nEvery remedy in the literature — tighter bottlenecks, motion-weighted objectives, latent-space regularisers — is a within-clip remedy. The constraint has to come from outside, and it has to be something both clips can be measured against."
+   },
+   {
+    "h": "An effect is comparable where an action is not",
+    "b": "The reference is a frozen self-supervised video encoder. Pool its tokens to a per-frame descriptor and take the net direction of change over a window, $\\tau_* = \\frac{1}{K}\\sum_i (s_{i+1} - s_i)$. Integrate the inferred latents the same way, $\\bar z = \\frac{1}{K}\\sum_i z_i$, lift them into that space with a trainable head, and require the two directions to agree:\n\n$$\\mathcal{L}^{\\text{Seq}\\Delta\\text{-REPA}}_{\\psi} = 1 - \\left\\langle \\mathrm{norm}(h_\\psi(\\bar z)),\\, \\mathrm{norm}(\\tau_*) \\right\\rangle$$\n\nadded to the $\\beta$-VAE loss at $\\lambda = 0.02$. The encoder is never trained, which is what makes it a fixed frame of reference rather than another moving part.\n\nThree details carry the weight. It is a **difference**, so static appearance largely cancels and what remains is motion — aligning the raw features instead costs a clear drop in probe accuracy, and lets exactly the spatial cues the bottleneck was fighting back in. It is **sequence-level**, integrated over the window, so the constraint applies to the trajectory rather than to each step independently, which is where a shared basis can even be defined. And it is a **cosine**, so only direction is constrained — feature magnitudes differ across domains, and an MSE against them reintroduces the domain dependence the whole exercise is removing."
+   },
+   {
+    "h": "What it moves, and what it does not",
+    "b": "The comparison is unusually clean: AdaWorld is re-run on Olaf-World's backbone, data and adaptation budget, keeping only its own latent-action training, so the difference is the objective. The probe is trained on one MIND subset and applied to the other — same eight actions, different scenes and different camera rigs.\n\nIn-domain macro-F1 rises from 0.6004 to 0.8138 on first-person, and from 0.4827 to 0.8256 on third-person. Transferred, 0.4820 to 0.6250. The prototype similarity matrix makes the mechanism legible: AdaWorld's is high nearly everywhere, meaning each action resembles several others across the shift, and Olaf-World's is diagonal-dominant.\n\nThen the part that does not move. Video quality is unchanged at best — at zero adaptation videos Olaf-World scores slightly *lower* than AdaWorld on both image quality and temporal consistency. The alignment term buys control faithfulness and nothing else, and this is the right place to say so, because it would be easy to read a better-structured latent space as a better model. It is a better *interface*. The picture is the backbone's, and the backbone was deliberately held fixed."
+   }
+  ],
+  "refs": [
+   {
+    "t": "Olaf-World: Orienting Latent Actions for Video World Modeling",
+    "y": 2026,
+    "url": "https://arxiv.org/abs/2602.10104"
+   },
+   {
+    "t": "AdaWorld: Learning Adaptable World Models with Latent Actions",
+    "y": 2025
+   }
+  ]
  }
 }

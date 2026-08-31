@@ -723,6 +723,14 @@
   "t": "Astra: General Interactive World Model with Autoregressive Denoising",
   "arxiv": "2512.08931"
  },
+ "adaworld": {
+  "t": "AdaWorld: Learning Adaptable World Models with Latent Actions",
+  "arxiv": "2503.18938"
+ },
+ "olafworld": {
+  "t": "Olaf-World: Orienting Latent Actions for Video World Modeling",
+  "arxiv": "2602.10104"
+ },
  "showtell": {
   "t": "Show and Tell: A Neural Image Caption Generator"
  },
